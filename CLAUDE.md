@@ -47,3 +47,21 @@ python -m http.server 5173
 - `components/screens/*.jsx` — One file per screen; `membership-live-share.jsx` holds Membership + Live Scorecard + Result Share
 - `assets/` — Brand SVGs (mascot, wordmark, full lockup)
 - `docs/BUSINESS_CONTEXT.md` — **Source of truth. Read this first.**
+
+## Collaboration conventions
+
+This repo is worked on by multiple people, each using their own Claude Code account. To keep things sane:
+
+### Secrets & env vars
+- **Never commit secrets.** All API keys (Stripe, Clerk, Postgres URL, etc.) live in `.env.local`, which is gitignored.
+- `.env.example` is the committed template — copy it to `.env.local` and fill in real values locally.
+- If a new secret is introduced, add a placeholder line to `.env.example` in the same PR so teammates know to set it.
+- Signing certificates (`.p12`, `.mobileprovision`, `.keystore`) are also gitignored — store them in a shared password manager (1Password/Bitwarden), not git.
+
+### Branches & PRs
+- Work on feature branches, not directly on `main`. Suggested naming: `feat/<short-description>`, `fix/<short-description>`.
+- Open a PR into `main` when ready. `main` should always be in a runnable state.
+
+### Handoff files
+- When pausing mid-task or passing work to the other collaborator, drop a markdown file in `docs/handoff/` named `YYYY-MM-DD-<topic>.md`.
+- Include: what was done, what's next, any gotchas, and the files touched. This becomes the next Claude's briefing.
