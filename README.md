@@ -117,7 +117,11 @@ Applied consistently across the match card, match history rows, hole-result card
 
 ## Business & product context
 
-The source-of-truth context for this business — positioning, revenue model, pricing principles, target personas, key business rules — lives **outside this repo** (the pitch doc stays private). The webapp's behavior must always align with that doc. Notable rules the software enforces:
+**Start here → [docs/BUSINESS_CONTEXT.md](docs/BUSINESS_CONTEXT.md)**
+
+That's the source-of-truth document for the business: positioning, revenue model, pricing principles, personas, and the full set of business rules the software must enforce. Every feature, copy decision, and data-model choice should be consistent with it. AI agents: there's also a [CLAUDE.md](CLAUDE.md) at the root with a shorter orientation.
+
+A few rules worth surfacing:
 
 1. **Walk-up ticket price > monthly League Membership price.** Configurable multiplier.
 2. **Priority registration window** for members before public walk-ups.
@@ -126,8 +130,6 @@ The source-of-truth context for this business — positioning, revenue model, pr
 5. **Stats-only members** cannot register for events without paying walk-up.
 6. **Majors** are a separate event type with distinct pricing.
 7. **Corporate events** never appear in public listings.
-
-See the pitch doc (shared separately) for the full set.
 
 ---
 
