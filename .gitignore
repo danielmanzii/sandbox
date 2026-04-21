@@ -1,0 +1,32 @@
+# macOS / Windows junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Local backups of replaced assets
+_old_*.bak
+*.bak
+
+# Reference-only folder from the original Claude Design export
+# (contains business strategy doc + duplicate assets). Not imported by the app.
+uploads/
+
+# Duplicate entry HTML kept around for local dev ergonomics
+# (index.html is the canonical one the server loads)
+Sandbox Pitch & Putt App.html
+
+# Node (for future port)
+node_modules/
+dist/
+build/
+.env
+.env.local
+
+# Python http.server
+__pycache__/
+*.pyc
