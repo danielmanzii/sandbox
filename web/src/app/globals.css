@@ -1,26 +1,226 @@
 @import "tailwindcss";
 
+/* Sandbox Pitch & Putt — production design tokens
+   Ported from root styles.css. Keep in sync until the prototype is retired.
+   Do NOT edit these casually — they cascade through every screen. */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand palette */
+  --forest: #1C492A;
+  --forest-deep: #123520;
+  --forest-dark: #0E2818;
+  --moss: #2C6B43;
+  --moss-light: #3E8A57;
+  --cream: #EAE2CE;
+  --cream-warm: #E0D6BE;
+  --sand: #D8CDAE;
+  --sand-dark: #B8AC8B;
+  --paper: #FFFFFF;
+  --canvas: #FFFFFF;
+  --ink: #0E1C13;
+  --ink-soft: #2C3A30;
+  /* clay was warm orange; neutralized to cream so existing references
+     flip to a brand-native accent on white canvas.
+     clay-deep carries the "loss/negative" semantic — a muted brick rust
+     that pairs with forest+cream without being an alarming red. */
+  --clay: #EAE2CE;
+  --clay-deep: #9B3A2E;
+  --loss: #9B3A2E;
+  --loss-soft: #E7B8A7;
+  --ball: #FFF8E8;
+
+  /* Layered depth */
+  --shadow-sm: 0 1px 2px rgba(14,28,19,0.04), 0 2px 8px rgba(14,28,19,0.04);
+  --shadow-md: 0 2px 4px rgba(14,28,19,0.04), 0 12px 28px rgba(14,28,19,0.08);
+  --shadow-lg: 0 4px 12px rgba(14,28,19,0.06), 0 24px 48px rgba(14,28,19,0.12);
+  --shadow-hero: 0 2px 6px rgba(14,28,19,0.05), 0 18px 40px rgba(14,28,19,0.18), 0 32px 72px rgba(14,28,19,0.08);
+  --hairline: 1px solid rgba(14,28,19,0.06);
+  --hairline-strong: 1px solid rgba(14,28,19,0.1);
+  --radius-card: 22px;
+  --radius-card-lg: 28px;
 }
 
+/* Tailwind v4 token bridge — exposes brand colors/fonts to utility classes.
+   Use e.g. `bg-forest`, `text-cream`, `font-display`, `font-mono`. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-forest: var(--forest);
+  --color-forest-deep: var(--forest-deep);
+  --color-forest-dark: var(--forest-dark);
+  --color-moss: var(--moss);
+  --color-moss-light: var(--moss-light);
+  --color-cream: var(--cream);
+  --color-cream-warm: var(--cream-warm);
+  --color-sand: var(--sand);
+  --color-sand-dark: var(--sand-dark);
+  --color-paper: var(--paper);
+  --color-canvas: var(--canvas);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-clay: var(--clay);
+  --color-clay-deep: var(--clay-deep);
+  --color-loss: var(--loss);
+  --color-loss-soft: var(--loss-soft);
+
+  --font-display: var(--font-bagel), "Frankfurter", system-ui;
+  --font-body: var(--font-archivo), "Helvetica Neue", Helvetica, sans-serif;
+  --font-serif: var(--font-instrument-serif), "Iowan Old Style", Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, Menlo, monospace;
+
+  --radius-card: 22px;
+  --radius-card-lg: 28px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--canvas);
+  overscroll-behavior: none;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* Reusable typographic tokens */
+.eyebrow {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.caption-serif {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+}
+
+/* Data numerals — tabular, tight */
+.data-num {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}
+
+.display-num {
+  font-family: var(--font-display);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+}
+
+/* Hide scrollbars on horizontal rails */
+.scroll-hide::-webkit-scrollbar { display: none; }
+.scroll-hide { scrollbar-width: none; }
+
+/* Dashed divider motif */
+.dashed-line {
+  background-image: linear-gradient(90deg, currentColor 50%, transparent 50%);
+  background-size: 8px 1px;
+  background-repeat: repeat-x;
+  background-position: 0 50%;
+  height: 1px;
+  opacity: 0.4;
+}
+
+/* Paper texture on white canvas */
+.paper-tex {
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(rgba(28, 73, 42, 0.035) 1px, transparent 1px),
+    radial-gradient(rgba(28, 73, 42, 0.025) 1px, transparent 1px);
+  background-size: 16px 16px, 22px 22px;
+  background-position: 0 0, 8px 11px;
+}
+
+.forest-tex {
+  background-color: var(--forest);
+  background-image:
+    radial-gradient(rgba(234, 226, 206, 0.035) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* Grain overlay (multiply blend) */
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.11  0 0 0 0 0.29  0 0 0 0 0.17  0 0 0 0.12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: multiply;
+}
+
+:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+/* Shared surfaces */
+.card {
+  background: var(--paper);
+  border-radius: var(--radius-card);
+  border: var(--hairline);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-hero {
+  background: var(--paper);
+  border-radius: var(--radius-card-lg);
+  border: var(--hairline);
+  box-shadow: var(--shadow-hero);
+  overflow: hidden;
+}
+
+.hairline {
+  height: 1px;
+  background: rgba(14,28,19,0.08);
+  width: 100%;
+}
+
+/* Glass header — translucent over scrolling content */
+.glass {
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+  border-bottom: var(--hairline);
+}
+
+/* Live pulse (used by LiveDot) */
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(200,100,40,0.55); }
+  70% { box-shadow: 0 0 0 8px rgba(200,100,40,0); }
+  100% { box-shadow: 0 0 0 0 rgba(200,100,40,0); }
+}
+
+/* Page transitions */
+.screen-enter {
+  animation: screen-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
