@@ -8,7 +8,12 @@ A web-first responsive consumer app prototype for **Sandbox Pitch & Putt** — a
 
 ## Current state
 
-**Prototype**, not production. React via CDN + Babel-in-browser with localStorage-backed mock data. Static-served (`python -m http.server 5173`). No build step. Designed for fast visual/flow iteration before porting to Next.js + Postgres + Stripe + Clerk.
+**Two codebases live side-by-side during the port:**
+
+- **Root (`index.html`, `components/`, `styles.css`)** — legacy prototype. React via CDN + Babel-in-browser with localStorage-backed mock data. Static-served (`python -m http.server 5173`). No build step. Kept runnable for reference while the port is in progress.
+- **`web/`** — production Next.js 16 app (TypeScript, Tailwind v4, App Router). This is where net-new work goes. Screens, components, and business logic are being ported here, with Postgres + Stripe + Clerk wired in over time.
+
+When in doubt, make changes in `web/`. Only touch the prototype if you're updating it for reference or the port hasn't reached that screen yet.
 
 ## Non-obvious rules to respect when making changes
 
@@ -32,6 +37,15 @@ Don't edit the `:root` tokens in `styles.css` without checking how they cascade 
 
 ## How to run
 
+**Production Next.js app (`web/`):**
+```bash
+cd web
+npm install     # first time only
+npm run dev
+# open http://localhost:3000
+```
+
+**Legacy prototype (root):**
 ```bash
 python -m http.server 5173
 # open http://127.0.0.1:5173/
@@ -39,6 +53,12 @@ python -m http.server 5173
 
 ## Project map
 
+**Production — `web/`** (where net-new work goes):
+- `web/src/app/` — Next.js App Router pages/layouts
+- `web/package.json` — dependencies (Next 16, React 19, Tailwind v4, TS 5)
+- `web/.env.local` — local secrets (gitignored; template at root `.env.example`)
+
+**Legacy prototype — root** (reference only during port):
 - `index.html` — App shell, routing, Tweaks panel
 - `styles.css` — Design tokens + shared classes
 - `components/data.jsx` — Mock data (events, users, matches, SBX ratings, etc.)
@@ -46,7 +66,10 @@ python -m http.server 5173
 - `components/ios-frame.jsx` — iOS device chrome for desktop preview
 - `components/screens/*.jsx` — One file per screen; `membership-live-share.jsx` holds Membership + Live Scorecard + Result Share
 - `assets/` — Brand SVGs (mascot, wordmark, full lockup)
+
+**Docs:**
 - `docs/BUSINESS_CONTEXT.md` — **Source of truth. Read this first.**
+- `docs/handoff/` — cross-session handoff notes
 
 ## Collaboration conventions
 
