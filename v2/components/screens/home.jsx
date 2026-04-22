@@ -1,131 +1,196 @@
 /* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, ScoreDial, Spark, MOCK */
-// Home screen — next event, live leaderboard, activity
+// V2 Home — airy, swipeable event carousel with a compact feed below.
 
 function HomeScreen({ go, tier, brandLoud, liveMode, mascot }) {
-  const nextEvent = liveMode ? MOCK.EVENTS.find(e => e.status === 'live') : MOCK.EVENTS.find(e => e.status === 'open' && !e.isMajor);
-  const major = MOCK.EVENTS.find(e => e.isMajor);
   const isMember = tier === 'league' || tier === 'leaguePlus';
+  // Events shown in the carousel: live first, then open, then upcoming/members-only
+  const carousel = React.useMemo(() => {
+    const live = MOCK.EVENTS.filter(e => e.status === 'live');
+    const open = MOCK.EVENTS.filter(e => e.status === 'open');
+    const rest = MOCK.EVENTS.filter(e => e.status !== 'live' && e.status !== 'open');
+    return [...live, ...open, ...rest].slice(0, 5);
+  }, []);
+
+  const [cardIndex, setCardIndex] = React.useState(0);
+  const scrollerRef = React.useRef(null);
+
+  // Track which card is centered in the horizontal scroller
+  React.useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const card = el.querySelector('[data-card]');
+      if (!card) return;
+      const cardW = card.getBoundingClientRect().width + 14; // gap
+      setCardIndex(Math.min(carousel.length - 1, Math.max(0, Math.round(el.scrollLeft / cardW))));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [carousel.length]);
+
+  const activeEvent = carousel[cardIndex];
+  const activeIsLive = activeEvent?.status === 'live';
+  const activeCanRegister = activeEvent?.status === 'open';
+
+  const firstName = (MOCK.USER.name || 'Alex').split(' ')[0];
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      {/* Top brand bar — white/editorial */}
-      <div style={{
-        padding: '58px 20px 20px',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        background: 'var(--canvas)',
-        color: 'var(--ink)',
-        position: 'relative',
-      }}>
-        <div style={{ position: 'relative' }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            MIAMI / WK 12
-          </div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-            Hey, Alex.
-          </div>
-          <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 4, color: 'var(--forest)' }}>
-            The birds are restless.
-          </div>
-        </div>
-        <button style={{
-          width: 42, height: 42, borderRadius: 999,
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 140, position: 'relative' }}>
+      {/* Ambient top-right wash */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', top: 0, right: 0, width: '85%', height: '46%',
+        background: 'radial-gradient(ellipse at 80% 10%, rgba(28,73,42,0.08) 0%, rgba(28,73,42,0.02) 40%, transparent 70%)',
+        pointerEvents: 'none',
+      }}/>
+      {/* Secondary soft rings */}
+      <svg aria-hidden="true" style={{ position: 'absolute', top: 40, right: -30, opacity: 0.22, pointerEvents: 'none' }} width="220" height="220" viewBox="0 0 200 200">
+        <circle cx="150" cy="50" r="48" fill="none" stroke="var(--forest)" strokeWidth="0.6"/>
+        <circle cx="150" cy="50" r="68" fill="none" stroke="var(--forest)" strokeWidth="0.5"/>
+        <circle cx="150" cy="50" r="92" fill="none" stroke="var(--forest)" strokeWidth="0.4"/>
+      </svg>
+
+      {/* Brand bar — menu left, avatar right */}
+      <div style={{ position: 'relative', padding: '58px 22px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button aria-label="Menu" style={{
+          width: 44, height: 44, borderRadius: 999,
           background: 'var(--paper)',
           border: 'var(--hairline)',
           boxShadow: 'var(--shadow-sm)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative',
           color: 'var(--forest)',
-          flexShrink: 0, marginTop: 4,
         }}>
-          <svg width="16" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2a6 6 0 0 0-6 6v4l-2 3h16l-2-3V8a6 6 0 0 0-6-6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
-            <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="2"/>
+          <svg width="18" height="14" viewBox="0 0 24 18" fill="none">
+            <path d="M2 3h20M2 9h14M2 15h20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
           </svg>
-          <span style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 999, background: 'var(--forest)', border: '1.5px solid var(--paper)' }}/>
         </button>
-      </div>
-
-      {/* Next-up card */}
-      <div style={{ padding: '16px 16px 0' }}>
-        <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot}/>
-      </div>
-
-      {/* Quick stats strip */}
-      <div style={{ display: 'flex', gap: 10, padding: '16px 16px 0', overflowX: 'auto' }} className="scroll-hide">
-        <QuickStat label="SBX" value="5.412" trend="+0.04" sub="top 38%" locked={!isMember && tier !== 'stats'} featured/>
-        <QuickStat label="Record" value="11–7–2" sub="season"/>
-        <QuickStat label="Unbeaten" value="3" sub="matches" icon={<Icon.Fire size={14} color="var(--forest)"/>}/>
-        <QuickStat label="Passes" value="2" sub="this mo"/>
-      </div>
-
-      {/* Major banner — editorial poster */}
-      <div style={{ padding: '16px 16px 0' }}>
-        <button onClick={() => go({ screen: 'eventDetail', eventId: major.id })} style={{
-          width: '100%', textAlign: 'left',
-          borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
-          background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 45%, var(--moss) 100%)`,
-          color: 'var(--cream)',
-          padding: 22,
-          position: 'relative',
-          border: 'none',
-          display: 'block',
-          boxShadow: 'var(--shadow-md)',
-        }}>
-          <div style={{ position: 'absolute', right: -24, top: -24, opacity: 0.14 }}>
-            <img src="assets/mascot-full-cream.svg" alt="" style={{ width: 180, transform: 'rotate(14deg)' }}/>
-          </div>
-          <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-          <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 999,
+            overflow: 'hidden',
+            border: '2px solid var(--paper)',
+            boxShadow: 'var(--shadow-sm)',
+            background: 'var(--forest)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
             <div style={{
-              display: 'inline-block',
-              padding: '5px 10px', borderRadius: 999,
-              background: 'rgba(234,226,206,0.12)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(234,226,206,0.22)',
-              fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase',
-            }}>⛳ Major</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>
-              THE BILTMORE
-            </div>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 8, letterSpacing: '0.06em' }}>
-              MAY 17 · SHOTGUN · 80 PLAYERS
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  height: 4, borderRadius: 999, background: 'rgba(234,226,206,0.14)', position: 'relative', overflow: 'hidden',
-                }}>
-                  <div style={{ width: '42.5%', height: '100%', background: 'var(--cream)', borderRadius: 999 }}/>
-                </div>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 6, letterSpacing: '0.06em' }}>
-                  34/80 REGISTERED
-                </div>
-              </div>
-              <div style={{
-                padding: '9px 14px', borderRadius: 999,
-                background: 'var(--cream)', color: 'var(--forest)',
-                fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                boxShadow: '0 6px 14px rgba(14,28,19,0.25)',
-              }}>
-                Register <Icon.ArrowRight size={14}/>
-              </div>
-            </div>
+              fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--cream)', lineHeight: 1,
+            }}>{firstName[0]}</div>
           </div>
+          {/* Online dot */}
+          <div style={{
+            position: 'absolute', right: -2, top: -2,
+            width: 12, height: 12, borderRadius: 999,
+            background: '#4ECB71',
+            border: '2px solid var(--paper)',
+          }}/>
+        </div>
+      </div>
+
+      {/* Greeting */}
+      <div style={{ position: 'relative', padding: '24px 24px 22px' }}>
+        <div style={{
+          fontFamily: 'var(--font-display)', fontSize: 44, color: 'var(--forest)',
+          letterSpacing: '-0.02em', lineHeight: 0.9,
+        }}>
+          Hello, {firstName}.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, color: 'var(--forest)', opacity: 0.55 }}>
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+            <path d="M6 1a5 5 0 0 0-5 5c0 3.5 5 7 5 7s5-3.5 5-7a5 5 0 0 0-5-5z" stroke="currentColor" strokeWidth="1.4"/>
+            <circle cx="6" cy="6" r="1.6" fill="currentColor"/>
+          </svg>
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Miami · Week 12
+          </span>
+        </div>
+      </div>
+
+      {/* Swipeable event stack */}
+      <div
+        ref={scrollerRef}
+        className="scroll-hide"
+        style={{
+          display: 'flex', gap: 14,
+          overflowX: 'auto', scrollSnapType: 'x mandatory',
+          padding: '0 24px 4px',
+          scrollPaddingLeft: 24,
+        }}
+      >
+        {carousel.map((e, i) => (
+          <EventCard key={e.id} event={e} isMember={isMember} go={go} active={i === cardIndex}/>
+        ))}
+      </div>
+
+      {/* Page indicator */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 16, position: 'relative' }}>
+        {carousel.map((_, i) => (
+          <div key={i} style={{
+            width: i === cardIndex ? 20 : 6,
+            height: 6, borderRadius: 999,
+            background: i === cardIndex ? 'var(--forest)' : 'rgba(14,28,19,0.14)',
+            transition: 'width 0.25s, background 0.25s',
+          }}/>
+        ))}
+      </div>
+
+      {/* Primary CTA — reacts to the centered card */}
+      <div style={{ padding: '22px 22px 0', position: 'relative' }}>
+        <button
+          onClick={() => {
+            if (!activeEvent) return;
+            if (activeIsLive) return go({ screen: 'live' });
+            return go({ screen: 'eventDetail', eventId: activeEvent.id });
+          }}
+          style={{
+            width: '100%',
+            background: '#0E1C13', color: 'var(--paper)',
+            borderRadius: 999, padding: '14px 22px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
+            boxShadow: '0 12px 30px rgba(14,28,19,0.22)',
+            border: 'none',
+          }}
+        >
+          <span style={{
+            width: 34, height: 34, borderRadius: 999,
+            background: 'var(--forest)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginLeft: -6,
+          }}>
+            {activeIsLive ? (
+              <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="var(--cream)"/></svg>
+            ) : (
+              <svg width="12" height="14" viewBox="0 0 12 14" fill="var(--cream)"><path d="M2 1.5v11l9-5.5z"/></svg>
+            )}
+          </span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '-0.01em' }}>
+            {activeIsLive ? 'Continue round' : activeCanRegister ? 'Register' : 'View details'}
+          </span>
         </button>
       </div>
 
-      {/* Activity feed — cleaner rhythm */}
-      <div style={{ padding: '28px 16px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 4px' }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>The Feed</div>
-          <button style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>See all →</button>
+      {/* Compact quick-stats row */}
+      <div style={{ display: 'flex', gap: 10, padding: '22px 22px 0', overflowX: 'auto' }} className="scroll-hide">
+        <QuickPill label="SBX" value={MOCK.USER.sbx.toFixed(3)} trend={`+${MOCK.USER.sbxDelta.toFixed(3)}`} featured/>
+        <QuickPill label="Record" value={`${MOCK.USER.matchesW}–${MOCK.USER.matchesL}–${MOCK.USER.matchesH}`} sub="season"/>
+        <QuickPill label="Unbeaten" value={MOCK.USER.streak} sub="matches"/>
+      </div>
+
+      {/* Activity feed — condensed */}
+      <div style={{ padding: '28px 22px 0', position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            The Feed
+          </div>
+          <button style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.65, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            See all →
+          </button>
         </div>
-        <div className="card" style={{ padding: '6px 4px' }}>
-          {MOCK.ACTIVITY.map((a, i) => (
+        <div className="card" style={{ padding: '4px 6px', borderRadius: 24 }}>
+          {MOCK.ACTIVITY.slice(0, 4).map((a, i) => (
             <div key={a.id} style={{
-              padding: '14px 14px',
+              padding: '14px 12px',
               display: 'flex', alignItems: 'center', gap: 12,
-              borderBottom: i < MOCK.ACTIVITY.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
+              borderBottom: i < Math.min(3, MOCK.ACTIVITY.length - 1) ? '1px solid rgba(14,28,19,0.05)' : 'none',
             }}>
               <AvatarBy handle={a.user} size={36}/>
               <div style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>
@@ -133,241 +198,180 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot }) {
                 <span style={{ opacity: 0.7 }}> {a.detail}</span>
               </div>
               {a.badge && <span style={{ fontSize: 18 }}>{a.badge}</span>}
-              <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)' }}>{a.time}</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.06em' }}>
+                {a.time}
+              </span>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Upcoming events teaser */}
-      <div style={{ padding: '28px 0 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 20px' }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Up Next</div>
-          <button onClick={() => go({ screen: 'events' })} style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Browse all →</button>
-        </div>
-        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 16px 4px' }} className="scroll-hide">
-          {MOCK.EVENTS.filter(e => e.status !== 'live').slice(0, 3).map(e => (
-            <MiniEventCard key={e.id} event={e} go={go}/>
-          ))}
-        </div>
-      </div>
-
-      {/* Brand foot */}
-      <div style={{ textAlign: 'center', padding: '56px 16px 24px', opacity: 0.18 }}>
-        <Wordmark variant="forest" size={120} style={{ margin: '0 auto' }}/>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', marginTop: 8, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Pitch & Putt · Miami</div>
       </div>
     </div>
   );
 }
 
-function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot }) {
-  if (!event) return null;
+// ─── Swipeable course card (the Pinterest-inspired hero) ─────────────
+function EventCard({ event, isMember, go, active }) {
   const live = event.status === 'live';
+  // Pick a few friends attending — mock. Real data can come from event.attendees.
+  const friends = MOCK.FRIENDS.slice(0, 4);
+  const attendingCount = 6 + (event.filled % 4); // fake but stable-ish
+
+  const onClick = () => {
+    if (live) return go({ screen: 'live' });
+    return go({ screen: 'eventDetail', eventId: event.id });
+  };
+
   return (
-    <button onClick={() => go({ screen: live ? 'live' : 'eventDetail', eventId: event.id })} className="card-hero" style={{
-      width: '100%', textAlign: 'left',
-      background: 'var(--forest)',
-      color: 'var(--cream)',
-      padding: 0, border: 'none',
-      position: 'relative', display: 'block',
-    }}>
-      {/* Immersive hero */}
-      <div style={{
-        height: 200,
-        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0.05) 0%, rgba(14,28,19,0.3) 50%, rgba(14,28,19,0.9) 100%), url('${event.img}')`,
-        backgroundSize: 'cover', backgroundPosition: 'center',
+    <button
+      data-card="true"
+      onClick={onClick}
+      style={{
+        scrollSnapAlign: 'start',
+        flexShrink: 0,
+        width: 280, height: 420,
+        borderRadius: 28, overflow: 'hidden',
         position: 'relative',
+        border: 'none', padding: 0,
+        boxShadow: active ? '0 24px 48px rgba(14,28,19,0.22), 0 6px 14px rgba(14,28,19,0.08)' : '0 12px 28px rgba(14,28,19,0.12)',
+        transition: 'box-shadow 0.25s, transform 0.25s',
+        transform: active ? 'scale(1)' : 'scale(0.97)',
+        textAlign: 'left',
+        background: 'var(--paper)',
       }}>
-        <div style={{ position: 'absolute', top: 16, left: 16, display: 'flex', gap: 6 }}>
-          {live ? (
-            <Chip variant="clay" icon={<LiveDot/>}>LIVE · HOLE {MOCK.LIVE.currentHole}</Chip>
-          ) : (
+      {/* Left green rail */}
+      <div style={{
+        position: 'absolute', left: 0, top: 28, bottom: 28, width: 8,
+        background: 'var(--forest)', borderTopRightRadius: 8, borderBottomRightRadius: 8,
+      }}/>
+      {/* Right cream rail */}
+      <div style={{
+        position: 'absolute', right: 0, top: 28, bottom: 28, width: 8,
+        background: 'var(--cream)', borderTopLeftRadius: 8, borderBottomLeftRadius: 8,
+      }}/>
+
+      {/* Hero image */}
+      <div style={{
+        position: 'absolute', inset: '10px 14px 0',
+        borderRadius: 22, overflow: 'hidden',
+        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0) 0%, rgba(14,28,19,0.05) 50%, rgba(14,28,19,0.85) 100%), url('${event.img}')`,
+        backgroundSize: 'cover', backgroundPosition: 'center',
+      }}>
+        {/* Badges top-left */}
+        <div style={{ position: 'absolute', top: 14, left: 14, display: 'flex', gap: 6 }}>
+          {event.isMajor && (
             <div style={{
-              padding: '6px 10px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--cream)',
-            }}>{event.tagline}</div>
+              padding: '4px 10px', borderRadius: 999,
+              background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.22)',
+              fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--cream)',
+            }}>⛳ Major</div>
+          )}
+          {live && (
+            <div style={{
+              padding: '4px 10px', borderRadius: 999,
+              background: 'var(--forest)',
+              fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--cream)',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--cream)', animation: 'ball-bounce 1.2s ease-in-out infinite' }}/>
+              Live now
+            </div>
           )}
         </div>
-        {!live && (
-          <div style={{ position: 'absolute', top: 16, right: 16, textAlign: 'right' }}>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.08em' }}>TEE OFF</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, marginTop: 2, letterSpacing: '-0.02em' }}>{event.time}</div>
-          </div>
-        )}
-        {mascot === 'full' && (
-          <img src="assets/mascot-full-cream.svg" alt="" style={{
-            position: 'absolute', right: -14, bottom: -24, width: 110, opacity: 0.22,
-            transform: 'rotate(-6deg)',
-          }}/>
-        )}
-        {/* Title floating at bottom of hero */}
-        <div style={{ position: 'absolute', bottom: 18, left: 20, right: 20 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.92, letterSpacing: '-0.02em' }}>
+
+        {/* Play button top-right */}
+        <div style={{
+          position: 'absolute', top: 14, right: 14,
+          width: 44, height: 44, borderRadius: 999,
+          background: 'var(--paper)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 6px 14px rgba(14,28,19,0.22)',
+          border: '2px solid var(--forest)',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 12 14" fill="var(--forest)"><path d="M2 1.5v11l9-5.5z"/></svg>
+        </div>
+
+        {/* Course identity bottom */}
+        <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16, color: 'var(--cream)' }}>
+          <div style={{
+            fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 0.9,
+            letterSpacing: '-0.02em',
+          }}>
             {event.courseShort}
           </div>
-          <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', opacity: 0.8, marginTop: 6, letterSpacing: '0.04em' }}>
-            {live ? 'WK 11 · MELREESE' : (event.dateFull || '').toUpperCase()}
+          <div style={{
+            fontFamily: 'var(--font-serif)', fontStyle: 'italic',
+            fontSize: 13, opacity: 0.85, marginTop: 6, maxWidth: 220,
+            lineHeight: 1.35,
+          }}>
+            {event.description || `${event.tagline}. ${event.dateFull}.`}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+            <div style={{ display: 'flex' }}>
+              {friends.slice(0, 4).map((f, i) => (
+                <img key={f.id} src={f.avatar} alt={f.name} style={{
+                  width: 26, height: 26, borderRadius: 999, objectFit: 'cover',
+                  border: '2px solid var(--cream)',
+                  marginLeft: i === 0 ? 0 : -8,
+                }}/>
+              ))}
+            </div>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', opacity: 0.85 }}>
+              {attendingCount} friends here
+            </span>
           </div>
         </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: '18px 20px 20px' }}>
-        {live ? (
-          <LiveInlinePreview/>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.06em' }}>
-                {event.filled}/{event.field} · FIELD
-              </div>
-              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-                {isMember ? (
-                  <><span style={{ fontWeight: 700 }}>Included</span> <span style={{ opacity: 0.55, textDecoration: 'line-through', marginLeft: 4 }}>${event.priceWalkup}</span></>
-                ) : (
-                  <><span style={{ opacity: 0.6 }}>${event.priceWalkup} walk-up</span> · <span style={{ fontWeight: 700 }}>${event.priceMember}</span> <span style={{ opacity: 0.6 }}>member</span></>
-                )}
-              </div>
-            </div>
-            <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); go({ screen: 'eventDetail', eventId: event.id }); }}>
-              {isMember ? 'Grab spot' : 'Register'}
-              <Icon.ArrowRight size={14}/>
-            </Button>
-          </div>
-        )}
       </div>
     </button>
   );
 }
 
-function LiveInlinePreview() {
-  const m = MOCK.LIVE.yourMatch;
-  const state = m.state; // + = you up, - = down, 0 = AS
-  const label = state > 0 ? `${state} UP` : state < 0 ? `${-state} DN` : 'AS';
-  const accent = state > 0 ? 'var(--clay)' : state < 0 ? '#E7B8A7' : 'var(--cream)';
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>Your match</Eyebrow>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 2 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: accent, letterSpacing: '-0.01em' }}>{label}</span>
-            <span style={{ fontSize: 11, opacity: 0.65 }}>thru {m.thru}</span>
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>vs</Eyebrow>
-          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{m.teamB.name}</div>
-        </div>
-      </div>
-      <Button variant="clay" size="sm" full style={{ marginTop: 12 }}>
-        Open live scorecard <Icon.ArrowRight size={14}/>
-      </Button>
-    </div>
-  );
-}
-
-function QuickStat({ label, value, sub, trend, icon, locked, featured }) {
+// ─── Compact quick-stat pill (home) ──────────────────────────────────
+function QuickPill({ label, value, sub, trend, featured }) {
   const bg = featured ? 'var(--forest)' : 'var(--paper)';
   const fg = featured ? 'var(--cream)' : 'var(--forest)';
-  const trendColor = featured ? '#C9D8BE' : 'var(--moss-light)';
   return (
     <div style={{
-      background: bg,
-      color: fg,
+      background: bg, color: fg,
       border: featured ? 'none' : 'var(--hairline)',
-      borderRadius: 18,
-      padding: '14px 16px 16px',
-      minWidth: 132,
-      position: 'relative',
-      opacity: locked ? 0.65 : 1,
       boxShadow: featured ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+      borderRadius: 20,
+      padding: '14px 18px',
+      minWidth: 128,
+      flexShrink: 0,
     }}>
       <div style={{
         fontSize: 10, fontFamily: 'var(--font-mono)',
-        display: 'flex', alignItems: 'center', gap: 4,
         opacity: featured ? 0.7 : 0.55,
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-      }}>
-        {label} {icon}
-        {locked && <Icon.Lock size={11} color="currentColor"/>}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 10 }}>
-        <span className="display-num" style={{ fontSize: 28 }}>{locked ? '—.———' : value}</span>
-        {trend && !locked && (
-          <span style={{ fontSize: 10, color: trendColor, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{trend}</span>
+        letterSpacing: '0.1em', textTransform: 'uppercase',
+      }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
+        <span className="display-num" style={{ fontSize: 26 }}>{value}</span>
+        {trend && (
+          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 800, opacity: featured ? 0.8 : 0.7 }}>
+            {trend}
+          </span>
         )}
       </div>
       {sub && (
-        <div style={{
-          fontSize: 10, opacity: 0.55, marginTop: 4,
-          fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase',
-        }}>{sub}</div>
+        <div style={{ fontSize: 10, opacity: 0.55, marginTop: 4, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          {sub}
+        </div>
       )}
     </div>
   );
 }
 
-function MiniEventCard({ event, go }) {
-  return (
-    <button onClick={() => go({ screen: 'eventDetail', eventId: event.id })} className="card" style={{
-      minWidth: 190, maxWidth: 190,
-      overflow: 'hidden',
-      textAlign: 'left',
-      padding: 0,
-      flexShrink: 0,
-      display: 'block',
-      borderRadius: 20,
-    }}>
-      <div style={{
-        height: 104,
-        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0) 40%, rgba(14,28,19,0.55) 100%), url('${event.img}')`,
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        position: 'relative',
-      }}>
-        {event.isMajor && (
-          <div style={{
-            position: 'absolute', top: 10, left: 10,
-            padding: '4px 8px', borderRadius: 999,
-            background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.22)',
-            fontSize: 9, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--cream)',
-          }}>⛳ Major</div>
-        )}
-        {event.status === 'member-only' && (
-          <div style={{
-            position: 'absolute', top: 10, left: 10,
-            padding: '4px 8px', borderRadius: 999,
-            background: 'rgba(14,28,19,0.65)', backdropFilter: 'blur(10px)',
-            fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase',
-            color: 'var(--cream)', display: 'inline-flex', alignItems: 'center', gap: 4,
-          }}><Icon.Lock size={9} color="currentColor"/> Member</div>
-        )}
-        <div style={{ position: 'absolute', bottom: 8, left: 12, right: 12, color: 'var(--cream)' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, lineHeight: 1, letterSpacing: '-0.01em' }}>{event.courseShort}</div>
-        </div>
-      </div>
-      <div style={{ padding: '10px 12px 14px' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.7, letterSpacing: '0.04em' }}>
-          {event.date.toUpperCase()} · {event.time}
-        </div>
-      </div>
-    </button>
-  );
-}
-
+// ─── AvatarBy — shared across screens, keep the export ───────────────
 function AvatarBy({ handle, size = 36 }) {
   const f = MOCK.FRIENDS.find(x => x.handle === handle);
   if (!f) return <div style={{ width: size, height: size, borderRadius: 999, background: 'var(--sand)' }}/>;
   return (
     <img src={f.avatar} alt={f.name} style={{
       width: size, height: size, borderRadius: 999, objectFit: 'cover',
-      border: '2px solid var(--cream)',
+      border: '2px solid var(--paper)',
     }}/>
   );
 }
 
-Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy });
+Object.assign(window, { HomeScreen, EventCard, QuickPill, AvatarBy });

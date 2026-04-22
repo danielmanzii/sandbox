@@ -124,205 +124,608 @@ function MembershipScreen({ go, tier }) {
   );
 }
 
-// ─── Live scorecard (2-man scramble match play) ────────
+// ─── Live / Hole-by-hole screen (V2) ────────────────────────────────
+// Per-hole full-screen layout inspired by the Pinterest reference.
+// Swipe horizontally between holes 1–9; tap a stroke pill (1/2/3/4)
+// to log YOUR team's strokes on this hole. Opponent score + putts +
+// proximity get captured via the bottom sheet (shot-by-shot mode).
+// Floating FAB opens the full scorecard overlay (all 9 holes).
 function LiveScorecardScreen({ go }) {
   const card = MOCK.YOUR_CARD;
-  const [showSheet, setShowSheet] = React.useState(false);
+  const holes = card.holes;
 
-  // Compute match state from hole results (W/H/L)
-  const played = card.holes.filter(h => h.result);
+  const firstUnplayed = React.useMemo(() => {
+    const i = holes.findIndex(h => !h.result);
+    return i === -1 ? holes.length - 1 : i;
+  }, [holes]);
+
+  const [holeIdx, setHoleIdx] = React.useState(firstUnplayed);
+  const [showOverlay, setShowOverlay] = React.useState(false);
+  const [showLogSheet, setShowLogSheet] = React.useState(false);
+  // Transient per-hole stroke selection (pre-commit)
+  const [strokes, setStrokes] = React.useState(null);
+
+  const hole = holes[holeIdx];
+
+  // Live-computed match state across all played holes
+  const played = holes.filter(h => h.result);
   const state = played.reduce((s, h) => s + (h.result === 'W' ? 1 : h.result === 'L' ? -1 : 0), 0);
   const thru = played.length;
-  const remaining = card.holes.length - thru;
-  const label = state > 0 ? `${state} UP` : state < 0 ? `${-state} DN` : 'ALL SQUARE';
-  const sub = remaining === 0 ? 'MATCH OVER'
-    : Math.abs(state) > remaining ? `DORMIE+${Math.abs(state) - remaining}`
-    : Math.abs(state) === remaining ? 'DORMIE'
-    : `${remaining} to play`;
+  const remaining = holes.length - thru;
+  const matchLabel = state > 0 ? `${state} UP` : state < 0 ? `${-state} DN` : 'AS';
 
+  // Demo wind/tip — admin-editable + weather-API-sourced in production
+  const windByHole = {
+    1: { mph: '4-6',  dir: 'ENE' },
+    2: { mph: '6-8',  dir: 'E'   },
+    3: { mph: '5-7',  dir: 'SE'  },
+    4: { mph: '8-10', dir: 'SE'  },
+    5: { mph: '5-8',  dir: 'SE'  },
+    6: { mph: '3-5',  dir: 'S'   },
+    7: { mph: '4-7',  dir: 'SSW' },
+    8: { mph: '6-9',  dir: 'SW'  },
+    9: { mph: '5-7',  dir: 'W'   },
+  };
+  const tipsByHole = {
+    1: 'Easy opener — aim center green, two-putt for a comfy halve.',
+    2: 'Pin tucked front-left. Short is fine; long leaves a slippery downhiller.',
+    3: 'Wind usually helps — club down and let the ball breathe.',
+    4: 'Longest hole on the loop. A clean strike from mat 3 holds the green.',
+    5: 'Slight dog-leg uphill, tough hole. Favor the left side of the fairway.',
+    6: 'Short and stock — the pin is the whole strategy here.',
+    7: 'False front eats short shots. One extra club minimum.',
+    8: 'Easiest birdie of the day. Commit to the line, swing through.',
+    9: 'Breeze picks up into the ninth green. Start it at the right edge.',
+  };
+  const wind = windByHole[hole.hole] || { mph: '5-7', dir: 'SE' };
+  const tip = tipsByHole[hole.hole] || 'Trust the yardage. Make an athletic swing.';
+
+  // Stroke commit: open the sheet to finalize opponent score / shot stats
+  const onPickStrokes = (n) => {
+    setStrokes(n);
+    setShowLogSheet(true);
+  };
+
+  return (
+    <div style={{
+      background: 'var(--canvas)', minHeight: '100%', color: 'var(--ink)',
+      paddingBottom: 140, position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Soft top-right wash to echo the home screen's airy feel */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', top: 0, right: 0, width: '85%', height: '44%',
+        background: 'radial-gradient(ellipse at 80% 10%, rgba(28,73,42,0.07), transparent 70%)',
+        pointerEvents: 'none',
+      }}/>
+
+      {/* Top bar */}
+      <div style={{
+        position: 'relative',
+        padding: '58px 22px 12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <button
+          onClick={() => go({ screen: 'home' })}
+          style={{
+            width: 44, height: 44, borderRadius: 999,
+            background: 'var(--paper)',
+            border: 'var(--hairline)',
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--forest)',
+          }}
+          aria-label="Back"
+        >
+          <Icon.ArrowLeft size={16}/>
+        </button>
+        <div style={{
+          fontFamily: 'var(--font-display)', fontSize: 26,
+          color: 'var(--forest)', letterSpacing: '-0.02em',
+        }}>
+          Hole {hole.hole}
+        </div>
+        <button style={{
+          width: 44, height: 44, borderRadius: 999,
+          background: 'var(--paper)',
+          border: 'var(--hairline)',
+          boxShadow: 'var(--shadow-sm)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--forest)',
+        }} aria-label="More">
+          <svg width="4" height="18" viewBox="0 0 4 18" fill="currentColor">
+            <circle cx="2" cy="2"  r="2"/>
+            <circle cx="2" cy="9"  r="2"/>
+            <circle cx="2" cy="16" r="2"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Stroke input pills (repurposed par selector) */}
+      <div style={{ padding: '16px 22px 0', position: 'relative' }}>
+        <div style={{
+          fontSize: 11, fontFamily: 'var(--font-mono)',
+          color: 'var(--forest)', opacity: 0.55,
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+          marginBottom: 10,
+        }}>
+          Strokes {hole.you != null && <span style={{ opacity: 0.8 }}>· logged {hole.you}</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 999,
+            background: hole.you != null ? 'var(--forest)' : 'transparent',
+            border: hole.you != null ? 'none' : '1.5px solid rgba(14,28,19,0.12)',
+            color: hole.you != null ? 'var(--cream)' : 'rgba(14,28,19,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7.5l3.2 3L12 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          {[1, 2, 3, 4].map(n => {
+            const isSelected = (hole.you ?? strokes) === n;
+            return (
+              <button
+                key={n}
+                onClick={() => onPickStrokes(n)}
+                style={{
+                  flex: 1, height: 38, borderRadius: 999,
+                  background: isSelected ? 'var(--forest)' : 'var(--paper)',
+                  color: isSelected ? 'var(--cream)' : 'var(--forest)',
+                  border: isSelected ? 'none' : 'var(--hairline)',
+                  boxShadow: isSelected ? 'var(--shadow-sm)' : 'none',
+                  fontFamily: 'var(--font-display)', fontSize: 16,
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Metrics + hole map — the main two-column block */}
+      <div style={{
+        position: 'relative',
+        padding: '20px 22px 0',
+        display: 'grid',
+        gridTemplateColumns: '112px 1fr',
+        gap: 12,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Yardage — dark card */}
+          <div style={{
+            background: '#0E1C13', color: 'var(--paper)',
+            borderRadius: 20, padding: '14px 14px 16px',
+            boxShadow: 'var(--shadow-md)',
+            position: 'relative',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginBottom: 4 }}>
+              <path d="M3 12V3l7 3.5L3 10" stroke="var(--forest)" strokeWidth="1.6" strokeLinejoin="round" fill="var(--forest)" fillOpacity="0.35"/>
+            </svg>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 0.9,
+              letterSpacing: '-0.03em',
+            }}>{hole.distance}<span style={{ fontSize: 16, opacity: 0.7 }}>y</span></div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.6, marginTop: 6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Remain
+            </div>
+          </div>
+
+          {/* Wind — light card */}
+          <div style={{
+            background: 'var(--paper)', color: 'var(--ink)',
+            borderRadius: 20, padding: '14px 14px 16px',
+            border: 'var(--hairline)',
+            boxShadow: 'var(--shadow-sm)',
+          }}>
+            <svg width="16" height="14" viewBox="0 0 18 14" fill="none" style={{ marginBottom: 6, color: 'var(--forest)' }}>
+              <path d="M2 4h11a2 2 0 1 0-2-2M2 10h7a2 2 0 1 1-2 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              <path d="M2 7h15a2.5 2.5 0 1 0-2.5-2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1,
+              letterSpacing: '-0.02em', color: 'var(--forest)',
+            }}>{wind.mph}</div>
+            <div style={{
+              fontSize: 10, fontFamily: 'var(--font-mono)',
+              opacity: 0.6, marginTop: 6, letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>
+              MPH · {wind.dir}
+            </div>
+          </div>
+        </div>
+
+        {/* Hole map */}
+        <HoleMap hole={hole}/>
+      </div>
+
+      {/* Tip card */}
+      <div style={{ padding: '18px 22px 0', position: 'relative' }}>
+        <div style={{
+          display: 'flex', gap: 12,
+          background: 'var(--paper)', border: 'var(--hairline)',
+          borderRadius: 20, padding: '14px 16px',
+          boxShadow: 'var(--shadow-sm)',
+          alignItems: 'stretch',
+        }}>
+          <div style={{ width: 3, background: 'var(--forest)', borderRadius: 999, flexShrink: 0 }}/>
+          <div>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 15,
+              color: 'var(--forest)', letterSpacing: '-0.01em',
+            }}>Tip</div>
+            <div className="caption-serif" style={{
+              fontSize: 13.5, color: 'var(--ink)', opacity: 0.75,
+              marginTop: 2, lineHeight: 1.45,
+            }}>
+              {tip}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Previous / Next hole navigation */}
+      <div style={{
+        padding: '14px 22px 0', position: 'relative',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <button
+          disabled={holeIdx === 0}
+          onClick={() => setHoleIdx(i => Math.max(0, i - 1))}
+          style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)',
+            color: 'var(--forest)', opacity: holeIdx === 0 ? 0.3 : 0.7,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <Icon.ArrowLeft size={12}/> Prev
+        </button>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {holes.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setHoleIdx(i)}
+              style={{
+                width: i === holeIdx ? 20 : 6,
+                height: 6, borderRadius: 999,
+                background: i === holeIdx ? 'var(--forest)' : 'rgba(14,28,19,0.14)',
+                transition: 'width 0.2s, background 0.2s',
+                border: 'none',
+              }}
+              aria-label={`Hole ${i + 1}`}
+            />
+          ))}
+        </div>
+        <button
+          disabled={holeIdx === holes.length - 1}
+          onClick={() => setHoleIdx(i => Math.min(holes.length - 1, i + 1))}
+          style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)',
+            color: 'var(--forest)', opacity: holeIdx === holes.length - 1 ? 0.3 : 0.7,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          Next <Icon.ArrowRight size={12}/>
+        </button>
+      </div>
+
+      {/* Bottom identity card — match-play data */}
+      <div style={{ padding: '22px 22px 0', position: 'relative' }}>
+        <div style={{
+          background: '#0E1C13', color: 'var(--paper)',
+          borderRadius: 22, padding: '14px 16px',
+          display: 'flex', alignItems: 'center', gap: 14,
+          boxShadow: 'var(--shadow-md)',
+        }}>
+          {/* Avatar with founder star */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 999,
+              background: 'var(--forest)', color: 'var(--cream)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-display)', fontSize: 19,
+              border: '2px solid var(--paper)',
+            }}>
+              {(MOCK.USER.name || 'A')[0]}
+            </div>
+            {MOCK.USER.foundingMember && (
+              <div style={{
+                position: 'absolute', bottom: -2, right: -2,
+                width: 18, height: 18, borderRadius: 999,
+                background: 'var(--cream)', color: 'var(--forest)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 900, border: '2px solid #0E1C13',
+              }}>★</div>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '-0.01em' }}>
+              {MOCK.USER.handle}
+            </div>
+            <div style={{
+              fontSize: 10, fontFamily: 'var(--font-mono)',
+              opacity: 0.55, marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>
+              vs {card.opponent} · thru {thru}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 22,
+              lineHeight: 1, letterSpacing: '-0.02em',
+              color: state > 0 ? 'var(--cream)' : state < 0 ? '#E7B8A7' : 'var(--cream)',
+            }}>{matchLabel}</div>
+            <div style={{
+              fontSize: 9, fontFamily: 'var(--font-mono)',
+              opacity: 0.55, marginTop: 4, letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>Match</div>
+          </div>
+          <div style={{ width: 1, background: 'rgba(234,226,206,0.14)', alignSelf: 'stretch' }}/>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 22,
+              lineHeight: 1, letterSpacing: '-0.02em',
+            }}>{MOCK.USER.sbx.toFixed(3)}</div>
+            <div style={{
+              fontSize: 9, fontFamily: 'var(--font-mono)',
+              opacity: 0.55, marginTop: 4, letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>SBX</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating FAB — open full scorecard overlay */}
+      <button
+        onClick={() => setShowOverlay(true)}
+        aria-label="Full scorecard"
+        style={{
+          position: 'absolute', bottom: 110, right: 22, zIndex: 30,
+          width: 52, height: 52, borderRadius: 999,
+          background: '#0E1C13', color: 'var(--paper)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 14px 28px rgba(14,28,19,0.32), 0 4px 10px rgba(14,28,19,0.18)',
+          border: 'none',
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+          <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {showOverlay && (
+        <FullScorecardOverlay
+          holes={holes}
+          activeHole={hole.hole}
+          onJump={(i) => { setHoleIdx(i); setShowOverlay(false); }}
+          onClose={() => setShowOverlay(false)}
+        />
+      )}
+      {showLogSheet && (
+        <HoleResultSheet
+          hole={hole.hole}
+          onClose={() => { setShowLogSheet(false); setStrokes(null); }}
+          onDone={() => { setShowLogSheet(false); setStrokes(null); setHoleIdx(i => Math.min(holes.length - 1, i + 1)); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Hole map — stylized satellite placeholder ──────────────────────
+// Uses an Unsplash aerial placeholder as the base image and layers
+// the flight arc, yardage markers, and the SPP monogram "ball" on top.
+// Real data will come from admin-uploaded satellite screenshots keyed
+// to each hole, with tee mats + pin positions pinned in an admin tool.
+function HoleMap({ hole }) {
+  const bgUrl = 'https://images.unsplash.com/photo-1587174486073-ae5e5cec4cdf?w=600&q=80&auto=format&fit=crop';
+
+  return (
+    <div style={{
+      position: 'relative',
+      minHeight: 320,
+      borderRadius: 24, overflow: 'hidden',
+      background: `linear-gradient(180deg, rgba(14,28,19,0.08), rgba(14,28,19,0.25)), url('${bgUrl}')`,
+      backgroundSize: 'cover', backgroundPosition: 'center',
+      boxShadow: 'var(--shadow-md)',
+    }}>
+      {/* SVG overlay: flight arc + yardage pills + ball radar */}
+      <svg viewBox="0 0 200 320" preserveAspectRatio="none" style={{
+        position: 'absolute', inset: 0, width: '100%', height: '100%',
+      }}>
+        <defs>
+          <filter id="softblur" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="0.8"/>
+          </filter>
+        </defs>
+        {/* Flight arc — forest green with low-opacity haze */}
+        <path
+          d="M 150 270 Q 90 210 70 80"
+          fill="none"
+          stroke="var(--forest)"
+          strokeWidth="1.6"
+          strokeDasharray="1 4"
+          strokeLinecap="round"
+          opacity="0.9"
+        />
+        {/* Pin marker at top */}
+        <circle cx="70" cy="80" r="4" fill="var(--forest)"/>
+        <circle cx="70" cy="80" r="10" fill="var(--forest)" opacity="0.18"/>
+      </svg>
+
+      {/* Distance pills (HTML for crisp text) */}
+      <div style={{
+        position: 'absolute', top: '26%', left: '38%',
+        padding: '4px 10px', borderRadius: 999,
+        background: 'rgba(14,28,19,0.78)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        color: 'var(--paper)',
+        fontSize: 10, fontFamily: 'var(--font-mono)',
+        fontWeight: 700, letterSpacing: '0.04em',
+      }}>
+        {hole.distance}y
+      </div>
+      <div style={{
+        position: 'absolute', bottom: '14%', right: '12%',
+        padding: '3px 9px', borderRadius: 999,
+        background: 'rgba(14,28,19,0.6)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        color: 'var(--paper)',
+        fontSize: 9, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.04em', opacity: 0.85,
+      }}>
+        {Math.round(hole.distance * 1.3)}y
+      </div>
+
+      {/* SPP monogram "ball" with radar rings */}
+      <div style={{
+        position: 'absolute', right: '22%', top: '54%',
+        width: 72, height: 72, borderRadius: 999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{
+          position: 'absolute', inset: -14, borderRadius: 999,
+          border: '1px solid rgba(255,255,255,0.45)', opacity: 0.7,
+        }}/>
+        <span style={{
+          position: 'absolute', inset: -26, borderRadius: 999,
+          border: '1px solid rgba(255,255,255,0.28)', opacity: 0.5,
+        }}/>
+        <div style={{
+          width: 48, height: 48, borderRadius: 999,
+          background: 'var(--paper)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 10px 24px rgba(14,28,19,0.35)',
+          border: '2px solid var(--cream)',
+        }}>
+          <Ostrich kind="S" variant="forest" size={34}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Full scorecard overlay (opened from FAB) ───────────────────────
+function FullScorecardOverlay({ holes, activeHole, onJump, onClose }) {
+  const played = holes.filter(h => h.result);
+  const state = played.reduce((s, h) => s + (h.result === 'W' ? 1 : h.result === 'L' ? -1 : 0), 0);
+  const thru = played.length;
+  const remaining = holes.length - thru;
   const wonH = played.filter(h => h.result === 'W').length;
   const halvedH = played.filter(h => h.result === 'H').length;
   const lostH = played.filter(h => h.result === 'L').length;
 
   return (
-    <div style={{
-      background: `linear-gradient(180deg, var(--forest-dark) 0%, var(--forest) 50%, var(--forest-deep) 100%)`,
-      minHeight: '100%', color: 'var(--cream)', paddingBottom: 120, position: 'relative',
-    }}>
-      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-      <div style={{ padding: '58px 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-        <button onClick={() => go({ screen: 'home' })} style={{
-          width: 40, height: 40, borderRadius: 999,
-          background: 'rgba(234,226,206,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-          color: 'var(--cream)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '1px solid rgba(234,226,206,0.22)',
-        }}>
-          <Icon.Close size={14}/>
-        </button>
-        <div style={{
-          padding: '6px 12px', borderRadius: 999,
-          background: 'rgba(234,226,206,0.14)', backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(234,226,206,0.24)',
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
-        }}>
-          <LiveDot/> LIVE · MELREESE
-        </div>
-        <div style={{ width: 40 }}/>
-      </div>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 50,
+        background: 'rgba(14,28,19,0.5)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'flex-end',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          background: 'var(--paper)', color: 'var(--ink)',
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          padding: '14px 20px 28px',
+          animation: 'sheet-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+          maxHeight: '88%', overflowY: 'auto',
+        }}
+      >
+        <style>{`@keyframes sheet-up { from { transform: translateY(100%);} to { transform: translateY(0);} }`}</style>
+        <div style={{ width: 36, height: 4, borderRadius: 3, background: 'rgba(14,28,19,0.18)', margin: '0 auto 14px' }}/>
 
-      {/* Match state hero */}
-      <div style={{ padding: '10px 20px 0', textAlign: 'center', position: 'relative' }}>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Week 11 · match play</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 10 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '-0.01em' }}>{card.teamName}</span>
-          <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 800, letterSpacing: '0.18em', fontFamily: 'var(--font-mono)' }}>VS</span>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, opacity: 0.7, letterSpacing: '-0.01em' }}>{card.opponent}</span>
-        </div>
-        <div style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 92, lineHeight: 0.82, marginTop: 20,
-          letterSpacing: '-0.04em',
-          color: state > 0 ? 'var(--cream)' : state < 0 ? '#E7B8A7' : 'var(--cream)',
-          textShadow: '0 4px 20px rgba(0,0,0,0.2)',
-        }}>{label}</div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 10, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-          THRU {thru} · {sub}
-        </div>
-      </div>
-
-      {/* Match card — minimalist hole strip */}
-      <div style={{ padding: '22px 16px 0', position: 'relative' }}>
-        <div style={{
-          background: 'var(--paper)',
-          borderRadius: 'var(--radius-card-lg)', padding: 20,
-          color: 'var(--ink)',
-          boxShadow: 'var(--shadow-hero)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Match card</div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.06em' }}>
-              THRU {thru} · {remaining} LEFT
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <div style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)',
+              opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase',
+            }}>Match card</div>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--forest)',
+              letterSpacing: '-0.02em', lineHeight: 0.9, marginTop: 6,
+            }}>
+              {state > 0 ? `${state} UP` : state < 0 ? `${-state} DN` : 'All square'}
             </div>
           </div>
+          <div style={{
+            fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.5,
+            letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'right',
+          }}>
+            THRU {thru}<br/>{remaining} LEFT
+          </div>
+        </div>
 
-          {/* Unified hole strip — one pill per hole */}
-          <div style={{ display: 'flex', gap: 5 }}>
-            {card.holes.map(h => {
-              const r = h.result;
-              const isCurrent = h.current;
-              const you = h.you, opp = h.opp;
-              let bg, fg, border;
-              if (r === 'W') { bg = 'var(--forest)'; fg = 'var(--cream)'; border = 'none'; }
-              else if (r === 'L') { bg = 'var(--cream)'; fg = 'var(--forest)'; border = 'none'; }
-              else if (r === 'H') { bg = 'var(--paper)'; fg = 'var(--forest)'; border = '1px solid rgba(28,73,42,0.25)'; }
-              else if (isCurrent) { bg = 'transparent'; fg = 'var(--forest)'; border = '1.5px solid var(--forest)'; }
-              else { bg = 'transparent'; fg = 'rgba(14,28,19,0.3)'; border = '1px solid rgba(14,28,19,0.08)'; }
-              return (
-                <div key={h.hole} style={{
+        {/* Hole strip */}
+        <div style={{ display: 'flex', gap: 5 }}>
+          {holes.map((h, i) => {
+            const r = h.result;
+            const isActive = h.hole === activeHole;
+            let bg, fg, border;
+            if (r === 'W') { bg = 'var(--forest)'; fg = 'var(--cream)'; border = 'none'; }
+            else if (r === 'L') { bg = 'var(--cream)'; fg = 'var(--forest)'; border = 'none'; }
+            else if (r === 'H') { bg = 'var(--paper)'; fg = 'var(--forest)'; border = '1px solid rgba(28,73,42,0.25)'; }
+            else if (isActive) { bg = 'transparent'; fg = 'var(--forest)'; border = '1.5px solid var(--forest)'; }
+            else { bg = 'transparent'; fg = 'rgba(14,28,19,0.3)'; border = '1px solid rgba(14,28,19,0.08)'; }
+            return (
+              <button
+                key={h.hole}
+                onClick={() => onJump(i)}
+                style={{
                   flex: 1, aspectRatio: '0.78',
                   borderRadius: 12,
                   background: bg, color: fg, border,
                   display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', gap: 2,
-                  position: 'relative',
-                }}>
-                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.04em' }}>{h.hole}</span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, lineHeight: 1 }}>
-                    {isCurrent ? '·' : r || ''}
+                  padding: 0,
+                }}
+              >
+                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.04em' }}>{h.hole}</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, lineHeight: 1 }}>
+                  {isActive && !r ? '·' : r || ''}
+                </span>
+                {h.you != null && h.opp != null && (
+                  <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '-0.02em' }}>
+                    {h.you}·{h.opp}
                   </span>
-                  {you != null && opp != null && (
-                    <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '-0.02em' }}>
-                      {you}·{opp}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-          <div style={{ height: 1, background: 'rgba(14,28,19,0.06)', margin: '18px 0 14px' }}/>
+        <div style={{ height: 1, background: 'rgba(14,28,19,0.06)', margin: '18px 0 14px' }}/>
 
-          {/* Legend + summary */}
-          <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: 'var(--font-mono)', justifyContent: 'space-between', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--forest)' }}/>
-              <strong style={{ fontSize: 13, fontFamily: 'var(--font-display)', color: 'var(--forest)' }}>{wonH}</strong> won
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--paper)', border: '1px solid rgba(28,73,42,0.3)' }}/>
-              <strong style={{ fontSize: 13, fontFamily: 'var(--font-display)', color: 'var(--forest)' }}>{halvedH}</strong> halved
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--cream)' }}/>
-              <strong style={{ fontSize: 13, fontFamily: 'var(--font-display)', color: 'var(--forest)' }}>{lostH}</strong> lost
-            </span>
-          </div>
+        {/* Legend + summary */}
+        <div style={{ display: 'flex', gap: 14, fontSize: 10, fontFamily: 'var(--font-mono)', justifyContent: 'space-between', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--forest)' }}/>
+            <strong style={{ fontSize: 13, fontFamily: 'var(--font-display)', color: 'var(--forest)' }}>{wonH}</strong> won
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--paper)', border: '1px solid rgba(28,73,42,0.3)' }}/>
+            <strong style={{ fontSize: 13, fontFamily: 'var(--font-display)', color: 'var(--forest)' }}>{halvedH}</strong> halved
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--cream)' }}/>
+            <strong style={{ fontSize: 13, fontFamily: 'var(--font-display)', color: 'var(--forest)' }}>{lostH}</strong> lost
+          </span>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <Button variant="forest" full onClick={onClose}>
+            Back to hole {activeHole} <Icon.ArrowRight size={14}/>
+          </Button>
         </div>
       </div>
-
-      {/* Current hole callout */}
-      <div style={{ padding: '16px', position: 'relative' }}>
-        <div style={{
-          background: 'rgba(234,226,206,0.08)',
-          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(234,226,206,0.18)',
-          borderRadius: 'var(--radius-card-lg)', padding: 20,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>You're on</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 54, lineHeight: 0.88, marginTop: 6, letterSpacing: '-0.03em' }}>Hole 6</div>
-              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, marginTop: 8, letterSpacing: '0.06em' }}>72 YD · MAT 2 · PAR 3</div>
-            </div>
-            <div style={{ position: 'relative', width: 84, height: 84, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="84" height="84" viewBox="0 0 100 100">
-                <circle cx="50" cy="55" r="36" fill="rgba(234,226,206,0.15)"/>
-                <circle cx="50" cy="55" r="24" fill="none" stroke="rgba(234,226,206,0.3)" strokeWidth="1"/>
-                <circle cx="50" cy="55" r="12" fill="none" stroke="rgba(234,226,206,0.4)" strokeWidth="1" strokeDasharray="3 2"/>
-                <circle cx="50" cy="55" r="3" fill="var(--clay)"/>
-                <line x1="50" y1="55" x2="50" y2="22" stroke="var(--cream)" strokeWidth="1.5"/>
-                <polygon points="50,22 63,26 50,31" fill="var(--clay)"/>
-                <circle cx="18" cy="82" r="3.2" fill="#FFF8E8" stroke="var(--forest-deep)" strokeWidth="0.5"/>
-              </svg>
-            </div>
-          </div>
-          <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '16px 0' }}/>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="primary" size="md" full onClick={() => setShowSheet(true)}>
-              Log hole 6 <Icon.ArrowRight size={14}/>
-            </Button>
-            <Button variant="ghost" size="md">
-              <Icon.Share size={14}/>
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Other matches */}
-      <div style={{ padding: '6px 16px 0', position: 'relative' }}>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.14em', textTransform: 'uppercase', paddingLeft: 4, marginBottom: 10 }}>Other matches</div>
-        <div style={{ background: 'rgba(234,226,206,0.06)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderRadius: 18, border: '1px solid rgba(234,226,206,0.12)', overflow: 'hidden' }}>
-          {MOCK.LIVE.matches.filter(m => !m.isYou).slice(0, 5).map((m, i, arr) => (
-            <div key={m.id} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '12px 14px',
-              borderBottom: i < arr.length - 1 ? '1px solid rgba(234,226,206,0.08)' : 'none',
-            }}>
-              <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{m.teams}</span>
-              <span style={{
-                fontFamily: 'var(--font-display)', fontSize: 14,
-                color: m.status === 'DORMIE' ? 'var(--clay)' : 'var(--cream)',
-                opacity: m.status === 'AS' ? 0.7 : 1,
-              }}>{m.status}</span>
-              <span style={{ fontSize: 10, opacity: 0.55, minWidth: 46, textAlign: 'right' }}>thru {m.thru}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {showSheet && <HoleResultSheet hole={6} onClose={() => setShowSheet(false)} onDone={() => { setShowSheet(false); go({ screen: 'resultShare' }); }}/>}
     </div>
   );
 }
