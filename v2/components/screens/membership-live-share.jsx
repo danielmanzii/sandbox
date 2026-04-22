@@ -142,10 +142,9 @@ function LiveScorecardScreen({ go }) {
   const [holeIdx, setHoleIdx] = React.useState(firstUnplayed);
   const [showOverlay, setShowOverlay] = React.useState(false);
   const [showLogSheet, setShowLogSheet] = React.useState(false);
-  // Transient per-hole stroke selection (pre-commit)
-  const [strokes, setStrokes] = React.useState(null);
 
   const hole = holes[holeIdx];
+  const logged = hole.you != null;
 
   // Live-computed match state across all played holes
   const played = holes.filter(h => h.result);
@@ -180,11 +179,10 @@ function LiveScorecardScreen({ go }) {
   const wind = windByHole[hole.hole] || { mph: '5-7', dir: 'SE' };
   const tip = tipsByHole[hole.hole] || 'Trust the yardage. Make an athletic swing.';
 
-  // Stroke commit: open the sheet to finalize opponent score / shot stats
-  const onPickStrokes = (n) => {
-    setStrokes(n);
-    setShowLogSheet(true);
-  };
+  // Tapping any stroke pill opens the shot-by-shot sheet. V1's logic
+  // computes the team's stroke count from GIR + putts + picked ball —
+  // the pills only DISPLAY what was computed; they aren't a direct input.
+  const openLogSheet = () => setShowLogSheet(true);
 
   return (
     <div style={{
@@ -240,22 +238,34 @@ function LiveScorecardScreen({ go }) {
         </button>
       </div>
 
-      {/* Stroke input pills (repurposed par selector) */}
+      {/* Team strokes — READ-ONLY display of what V1's shot-by-shot
+          logic computed. Tap any pill to open the sheet and re-log. */}
       <div style={{ padding: '16px 22px 0', position: 'relative' }}>
         <div style={{
-          fontSize: 11, fontFamily: 'var(--font-mono)',
-          color: 'var(--forest)', opacity: 0.55,
-          letterSpacing: '0.1em', textTransform: 'uppercase',
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
           marginBottom: 10,
         }}>
-          Strokes {hole.you != null && <span style={{ opacity: 0.8 }}>· logged {hole.you}</span>}
+          <div style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)',
+            color: 'var(--forest)', opacity: 0.55,
+            letterSpacing: '0.1em', textTransform: 'uppercase',
+          }}>
+            Team strokes
+          </div>
+          <div style={{
+            fontSize: 10, fontFamily: 'var(--font-mono)',
+            color: 'var(--forest)', opacity: logged ? 0.65 : 0.4,
+            letterSpacing: '0.06em',
+          }}>
+            {logged ? 'Computed from shots' : 'Tap to log shots'}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 999,
-            background: hole.you != null ? 'var(--forest)' : 'transparent',
-            border: hole.you != null ? 'none' : '1.5px solid rgba(14,28,19,0.12)',
-            color: hole.you != null ? 'var(--cream)' : 'rgba(14,28,19,0.3)',
+            background: logged ? 'var(--forest)' : 'transparent',
+            border: logged ? 'none' : '1.5px solid rgba(14,28,19,0.12)',
+            color: logged ? 'var(--cream)' : 'rgba(14,28,19,0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}>
@@ -264,15 +274,16 @@ function LiveScorecardScreen({ go }) {
             </svg>
           </div>
           {[1, 2, 3, 4].map(n => {
-            const isSelected = (hole.you ?? strokes) === n;
+            const isSelected = logged && hole.you === n;
             return (
               <button
                 key={n}
-                onClick={() => onPickStrokes(n)}
+                onClick={openLogSheet}
+                aria-label={`Team strokes: ${n}`}
                 style={{
                   flex: 1, height: 38, borderRadius: 999,
                   background: isSelected ? 'var(--forest)' : 'var(--paper)',
-                  color: isSelected ? 'var(--cream)' : 'var(--forest)',
+                  color: isSelected ? 'var(--cream)' : logged ? 'rgba(14,28,19,0.32)' : 'var(--forest)',
                   border: isSelected ? 'none' : 'var(--hairline)',
                   boxShadow: isSelected ? 'var(--shadow-sm)' : 'none',
                   fontFamily: 'var(--font-display)', fontSize: 16,
@@ -509,60 +520,149 @@ function LiveScorecardScreen({ go }) {
       {showLogSheet && (
         <HoleResultSheet
           hole={hole.hole}
-          onClose={() => { setShowLogSheet(false); setStrokes(null); }}
-          onDone={() => { setShowLogSheet(false); setStrokes(null); setHoleIdx(i => Math.min(holes.length - 1, i + 1)); }}
+          onClose={() => setShowLogSheet(false)}
+          onDone={() => { setShowLogSheet(false); setHoleIdx(i => Math.min(holes.length - 1, i + 1)); }}
         />
       )}
     </div>
   );
 }
 
-// ─── Hole map — stylized satellite placeholder ──────────────────────
-// Uses an Unsplash aerial placeholder as the base image and layers
-// the flight arc, yardage markers, and the SPP monogram "ball" on top.
-// Real data will come from admin-uploaded satellite screenshots keyed
-// to each hole, with tee mats + pin positions pinned in an admin tool.
+// ─── Hole map — stylized painted-diorama SVG illustration ───────────
+// Stand-in for admin-uploaded satellite screenshots. Entire illustration
+// is inline SVG so it renders crisp at any size and uses our palette.
+// Replaceable: drop a real image at v2/assets/hole-maps/hole-N.png and
+// swap the <rect> background for a <image> element.
 function HoleMap({ hole }) {
-  const bgUrl = 'https://images.unsplash.com/photo-1587174486073-ae5e5cec4cdf?w=600&q=80&auto=format&fit=crop';
-
   return (
     <div style={{
       position: 'relative',
-      minHeight: 320,
+      minHeight: 340,
       borderRadius: 24, overflow: 'hidden',
-      background: `linear-gradient(180deg, rgba(14,28,19,0.08), rgba(14,28,19,0.25)), url('${bgUrl}')`,
-      backgroundSize: 'cover', backgroundPosition: 'center',
+      background: 'var(--cream)',
       boxShadow: 'var(--shadow-md)',
     }}>
-      {/* SVG overlay: flight arc + yardage pills + ball radar */}
-      <svg viewBox="0 0 200 320" preserveAspectRatio="none" style={{
+      <svg viewBox="0 0 200 340" preserveAspectRatio="xMidYMid slice" style={{
         position: 'absolute', inset: 0, width: '100%', height: '100%',
+        display: 'block',
       }}>
         <defs>
-          <filter id="softblur" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="0.8"/>
+          {/* Painted green gradient (base fairway) */}
+          <linearGradient id="fw" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"  stopColor="#A9C58F"/>
+            <stop offset="55%" stopColor="#6F9963"/>
+            <stop offset="100%" stopColor="#3E6D48"/>
+          </linearGradient>
+          {/* Rough tree ring */}
+          <radialGradient id="trees" cx="50%" cy="50%" r="60%">
+            <stop offset="60%" stopColor="#2C4D32" stopOpacity="0"/>
+            <stop offset="100%" stopColor="#162B1B" stopOpacity="1"/>
+          </radialGradient>
+          {/* Water */}
+          <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4B8D94"/>
+            <stop offset="100%" stopColor="#2E5D67"/>
+          </linearGradient>
+          {/* Cloud wisp */}
+          <radialGradient id="cloud" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"  stopColor="#FFFFFF" stopOpacity="0.75"/>
+            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0"/>
+          </radialGradient>
+          <filter id="paint" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="0.6"/>
           </filter>
         </defs>
-        {/* Flight arc — forest green with low-opacity haze */}
+
+        {/* Outer dark tree ring */}
+        <rect width="200" height="340" fill="#162B1B"/>
+        <rect x="0" y="0" width="200" height="340" fill="url(#trees)" opacity="0.85"/>
+
+        {/* Tree cluster blobs — hand-placed, organic */}
+        <g fill="#1E3A22" opacity="0.92" filter="url(#paint)">
+          <ellipse cx="18" cy="56" rx="22" ry="28"/>
+          <ellipse cx="32" cy="128" rx="30" ry="42"/>
+          <ellipse cx="22" cy="220" rx="26" ry="40"/>
+          <ellipse cx="40" cy="300" rx="28" ry="30"/>
+          <ellipse cx="180" cy="30" rx="24" ry="30"/>
+          <ellipse cx="185" cy="110" rx="22" ry="36"/>
+          <ellipse cx="165" cy="248" rx="30" ry="34"/>
+        </g>
+
+        {/* Main fairway — irregular painted blob with dogleg */}
         <path
-          d="M 150 270 Q 90 210 70 80"
-          fill="none"
-          stroke="var(--forest)"
-          strokeWidth="1.6"
-          strokeDasharray="1 4"
-          strokeLinecap="round"
-          opacity="0.9"
+          d="M 70 312
+             C 45 290, 52 252, 72 230
+             C 90 210, 72 180, 80 146
+             C 88 120, 110 100, 118 78
+             C 124 60, 110 44, 92 40
+             C 85 38, 80 42, 78 48
+             C 76 55, 82 62, 92 60
+             C 108 58, 124 72, 126 96
+             C 128 130, 100 150, 108 188
+             C 114 214, 146 220, 150 254
+             C 154 290, 118 318, 80 318 Z"
+          fill="url(#fw)"
+          filter="url(#paint)"
         />
-        {/* Pin marker at top */}
-        <circle cx="70" cy="80" r="4" fill="var(--forest)"/>
-        <circle cx="70" cy="80" r="10" fill="var(--forest)" opacity="0.18"/>
+
+        {/* Lighter fairway path highlight */}
+        <path
+          d="M 80 304
+             C 70 280, 80 252, 96 232
+             C 108 216, 96 192, 104 158
+             C 110 134, 126 112, 124 86"
+          fill="none"
+          stroke="#C8DDB0" strokeOpacity="0.55" strokeWidth="16" strokeLinecap="round"
+          filter="url(#paint)"
+        />
+
+        {/* Green (darker, cleaner) — top of hole */}
+        <ellipse cx="122" cy="70" rx="24" ry="18" fill="#3C6845"/>
+        <ellipse cx="122" cy="70" rx="16" ry="11" fill="#6AA476" opacity="0.75"/>
+
+        {/* Sand bunkers */}
+        <ellipse cx="96"  cy="96"  rx="8"  ry="5" fill="#EADDB5" opacity="0.92"/>
+        <ellipse cx="140" cy="92"  rx="6"  ry="4" fill="#EADDB5" opacity="0.92"/>
+        <ellipse cx="100" cy="256" rx="9"  ry="5" fill="#EADDB5" opacity="0.92"/>
+
+        {/* Water feature (bottom-right) */}
+        <path
+          d="M 140 244
+             C 166 244, 174 270, 168 294
+             C 162 318, 138 316, 128 296
+             C 120 278, 122 244, 140 244 Z"
+          fill="url(#water)"
+          filter="url(#paint)"
+        />
+
+        {/* Cloud drifting across right-middle */}
+        <ellipse cx="158" cy="180" rx="42" ry="18" fill="url(#cloud)"/>
+
+        {/* Flag at green — pole + triangle */}
+        <line x1="122" y1="70" x2="122" y2="46" stroke="var(--cream)" strokeWidth="1.4"/>
+        <polygon points="122,46 136,50 122,55" fill="var(--forest)"/>
+        <circle cx="122" cy="70" r="1.8" fill="var(--cream)"/>
+
+        {/* Flight arc — ball → green */}
+        <path
+          d="M 134 200 Q 88 160 122 74"
+          fill="none"
+          stroke="var(--cream)"
+          strokeWidth="1.8"
+          strokeDasharray="0.5 4"
+          strokeLinecap="round"
+          opacity="0.95"
+        />
+        {/* Pin hit marker (small ring where the arc lands) */}
+        <circle cx="122" cy="74" r="3" fill="var(--cream)"/>
+        <circle cx="122" cy="74" r="6" fill="none" stroke="var(--cream)" strokeWidth="0.8" opacity="0.6"/>
       </svg>
 
-      {/* Distance pills (HTML for crisp text) */}
+      {/* Distance pills — HTML for crisp text */}
       <div style={{
-        position: 'absolute', top: '26%', left: '38%',
+        position: 'absolute', top: '30%', left: '44%',
         padding: '4px 10px', borderRadius: 999,
-        background: 'rgba(14,28,19,0.78)',
+        background: 'rgba(14,28,19,0.82)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         color: 'var(--paper)',
         fontSize: 10, fontFamily: 'var(--font-mono)',
@@ -571,26 +671,26 @@ function HoleMap({ hole }) {
         {hole.distance}y
       </div>
       <div style={{
-        position: 'absolute', bottom: '14%', right: '12%',
+        position: 'absolute', bottom: '16%', right: '16%',
         padding: '3px 9px', borderRadius: 999,
-        background: 'rgba(14,28,19,0.6)',
+        background: 'rgba(14,28,19,0.55)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         color: 'var(--paper)',
         fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.04em', opacity: 0.85,
+        letterSpacing: '0.04em', opacity: 0.9,
       }}>
         {Math.round(hole.distance * 1.3)}y
       </div>
 
-      {/* SPP monogram "ball" with radar rings */}
+      {/* SPP monogram "ball" with radar rings — ball position on fairway */}
       <div style={{
-        position: 'absolute', right: '22%', top: '54%',
+        position: 'absolute', right: '30%', top: '56%',
         width: 72, height: 72, borderRadius: 999,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{
           position: 'absolute', inset: -14, borderRadius: 999,
-          border: '1px solid rgba(255,255,255,0.45)', opacity: 0.7,
+          border: '1px solid rgba(255,255,255,0.5)', opacity: 0.7,
         }}/>
         <span style={{
           position: 'absolute', inset: -26, borderRadius: 999,
@@ -600,7 +700,7 @@ function HoleMap({ hole }) {
           width: 48, height: 48, borderRadius: 999,
           background: 'var(--paper)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 10px 24px rgba(14,28,19,0.35)',
+          boxShadow: '0 10px 24px rgba(14,28,19,0.38)',
           border: '2px solid var(--cream)',
         }}>
           <Ostrich kind="S" variant="forest" size={34}/>

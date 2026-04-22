@@ -4,24 +4,31 @@
 function SocialScreen({ go, tier }) {
   const [tab, setTab] = React.useState('live');
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <div style={{ padding: '58px 20px 20px', background: 'var(--canvas)', color: 'var(--forest)' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>The Board</div>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 140, position: 'relative' }}>
+      {/* Ambient top-right wash */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', top: 0, right: 0, width: '85%', height: '44%',
+        background: 'radial-gradient(ellipse at 80% 10%, rgba(28,73,42,0.08) 0%, rgba(28,73,42,0.02) 40%, transparent 70%)',
+        pointerEvents: 'none',
+      }}/>
+      <div style={{ position: 'relative', padding: '58px 22px 22px', color: 'var(--forest)' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>The Board</div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.9, marginTop: 8, letterSpacing: '-0.02em' }}>Leaderboards.</div>
         <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 6 }}>
           Talk less. Shoot lower.
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, margin: '0 16px 0', background: 'rgba(14,28,19,0.05)', borderRadius: 14, padding: 4 }}>
+      <div style={{ display: 'flex', gap: 4, margin: '0 22px', background: 'rgba(14,28,19,0.05)', borderRadius: 999, padding: 4, position: 'relative' }}>
         {[['live', 'Live'], ['season', 'Season'], ['alltime', 'All-time']].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
-            flex: 1, padding: '10px 12px', borderRadius: 11,
-            background: tab === k ? 'var(--paper)' : 'transparent',
-            color: 'var(--forest)', fontWeight: 700, fontSize: 12,
+            flex: 1, padding: '10px 12px', borderRadius: 999,
+            background: tab === k ? '#0E1C13' : 'transparent',
+            color: tab === k ? 'var(--paper)' : 'var(--forest)', fontWeight: 700, fontSize: 11,
             boxShadow: tab === k ? 'var(--shadow-sm)' : 'none',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.04em',
+            fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em',
+            border: 'none',
           }}>
             {k === 'live' && <LiveDot/>}
             {l}

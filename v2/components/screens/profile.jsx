@@ -23,12 +23,12 @@ function ProfileScreen({ go, tier, viewingHandle }) {
         {!isSelf && (
           <button onClick={() => go({ screen: 'social' })} style={{
             position: 'absolute', top: 58, left: 16,
-            width: 40, height: 40, borderRadius: 999,
-            background: 'rgba(14,28,19,0.55)', backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            color: 'var(--cream)',
+            width: 44, height: 44, borderRadius: 999,
+            background: 'var(--paper)',
+            boxShadow: 'var(--shadow-md)',
+            color: 'var(--forest)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '1px solid rgba(234,226,206,0.22)',
+            border: 'none',
           }}>
             <Icon.ArrowLeft size={16}/>
           </button>

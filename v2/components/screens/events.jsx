@@ -11,9 +11,16 @@ function EventsScreen({ go, tier }) {
   });
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <div style={{ padding: '58px 20px 20px', background: 'var(--canvas)', color: 'var(--forest)' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>The Schedule</div>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 140, position: 'relative' }}>
+      {/* Ambient top-right wash — V2 signature */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', top: 0, right: 0, width: '85%', height: '44%',
+        background: 'radial-gradient(ellipse at 80% 10%, rgba(28,73,42,0.08) 0%, rgba(28,73,42,0.02) 40%, transparent 70%)',
+        pointerEvents: 'none',
+      }}/>
+
+      <div style={{ position: 'relative', padding: '58px 22px 22px', color: 'var(--forest)' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>The Schedule</div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.9, marginTop: 8, letterSpacing: '-0.02em' }}>
           Play.
         </div>
@@ -22,21 +29,21 @@ function EventsScreen({ go, tier }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, padding: '4px 16px 0', overflowX: 'auto' }} className="scroll-hide">
+      <div style={{ display: 'flex', gap: 8, padding: '0 22px 0', overflowX: 'auto', position: 'relative' }} className="scroll-hide">
         {[['all', 'All'], ['weekly', 'Weekly'], ['majors', 'Majors']].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} style={{
-            padding: '9px 16px', borderRadius: 999,
-            background: filter === k ? 'var(--forest)' : 'var(--paper)',
-            color: filter === k ? 'var(--cream)' : 'var(--forest)',
+            padding: '10px 18px', borderRadius: 999,
+            background: filter === k ? '#0E1C13' : 'var(--paper)',
+            color: filter === k ? 'var(--paper)' : 'var(--forest)',
             border: filter === k ? 'none' : 'var(--hairline)',
-            fontWeight: 700, fontSize: 12, letterSpacing: '0.02em',
+            fontWeight: 700, fontSize: 11, letterSpacing: '0.08em',
             boxShadow: filter === k ? 'var(--shadow-sm)' : 'none',
             fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
           }}>{l}</button>
         ))}
       </div>
 
-      <div style={{ padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16, position: 'relative' }}>
         {filtered.map(e => <FullEventCard key={e.id} event={e} go={go} tier={tier}/>)}
       </div>
     </div>
@@ -47,47 +54,82 @@ function FullEventCard({ event, go, tier }) {
   const isMember = tier === 'league' || tier === 'leaguePlus';
   const pct = event.filled / event.field;
   const nearFull = pct > 0.85;
+  const friends = MOCK.FRIENDS.slice(0, 3);
+  const live = event.status === 'live';
   return (
-    <button onClick={() => go({ screen: 'eventDetail', eventId: event.id })} className="card" style={{
+    <button onClick={() => go({ screen: live ? 'live' : 'eventDetail', eventId: event.id })} style={{
       width: '100%', textAlign: 'left',
+      background: 'var(--paper)',
       overflow: 'hidden',
       padding: 0,
       display: 'block',
-      borderRadius: 22,
+      borderRadius: 26,
+      boxShadow: 'var(--shadow-md)',
+      border: 'none',
+      position: 'relative',
     }}>
+      {/* Pinterest-style rails — subtle on list cards */}
+      <div style={{ position: 'absolute', left: 0, top: 22, bottom: 22, width: 5, background: 'var(--forest)', borderTopRightRadius: 6, borderBottomRightRadius: 6 }}/>
+      <div style={{ position: 'absolute', right: 0, top: 22, bottom: 22, width: 5, background: 'var(--cream)', borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }}/>
+
       <div style={{
-        height: 140,
-        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0) 0%, rgba(14,28,19,0.2) 55%, rgba(14,28,19,0.85) 100%), url('${event.img}')`,
+        height: 170,
+        margin: '8px 12px 0',
+        borderRadius: 20, overflow: 'hidden',
+        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0) 0%, rgba(14,28,19,0.15) 55%, rgba(14,28,19,0.88) 100%), url('${event.img}')`,
         backgroundSize: 'cover', backgroundPosition: 'center',
         position: 'relative', color: 'var(--cream)',
         padding: 14,
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {event.isMajor && (
-            <div style={{
-              padding: '4px 10px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.22)',
-              fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
-            }}>⛳ Major</div>
-          )}
-          {event.status === 'member-only' && (
-            <div style={{
-              padding: '4px 10px', borderRadius: 999,
-              background: 'rgba(14,28,19,0.7)', backdropFilter: 'blur(10px)',
-              fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}><Icon.Lock size={10} color="currentColor"/> Member</div>
-          )}
-          {!event.isMajor && event.status === 'open' && (
-            <div style={{
-              padding: '4px 10px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.22)',
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-            }}>{event.tagline}</div>
-          )}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {event.isMajor && (
+              <div style={{
+                padding: '4px 10px', borderRadius: 999,
+                background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.22)',
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+              }}>⛳ Major</div>
+            )}
+            {live && (
+              <div style={{
+                padding: '4px 10px', borderRadius: 999,
+                background: 'var(--forest)',
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--cream)' }}/> Live
+              </div>
+            )}
+            {event.status === 'member-only' && (
+              <div style={{
+                padding: '4px 10px', borderRadius: 999,
+                background: 'rgba(14,28,19,0.7)', backdropFilter: 'blur(10px)',
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}><Icon.Lock size={10} color="currentColor"/> Member</div>
+            )}
+            {!event.isMajor && !live && event.status === 'open' && (
+              <div style={{
+                padding: '4px 10px', borderRadius: 999,
+                background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.22)',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              }}>{event.tagline}</div>
+            )}
+          </div>
+          {/* Floating play button — Pinterest signature */}
+          <div style={{
+            width: 36, height: 36, borderRadius: 999,
+            background: 'var(--paper)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 6px 14px rgba(14,28,19,0.22)',
+            border: '2px solid var(--forest)',
+            flexShrink: 0,
+          }}>
+            <svg width="12" height="12" viewBox="0 0 12 14" fill="var(--forest)"><path d="M2 1.5v11l9-5.5z"/></svg>
+          </div>
         </div>
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 0.92, letterSpacing: '-0.02em' }}>
@@ -98,32 +140,27 @@ function FullEventCard({ event, go, tier }) {
           </div>
         </div>
       </div>
-      <div style={{ padding: '14px 16px 16px' }}>
+      <div style={{ padding: '14px 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{
-              height: 4, borderRadius: 999,
-              background: 'rgba(14,28,19,0.06)', position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                width: `${pct * 100}%`, height: '100%',
-                background: nearFull ? 'var(--forest)' : 'var(--moss)',
-                borderRadius: 999,
-              }}/>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex' }}>
+              {friends.map((f, i) => (
+                <img key={f.id} src={f.avatar} alt={f.name} style={{
+                  width: 24, height: 24, borderRadius: 999, objectFit: 'cover',
+                  border: '2px solid var(--paper)',
+                  marginLeft: i === 0 ? 0 : -8,
+                }}/>
+              ))}
             </div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, marginTop: 6, letterSpacing: '0.06em' }}>
-              {event.filled}/{event.field} REGISTERED{nearFull ? ' · ALMOST FULL' : ''}
-            </div>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.7, letterSpacing: '0.04em' }}>
+              {event.filled}/{event.field} here
+              {nearFull && <span style={{ color: 'var(--forest)', fontWeight: 800, marginLeft: 4 }}>· ALMOST FULL</span>}
+            </span>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--forest)', fontFamily: 'var(--font-mono)' }}>
               {isMember ? 'INCLUDED' : `$${event.priceMember}`}
             </div>
-            {!isMember && (
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.5, color: 'var(--forest)', marginTop: 2 }}>
-                ${event.priceWalkup} walk-up
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -142,30 +179,36 @@ function EventDetailScreen({ go, eventId, tier, setScreenState }) {
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 140 }}>
-      {/* Hero */}
+      {/* Hero — framed with V2 rails */}
+      <div style={{ position: 'relative', padding: '12px 12px 0' }}>
+        <div style={{ position: 'absolute', left: 4, top: 36, bottom: 20, width: 6, background: 'var(--forest)', borderTopRightRadius: 6, borderBottomRightRadius: 6, zIndex: 2 }}/>
+        <div style={{ position: 'absolute', right: 4, top: 36, bottom: 20, width: 6, background: 'var(--cream)', borderTopLeftRadius: 6, borderBottomLeftRadius: 6, zIndex: 2 }}/>
       <div style={{
-        height: 280,
-        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0.25), rgba(14,28,19,0.85)), url('${event.img}')`,
+        height: 300,
+        borderRadius: 24, overflow: 'hidden',
+        backgroundImage: `linear-gradient(180deg, rgba(14,28,19,0.1) 0%, rgba(14,28,19,0.25) 50%, rgba(14,28,19,0.88) 100%), url('${event.img}')`,
         backgroundSize: 'cover', backgroundPosition: 'center',
         position: 'relative', color: 'var(--cream)',
       }}>
         <button onClick={() => go({ screen: 'events' })} style={{
-          position: 'absolute', top: 58, left: 16,
-          width: 40, height: 40, borderRadius: 999,
-          background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(10px)',
+          position: 'absolute', top: 50, left: 16,
+          width: 44, height: 44, borderRadius: 999,
+          background: 'var(--paper)',
+          boxShadow: 'var(--shadow-md)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--cream)',
-          border: '1px solid rgba(234,226,206,0.2)',
+          color: 'var(--forest)',
+          border: 'none',
         }}>
           <Icon.ArrowLeft size={16}/>
         </button>
         <button style={{
-          position: 'absolute', top: 58, right: 16,
-          width: 40, height: 40, borderRadius: 999,
-          background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(10px)',
+          position: 'absolute', top: 50, right: 16,
+          width: 44, height: 44, borderRadius: 999,
+          background: 'var(--paper)',
+          boxShadow: 'var(--shadow-md)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--cream)',
-          border: '1px solid rgba(234,226,206,0.2)',
+          color: 'var(--forest)',
+          border: 'none',
         }}>
           <Icon.Share size={16}/>
         </button>
@@ -194,6 +237,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState }) {
             {event.courseName.toUpperCase()}
           </div>
         </div>
+      </div>
       </div>
 
       {/* Details block */}
@@ -268,14 +312,30 @@ function EventDetailScreen({ go, eventId, tier, setScreenState }) {
         </div>
       </div>
 
-      {/* Sticky CTA */}
+      {/* Sticky CTA — V2 dark pill */}
       <div style={{
         position: 'absolute', bottom: 90, left: 16, right: 16, zIndex: 20,
       }}>
-        <Button variant="forest" size="lg" full onClick={() => setRegistering(true)}>
-          {isMember ? 'Claim your spot' : `Register · $${event.priceWalkup}`}
-          <Icon.ArrowRight size={16}/>
-        </Button>
+        <button onClick={() => setRegistering(true)} style={{
+          width: '100%',
+          background: '#0E1C13', color: 'var(--paper)',
+          borderRadius: 999, padding: '14px 22px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
+          boxShadow: '0 16px 36px rgba(14,28,19,0.28)',
+          border: 'none',
+        }}>
+          <span style={{
+            width: 34, height: 34, borderRadius: 999,
+            background: 'var(--forest)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginLeft: -6,
+          }}>
+            <svg width="12" height="14" viewBox="0 0 12 14" fill="var(--cream)"><path d="M2 1.5v11l9-5.5z"/></svg>
+          </span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '-0.01em' }}>
+            {isMember ? 'Claim your spot' : `Register · $${event.priceWalkup}`}
+          </span>
+        </button>
       </div>
 
       {/* Register bottom-sheet */}
