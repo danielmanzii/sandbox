@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Sandbox Pitch & Putt — App</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Archivo:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components/data.jsx"></script>
+<script type="text/babel" src="components/primitives.jsx"></script>
+<script type="text/babel" src="components/ios-frame.jsx"></script>
+<script type="text/babel" src="components/screens/home.jsx"></script>
+<script type="text/babel" src="components/screens/events.jsx"></script>
+<script type="text/babel" src="components/screens/stats.jsx"></script>
+<script type="text/babel" src="components/screens/profile.jsx"></script>
+<script type="text/babel" src="components/screens/social.jsx"></script>
+<script type="text/babel" src="components/screens/membership-live-share.jsx"></script>
+
+<script type="text/babel">
+/* global React, ReactDOM, IOSDevice, HomeScreen, EventsScreen, EventDetailScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, Icon, Wordmark, MOCK */
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "tier": "league",
+  "mascot": "full",
+  "liveMode": true,
+  "brandLoud": "full",
+  "viewingHandle": null
+}/*EDITMODE-END*/;
+
+function App() {
+  // Persist nav + tier
+  const [route, setRoute] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('spp_route') || 'null') || { screen: 'home' }; }
+    catch { return { screen: 'home' }; }
+  });
+  const [tier, setTier] = React.useState(() => localStorage.getItem('spp_tier') || TWEAK_DEFAULTS.tier);
+  const [mascot, setMascot] = React.useState(() => localStorage.getItem('spp_mascot') || TWEAK_DEFAULTS.mascot);
+  const [liveMode, setLiveMode] = React.useState(() => {
+    const v = localStorage.getItem('spp_live');
+    return v == null ? TWEAK_DEFAULTS.liveMode : v === 'true';
+  });
+  const [brandLoud, setBrandLoud] = React.useState(() => localStorage.getItem('spp_brand') || TWEAK_DEFAULTS.brandLoud);
+  const [tweaksOn, setTweaksOn] = React.useState(false);
+
+  React.useEffect(() => { localStorage.setItem('spp_route', JSON.stringify(route)); }, [route]);
+  React.useEffect(() => { localStorage.setItem('spp_tier', tier); }, [tier]);
+  React.useEffect(() => { localStorage.setItem('spp_mascot', mascot); }, [mascot]);
+  React.useEffect(() => { localStorage.setItem('spp_live', String(liveMode)); }, [liveMode]);
+  React.useEffect(() => { localStorage.setItem('spp_brand', brandLoud); }, [brandLoud]);
+
+  // Edit-mode protocol
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setTweaksOn(true);
+      if (e.data.type === '__deactivate_edit_mode') setTweaksOn(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const go = (next) => setRoute(prev => ({ ...prev, ...next }));
+
+  // Screen router
+  const screenProps = { go, tier, setTier, mascot, brandLoud, liveMode };
+
+  let screen;
+  switch (route.screen) {
+    case 'home':         screen = <HomeScreen {...screenProps}/>; break;
+    case 'events':       screen = <EventsScreen {...screenProps}/>; break;
+    case 'eventDetail':  screen = <EventDetailScreen {...screenProps} eventId={route.eventId}/>; break;
+    case 'stats':        screen = <StatsScreen {...screenProps}/>; break;
+    case 'profile':      screen = <ProfileScreen {...screenProps} viewingHandle={route.viewingHandle}/>; break;
+    case 'social':       screen = <SocialScreen {...screenProps}/>; break;
+    case 'membership':   screen = <MembershipScreen {...screenProps}/>; break;
+    case 'live':         screen = <LiveScorecardScreen {...screenProps}/>; break;
+    case 'resultShare':  screen = <ResultShareScreen {...screenProps}/>; break;
+    default:             screen = <HomeScreen {...screenProps}/>;
+  }
+
+  // Tabs
+  const tabs = [
+    { id: 'home', label: 'Home', icon: 'Home' },
+    { id: 'events', label: 'Play', icon: 'Tee' },
+    { id: 'social', label: 'Board', icon: 'Trophy' },
+    { id: 'stats', label: 'Stats', icon: 'Chart' },
+    { id: 'profile', label: 'You', icon: 'User' },
+  ];
+
+  // Hide tabs on deep screens
+  const hideTabs = ['live', 'resultShare'].includes(route.screen);
+
+  return (
+    <>
+      <div className="phone-wrap">
+        <PhoneStage>
+          <div key={route.screen} className="screen-enter" style={{
+            position: 'absolute', inset: 0, overflow: 'auto',
+          }}>
+            {screen}
+          </div>
+          {!hideTabs && <TabBar tabs={tabs} active={route.screen} go={go}/>}
+        </PhoneStage>
+      </div>
+
+      {tweaksOn && <TweaksPanel
+        tier={tier} setTier={setTier}
+        mascot={mascot} setMascot={setMascot}
+        liveMode={liveMode} setLiveMode={setLiveMode}
+        brandLoud={brandLoud} setBrandLoud={setBrandLoud}
+        route={route} go={go}
+      />}
+    </>
+  );
+}
+
+// ─── Phone stage: scales a 402×874 "phone" to viewport ───
+function PhoneStage({ children }) {
+  const W = 402, H = 874;
+  const [scale, setScale] = React.useState(1);
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const update = () => {
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const mobile = vw < 640;
+      setIsMobile(mobile);
+      if (mobile) {
+        // On mobile, fill viewport
+        setScale(1);
+      } else {
+        const pad = 40;
+        setScale(Math.min((vw - pad) / W, (vh - pad) / H, 1.1));
+      }
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  if (isMobile) {
+    return (
+      <div style={{
+        width: '100vw', height: '100dvh',
+        background: 'var(--canvas)', position: 'relative', overflow: 'hidden',
+      }}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      width: W, height: H, position: 'relative',
+      transform: `scale(${scale})`, transformOrigin: 'center center',
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        borderRadius: 48, overflow: 'hidden',
+        background: 'var(--canvas)',
+        boxShadow: '0 40px 80px rgba(0,0,0,0.35), 0 0 0 10px #1a1a1a, 0 0 0 11px #2a2a2a',
+      }}>
+        {/* Dynamic island */}
+        <div style={{
+          position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+          width: 120, height: 34, borderRadius: 22, background: '#000', zIndex: 100,
+          pointerEvents: 'none',
+        }}/>
+        {/* Time */}
+        <div style={{
+          position: 'absolute', top: 18, left: 26, zIndex: 100,
+          fontFamily: '-apple-system, system-ui', fontSize: 15, fontWeight: 600,
+          color: 'var(--cream)', mixBlendMode: 'difference',
+        }}>9:41</div>
+        {/* Battery/signal */}
+        <div style={{
+          position: 'absolute', top: 20, right: 26, zIndex: 100,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <svg width="18" height="11" viewBox="0 0 19 12" style={{ mixBlendMode: 'difference' }}>
+            <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill="#fff"/>
+            <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill="#fff"/>
+            <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill="#fff"/>
+            <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill="#fff"/>
+          </svg>
+          <svg width="24" height="11" viewBox="0 0 27 13" style={{ mixBlendMode: 'difference' }}>
+            <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="#fff" strokeOpacity="0.5" fill="none"/>
+            <rect x="2" y="2" width="18" height="9" rx="2" fill="#fff"/>
+          </svg>
+        </div>
+
+        {children}
+
+        {/* Home indicator */}
+        <div style={{
+          position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+          width: 134, height: 5, borderRadius: 3, background: 'rgba(14,28,19,0.4)',
+          zIndex: 100, pointerEvents: 'none',
+        }}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tab bar (floating pill on forest) ──────────────────
+function TabBar({ tabs, active, go }) {
+  return (
+    <div style={{
+      position: 'absolute', bottom: 22, left: 14, right: 14, zIndex: 40,
+      background: 'var(--forest-deep)',
+      borderRadius: 999,
+      padding: '6px',
+      display: 'flex', gap: 2,
+      boxShadow: '0 18px 36px rgba(14,28,19,0.34), inset 0 0 0 1px rgba(234,226,206,0.08)',
+      border: '1px solid rgba(234,226,206,0.12)',
+    }}>
+      {tabs.map(t => {
+        const isActive = active === t.id || (t.id === 'events' && active === 'eventDetail') || (t.id === 'profile' && active === 'membership');
+        const IconComp = Icon[t.icon];
+        return (
+          <button key={t.id} onClick={() => go({ screen: t.id })} style={{
+            flex: 1,
+            padding: '10px 4px',
+            borderRadius: 999,
+            background: isActive ? 'var(--clay)' : 'transparent',
+            color: isActive ? 'var(--forest-deep)' : 'rgba(234,226,206,0.75)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            transition: 'all 0.2s',
+          }}>
+            <IconComp size={18} color="currentColor" filled={isActive}/>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Tweaks panel ───────────────────────────────────────
+function TweaksPanel({ tier, setTier, mascot, setMascot, liveMode, setLiveMode, brandLoud, setBrandLoud, route, go }) {
+  const [collapsed, setCollapsed] = React.useState(false);
+
+  if (collapsed) {
+    return (
+      <div className="tweaks-panel collapsed" onClick={() => setCollapsed(false)}>
+        <div className="head" style={{ borderBottom: 'none', cursor: 'pointer' }}>
+          <span>Tweaks</span>
+          <span style={{ fontSize: 14 }}>⚙</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tweaks-panel">
+      <div className="head">
+        <span>Tweaks</span>
+        <button onClick={() => setCollapsed(true)} style={{ color: 'var(--cream)', opacity: 0.6, fontSize: 16, fontWeight: 700, lineHeight: 1 }}>−</button>
+      </div>
+      <div className="body">
+        <div className="tweak-row">
+          <label>Membership</label>
+          <div className="tweak-opts">
+            {[['walkup', 'Walk-up'], ['stats', 'Stats'], ['league', 'League'], ['leaguePlus', 'Plus']].map(([k, l]) => (
+              <button key={k} className={tier === k ? 'active' : ''} onClick={() => setTier(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="tweak-row">
+          <label>Mascot</label>
+          <div className="tweak-opts">
+            {[['off', 'Off'], ['subtle', 'Subtle'], ['full', 'Full']].map(([k, l]) => (
+              <button key={k} className={mascot === k ? 'active' : ''} onClick={() => setMascot(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="tweak-row">
+          <label>Live event</label>
+          <div className="tweak-opts">
+            <button className={liveMode ? 'active' : ''} onClick={() => setLiveMode(true)}>On</button>
+            <button className={!liveMode ? 'active' : ''} onClick={() => setLiveMode(false)}>Off</button>
+          </div>
+        </div>
+
+        <div className="tweak-row">
+          <label>Jump to screen</label>
+          <div className="tweak-opts" style={{ flexWrap: 'wrap', gap: 3 }}>
+            {[
+              ['home', 'Home'],
+              ['events', 'Events'],
+              ['eventDetail', 'Detail'],
+              ['stats', 'Stats'],
+              ['social', 'Board'],
+              ['membership', 'Member'],
+              ['live', 'Live'],
+              ['resultShare', 'Share'],
+              ['profile', 'Profile'],
+            ].map(([k, l]) => (
+              <button key={k} className={route.screen === k ? 'active' : ''} onClick={() => go({ screen: k, eventId: k === 'eventDetail' ? 'e_sat' : undefined })} style={{ flex: '0 0 auto', padding: '6px 10px' }}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="tweak-row">
+          <label>View profile as</label>
+          <div className="tweak-opts">
+            <button className={!route.viewingHandle ? 'active' : ''} onClick={() => go({ screen: 'profile', viewingHandle: null })}>Self</button>
+            <button className={route.viewingHandle === '@jaybird' ? 'active' : ''} onClick={() => go({ screen: 'profile', viewingHandle: '@jaybird' })}>Friend</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -13,16 +13,29 @@ The app is a static set of files. Serve it with any HTTP server — can't open `
 ```bash
 # from this folder
 python -m http.server 5173
-# then open http://127.0.0.1:5173/
 ```
 
-Any static server works (`npx serve`, `caddy`, etc.). Port doesn't matter.
+Then:
+- **http://127.0.0.1:5173/** — version picker landing page
+- **http://127.0.0.1:5173/v1/** — V1 (shipped editorial modern UI)
+- **http://127.0.0.1:5173/v2/** — V2 (in-progress Pinterest-direction UI)
+
+Each version has a floating `V1 / V2` pill in the top-right to swap between them at any time. Any static server works (`npx serve`, `caddy`, etc.).
+
+---
+
+## Two versions in parallel
+
+- **V1** is the shipped design (white canvas, forest + cream accents, layered shadows, shape-based result states). Frozen — only bug fixes.
+- **V2** starts as a clone of V1 and diverges as we build a new UI direction inspired by a Pinterest reference.
+
+Both are fully-functioning prototypes with all 9 screens. Pick whichever matches the work you're doing.
 
 ---
 
 ## Dev loop
 
-- Edit any file under `components/` or `styles.css`
+- Edit files under `v1/components/` or `v2/components/` (or the corresponding `styles.css`)
 - Hard-refresh the browser (Ctrl/Cmd+Shift+R) to see changes
 - No build step, no bundler — edits are live
 
@@ -57,21 +70,27 @@ The panel lets you flip:
 
 ```
 webapp/
-├── index.html                      # App shell, React root, routing, Tweaks panel
-├── styles.css                      # Design system tokens + shared classes
-├── assets/                         # Brand SVGs (ostrich mascot, wordmark, full lockup)
-├── components/
-│   ├── data.jsx                    # Mock data (events, users, matches, SBX ratings, etc.)
-│   ├── primitives.jsx              # Icon, Button, Chip, Eyebrow, Wordmark, Ostrich, etc.
-│   ├── ios-frame.jsx               # iOS device chrome for desktop preview
-│   └── screens/
-│       ├── home.jsx
-│       ├── events.jsx              # Events list + Event detail + Register sheet
-│       ├── stats.jsx               # SBX Rating + Scramble Intel + Match History + H2H + Badges
-│       ├── profile.jsx             # Self + public view (member-gated stats)
-│       ├── social.jsx              # Live / Season / All-time leaderboards
-│       └── membership-live-share.jsx  # Membership tiers + Live scorecard + Result share
-└── uploads/                        # Original brand assets (reference only)
+├── index.html                      # Version picker landing page
+├── v1/                             # Shipped UI — editorial modern (frozen)
+│   ├── index.html                  # App shell, React root, routing, Tweaks panel, V1/V2 pill
+│   ├── styles.css                  # Design system tokens + shared classes
+│   ├── assets/                     # Brand SVGs (duplicated per version so each is self-contained)
+│   └── components/
+│       ├── data.jsx                # Mock data
+│       ├── primitives.jsx          # Icon, Button, Chip, Eyebrow, Wordmark, Ostrich, etc.
+│       ├── ios-frame.jsx           # iOS device chrome for desktop preview
+│       └── screens/
+│           ├── home.jsx
+│           ├── events.jsx          # Events list + Event detail + Register sheet
+│           ├── stats.jsx           # SBX Rating + Scramble Intel + Match History + H2H + Badges
+│           ├── profile.jsx         # Self + public view (member-gated stats)
+│           ├── social.jsx          # Live / Season / All-time leaderboards
+│           └── membership-live-share.jsx  # Membership tiers + Live scorecard + Result share
+├── v2/                             # Pinterest-direction UI (in progress)
+│   └── … same structure as v1/; starts as a clone, diverges over time
+├── web/                            # Production Next.js port (shared across versions)
+├── docs/                           # Business context, cross-session handoff notes
+└── assets/                         # Original brand SVGs (shared reference)
 ```
 
 ---
@@ -140,7 +159,8 @@ This is a shared iteration space — move fast, break nothing critical.
 - Branch off `main` for non-trivial changes
 - Hard-refresh the browser after each edit to sanity-check
 - Check the Tweaks panel's "Jump to screen" shortcuts to test every screen after visual changes
-- Don't touch the design system tokens (`styles.css` `:root` block) without a heads-up — they cascade everywhere
+- Don't touch the design-system tokens (the `:root` block in `v1/styles.css` or `v2/styles.css`) without a heads-up — they cascade across that entire version
+- V1 is frozen — only bug fixes unless explicitly asked. Design exploration belongs in V2
 
 ---
 

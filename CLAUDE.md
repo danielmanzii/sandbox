@@ -8,12 +8,15 @@ A web-first responsive consumer app prototype for **Sandbox Pitch & Putt** — a
 
 ## Current state
 
-**Two codebases live side-by-side during the port:**
+**Three surfaces live side-by-side:**
 
-- **Root (`index.html`, `components/`, `styles.css`)** — legacy prototype. React via CDN + Babel-in-browser with localStorage-backed mock data. Static-served (`python -m http.server 5173`). No build step. Kept runnable for reference while the port is in progress.
-- **`web/`** — production Next.js 16 app (TypeScript, Tailwind v4, App Router). This is where net-new work goes. Screens, components, and business logic are being ported here, with Postgres + Stripe + Clerk wired in over time.
+- **`v1/`** — Shipped prototype UI (editorial modern, white + forest + cream, layered shadows, shape-based result states). React via CDN + Babel-in-browser. Frozen as a reference version — only bug fixes go here.
+- **`v2/`** — In-progress UI based on a Pinterest direction. Starts as a clone of `v1/` and diverges as new design lands. Same tech stack as v1. This is where design exploration happens.
+- **`web/`** — Production Next.js 16 app (TypeScript, Tailwind v4, App Router). Where net-new work is ported once a UI version is settled. Postgres + Stripe + Clerk wired in over time.
 
-When in doubt, make changes in `web/`. Only touch the prototype if you're updating it for reference or the port hasn't reached that screen yet.
+The root `index.html` is a landing page that lets you pick between V1 and V2. Each version has a floating `V1 / V2` pill in the top-right so you can hop between them. Run via `python -m http.server 5173` from the repo root.
+
+When in doubt: design exploration goes in `v2/`; production code goes in `web/`. Don't edit `v1/` unless explicitly asked (it's the reference).
 
 ## Non-obvious rules to respect when making changes
 
@@ -33,9 +36,17 @@ See [docs/BUSINESS_CONTEXT.md](docs/BUSINESS_CONTEXT.md) for the full set of rul
 - **Type:** Bagel Fat One (display), Archivo (body), Instrument Serif italic (editorial), JetBrains Mono (eyebrows/data).
 - **Result states:** Shape, not color. W = filled forest, L = filled cream, H = white outlined — applied consistently across match card pills, match history badges, hole-result cards, and summary legends.
 
-Don't edit the `:root` tokens in `styles.css` without checking how they cascade — they touch everything.
+Each version has its own `styles.css` (in `v1/styles.css` and `v2/styles.css`). Don't edit the `:root` tokens there without checking how they cascade — they touch everything in that version.
 
 ## How to run
+
+**V1 / V2 prototypes (root):**
+```bash
+python -m http.server 5173
+# open http://127.0.0.1:5173/          — version picker
+# open http://127.0.0.1:5173/v1/       — V1 direct
+# open http://127.0.0.1:5173/v2/       — V2 direct
+```
 
 **Production Next.js app (`web/`):**
 ```bash
@@ -45,27 +56,25 @@ npm run dev
 # open http://localhost:3000
 ```
 
-**Legacy prototype (root):**
-```bash
-python -m http.server 5173
-# open http://127.0.0.1:5173/
-```
-
 ## Project map
 
-**Production — `web/`** (where net-new work goes):
+**Design exploration — `v1/` and `v2/`:**
+Both folders have the same structure. `v1/` is the shipped/frozen UI; `v2/` is where the Pinterest-direction redesign happens.
+- `vN/index.html` — App shell, routing, Tweaks panel, floating V1/V2 switcher
+- `vN/styles.css` — Design tokens + shared classes for that version
+- `vN/components/data.jsx` — Mock data (events, users, matches, SBX ratings, etc.)
+- `vN/components/primitives.jsx` — Icon, Button, Chip, Wordmark, Ostrich, etc.
+- `vN/components/ios-frame.jsx` — iOS device chrome for desktop preview
+- `vN/components/screens/*.jsx` — One file per screen; `membership-live-share.jsx` holds Membership + Live Scorecard + Result Share
+- `vN/assets/` — Brand SVGs (mascot, wordmark, full lockup) — duplicated per version so each is self-contained
+
+**Root-level shell:**
+- `index.html` — Landing/picker with links into `v1/` and `v2/`
+
+**Production — `web/`** (where net-new work goes once a UI version is settled):
 - `web/src/app/` — Next.js App Router pages/layouts
 - `web/package.json` — dependencies (Next 16, React 19, Tailwind v4, TS 5)
 - `web/.env.local` — local secrets (gitignored; template at root `.env.example`)
-
-**Legacy prototype — root** (reference only during port):
-- `index.html` — App shell, routing, Tweaks panel
-- `styles.css` — Design tokens + shared classes
-- `components/data.jsx` — Mock data (events, users, matches, SBX ratings, etc.)
-- `components/primitives.jsx` — Icon, Button, Chip, Wordmark, Ostrich, etc.
-- `components/ios-frame.jsx` — iOS device chrome for desktop preview
-- `components/screens/*.jsx` — One file per screen; `membership-live-share.jsx` holds Membership + Live Scorecard + Result Share
-- `assets/` — Brand SVGs (mascot, wordmark, full lockup)
 
 **Docs:**
 - `docs/BUSINESS_CONTEXT.md` — **Source of truth. Read this first.**
