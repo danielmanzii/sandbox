@@ -29,6 +29,7 @@
 <script type="text/babel" src="components/ios-frame.jsx"></script>
 <script type="text/babel" src="components/screens/home.jsx"></script>
 <script type="text/babel" src="components/screens/events.jsx"></script>
+<script type="text/babel" src="components/screens/play.jsx"></script>
 <script type="text/babel" src="components/screens/stats.jsx"></script>
 <script type="text/babel" src="components/screens/profile.jsx"></script>
 <script type="text/babel" src="components/screens/social.jsx"></script>
@@ -42,7 +43,7 @@
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "tier": "league",
@@ -135,7 +136,8 @@ function App({ profile }) {
   let screen;
   switch (route.screen) {
     case 'home':         screen = <HomeScreen {...screenProps}/>; break;
-    case 'events':       screen = <EventsScreen {...screenProps}/>; break;
+    // Play tab = Ranked (EventsScreen) or Unranked (Challenge intro) via sub-segmented control.
+    case 'events':       screen = <PlayScreen {...screenProps} playTab={route.playTab}/>; break;
     case 'eventDetail':  screen = <EventDetailScreen {...screenProps} eventId={route.eventId}/>; break;
     case 'stats':        screen = <StatsScreen {...screenProps}/>; break;
     case 'profile':      screen = <ProfileScreen {...screenProps} viewingHandle={route.viewingHandle}/>; break;
@@ -144,16 +146,17 @@ function App({ profile }) {
     case 'live':         screen = <LiveScorecardScreen {...screenProps}/>; break;
     case 'resultShare':  screen = <ResultShareScreen {...screenProps}/>; break;
 
-    // Real-data routes for Challenge a Friend
+    // Real-data routes for Challenge a Friend (reached from Play → Unranked)
     case 'challenge':
       screen = <MatchHub
         profile={profile}
-        onExit={() => go({ screen: 'home' })}
+        mode={route.mode || '1v1'}
+        onExit={() => go({ screen: 'events', playTab: 'unranked' })}
         onOpenMatch={(id) => go({ screen: 'match', matchId: id })}
       />;
       break;
     case 'match':
-      screen = <MatchLive matchId={route.matchId} profile={profile} onExit={() => go({ screen: 'challenge' })}/>;
+      screen = <MatchLive matchId={route.matchId} profile={profile} onExit={() => go({ screen: 'events', playTab: 'unranked' })}/>;
       break;
 
     default: screen = <HomeScreen {...screenProps}/>;

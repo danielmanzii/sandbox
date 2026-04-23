@@ -1,17 +1,17 @@
 /* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
-function MatchHub({ profile, onOpenMatch, onExit }) {
+function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1' }) {
   const [mode, setMode] = React.useState('home'); // home | start | join | code | handle
   const [recent, setRecent] = React.useState([]);
   const [newMatch, setNewMatch] = React.useState(null);
 
-  // Load recent matches for this user.
+  // Load recent matches for this user (includes 2v2 slots).
   const loadRecent = React.useCallback(async () => {
     const { data } = await sbx
       .from('matches')
-      .select('id, join_code, course_name, status, result, final_margin, created_at, total_holes, player_a, player_b')
-      .or(`player_a.eq.${profile.id},player_b.eq.${profile.id}`)
+      .select('id, join_code, course_name, status, result, final_margin, created_at, total_holes, match_type, player_a, player_a2, player_b, player_b2')
+      .or(`player_a.eq.${profile.id},player_a2.eq.${profile.id},player_b.eq.${profile.id},player_b2.eq.${profile.id}`)
       .order('created_at', { ascending: false })
       .limit(10);
     setRecent(data || []);
@@ -19,9 +19,9 @@ function MatchHub({ profile, onOpenMatch, onExit }) {
 
   React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
-  if (mode === 'start') return <StartMatchView profile={profile} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
+  if (mode === 'start') return <StartMatchView profile={profile} matchType={matchType} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
   if (mode === 'join')  return <JoinMatchView  profile={profile} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
-  if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onOpponentJoined={(id) => onOpenMatch(id)}/>;
+  if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} profile={profile} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onReady={(id) => onOpenMatch(id)}/>;
   if (mode === 'handle' && window.DisplayNameScreen) {
     const DNS = window.DisplayNameScreen;
     return <DNS profile={profile} onCancel={() => setMode('home')} onDone={() => setMode('home')}/>;
@@ -43,7 +43,7 @@ function MatchHub({ profile, onOpenMatch, onExit }) {
         )}
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-            Challenge a Friend
+            Challenge · {matchType}
           </div>
           <button onClick={() => setMode('handle')} title="Change display name" style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -179,7 +179,7 @@ function StatusChip({ match, youAreA }) {
 }
 
 // ─── Start Match view ────────────────────────────────────────
-function StartMatchView({ profile, onCancel, onCreated }) {
+function StartMatchView({ profile, matchType = '1v1', onCancel, onCreated }) {
   const [course, setCourse] = React.useState('Melreese');
   const [holes, setHoles]   = React.useState(9);
   const [busy, setBusy]     = React.useState(false);
@@ -193,6 +193,7 @@ function StartMatchView({ profile, onCancel, onCreated }) {
       join_code,
       course_name: course.trim() || null,
       total_holes: holes,
+      match_type: matchType,
       player_a: profile.id,
       status: 'waiting',
     }).select().single();
@@ -220,10 +221,15 @@ function StartMatchView({ profile, onCancel, onCreated }) {
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <Eyebrow color="var(--forest)">New 1v1 match</Eyebrow>
+      <Eyebrow color="var(--forest)">New {matchType} match</Eyebrow>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
         Set it up.
       </div>
+      {matchType === '2v2' && (
+        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--forest)', opacity: 0.7, marginTop: 10, lineHeight: 1.4 }}>
+          Share the code with your partner first, then with your opponents. Match starts when 4 players are in.
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 24 }}>
         <label style={{ display: 'block' }}>
@@ -263,26 +269,42 @@ function StartMatchView({ profile, onCancel, onCreated }) {
   );
 }
 
-// ─── Waiting for opponent ────────────────────────────────────
-function WaitingForOpponentView({ match, onCancel, onOpponentJoined }) {
-  // Subscribe to updates on this match row; when player_b fills in, open the match.
+// ─── Waiting lobby (works for both 1v1 and 2v2) ──────────────
+// Subscribes to updates on the match row. Whenever a slot fills we re-render
+// to show progress; when the match goes 'active' (all required slots filled)
+// we push the user into the live match.
+function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) {
+  const [match, setMatch] = React.useState(initial);
+  const is2v2 = match.match_type === '2v2';
+  const required = is2v2 ? 4 : 2;
+  const filled = [match.player_a, match.player_a2, match.player_b, match.player_b2].filter(Boolean).length;
+
   React.useEffect(() => {
     const ch = sbx.channel(`match:${match.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
-        if (payload.new && payload.new.player_b) {
-          onOpponentJoined(match.id);
-        }
+        if (payload.new) setMatch(payload.new);
       })
       .subscribe();
 
     // Poll as a fallback every 4s in case the channel hiccups.
     const poll = setInterval(async () => {
-      const { data } = await sbx.from('matches').select('player_b, status').eq('id', match.id).maybeSingle();
-      if (data && data.player_b) onOpponentJoined(match.id);
+      const { data } = await sbx.from('matches').select('*').eq('id', match.id).maybeSingle();
+      if (data) setMatch(data);
     }, 4000);
 
     return () => { sbx.removeChannel(ch); clearInterval(poll); };
-  }, [match.id, onOpponentJoined]);
+  }, [match.id]);
+
+  React.useEffect(() => {
+    if (match.status === 'active') onReady(match.id);
+    if (match.status === 'abandoned') onCancel();
+  }, [match.status, match.id, onReady, onCancel]);
+
+  async function cancelMatch() {
+    if (!window.confirm('Cancel this match? It will disappear from your list.')) return;
+    await sbx.from('matches').update({ status: 'abandoned' }).eq('id', match.id);
+    onCancel();
+  }
 
   return (
     <div style={{
@@ -304,7 +326,10 @@ function WaitingForOpponentView({ match, onCancel, onOpponentJoined }) {
       <div style={{ position: 'relative', marginTop: 24 }}>
         <Eyebrow color="var(--cream)">Share this code</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 0.95, marginTop: 10 }}>
-          Waiting on<br/>your opponent…
+          {is2v2 ? <>Waiting on<br/>the other three…</> : <>Waiting on<br/>your opponent…</>}
+        </div>
+        <div style={{ fontSize: 13, opacity: 0.8, marginTop: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
+          {filled}/{required} PLAYERS IN
         </div>
       </div>
 
@@ -314,12 +339,12 @@ function WaitingForOpponentView({ match, onCancel, onOpponentJoined }) {
           fontFamily: 'var(--font-display)', fontSize: 88, letterSpacing: '0.08em',
           marginTop: 4, color: 'var(--cream)',
         }}>{match.join_code}</div>
-        <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 260 }}>
-          Have your opponent tap <b>Enter a match code</b> on their home screen and type this in.
+        <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
+          Players tap <b>Join match</b> on the Unranked tab and type this code. {is2v2 ? 'First to join becomes your partner; the next two are the opposing team.' : ''}
         </div>
       </div>
 
-      <Button variant="outlineCream" size="lg" full onClick={onCancel}>
+      <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
         Cancel match
       </Button>
     </div>
@@ -338,17 +363,30 @@ function JoinMatchView({ profile, onCancel, onJoined }) {
     setBusy(true); setErr('');
 
     const { data: m, error } = await sbx.from('matches').select('*').eq('join_code', c).maybeSingle();
-    if (error)   { setErr(error.message); setBusy(false); return; }
-    if (!m)      { setErr('No match with that code.'); setBusy(false); return; }
-    if (m.player_a === profile.id) { setErr("That's your own match — wait on the code screen for your opponent."); setBusy(false); return; }
-    if (m.player_b && m.player_b !== profile.id) { setErr('That match already has two players.'); setBusy(false); return; }
+    if (error) { setErr(error.message); setBusy(false); return; }
+    if (!m)    { setErr('No match with that code.'); setBusy(false); return; }
     if (m.status === 'completed' || m.status === 'abandoned') { setErr('That match is over.'); setBusy(false); return; }
 
-    const { error: updErr } = await sbx.from('matches').update({
-      player_b: profile.id,
-      status: 'active',
-      started_at: new Date().toISOString(),
-    }).eq('id', m.id);
+    // If the current user is already a slot in this match, just reopen it.
+    if ([m.player_a, m.player_a2, m.player_b, m.player_b2].includes(profile.id)) {
+      onJoined(m.id);
+      return;
+    }
+
+    // Figure out which slot the joiner fills, based on match_type.
+    const is2v2 = m.match_type === '2v2';
+    let update = null;
+    if (is2v2) {
+      if (!m.player_a2)      update = { player_a2: profile.id };
+      else if (!m.player_b)  update = { player_b:  profile.id };
+      else if (!m.player_b2) update = { player_b2: profile.id, status: 'active', started_at: new Date().toISOString() };
+      else { setErr('That match already has four players.'); setBusy(false); return; }
+    } else {
+      if (!m.player_b) update = { player_b: profile.id, status: 'active', started_at: new Date().toISOString() };
+      else { setErr('That match already has two players.'); setBusy(false); return; }
+    }
+
+    const { error: updErr } = await sbx.from('matches').update(update).eq('id', m.id);
     if (updErr) { setErr(updErr.message); setBusy(false); return; }
 
     setBusy(false);

@@ -18,18 +18,19 @@ function useUserStats(profileId) {
       .from('matches')
       .select(`
         id, join_code, course_name, status, result, final_margin,
-        player_a, player_b, total_holes, created_at, started_at, completed_at,
+        match_type, player_a, player_a2, player_b, player_b2,
+        total_holes, created_at, started_at, completed_at,
         player_a_profile:profiles!matches_player_a_fkey(first_name, handle),
         player_b_profile:profiles!matches_player_b_fkey(first_name, handle)
       `)
-      .or(`player_a.eq.${profileId},player_b.eq.${profileId}`)
+      .or(`player_a.eq.${profileId},player_a2.eq.${profileId},player_b.eq.${profileId},player_b2.eq.${profileId}`)
       .order('created_at', { ascending: false });
 
-    const list = matches || [];
+    const list = (matches || []).filter(m => m.status !== 'abandoned');
     let W = 0, L = 0, H = 0;
     for (const m of list) {
       if (m.status !== 'completed') continue;
-      const userIsA = m.player_a === profileId;
+      const userIsA = m.player_a === profileId || m.player_a2 === profileId;
       if (m.result === 'H') H++;
       else if ((m.result === 'A' && userIsA) || (m.result === 'B' && !userIsA)) W++;
       else L++;
@@ -39,10 +40,53 @@ function useUserStats(profileId) {
     let streak = 0;
     for (const m of list) {
       if (m.status !== 'completed') continue;
-      const userIsA = m.player_a === profileId;
+      const userIsA = m.player_a === profileId || m.player_a2 === profileId;
       const userLost = (m.result === 'A' && !userIsA) || (m.result === 'B' && userIsA);
       if (userLost) break;
       streak++;
+    }
+
+    // Pull hole-level data for all the user's matches and derive advanced stats.
+    // Only 1v1 matches have per-player GIR/putts/proximity columns populated; in
+    // 2v2 those are team-level and we skip them for now.
+    const matchIds = list.map(m => m.id);
+    let gir = null, putts = null, proximity = null, girTrend = [];
+    let holeCount = 0;
+    if (matchIds.length > 0) {
+      const { data: holes } = await sbx.from('match_holes').select('*').in('match_id', matchIds);
+      const matchById = Object.fromEntries(list.map(m => [m.id, m]));
+      let girNum = 0, girDen = 0;
+      let puttsSum = 0, puttsCount = 0;
+      let proxSum = 0, proxCount = 0;
+      for (const h of holes || []) {
+        const m = matchById[h.match_id];
+        if (!m || m.match_type === '2v2') continue;
+        const userIsA = m.player_a === profileId;
+        const girV   = userIsA ? h.player_a_gir           : h.player_b_gir;
+        const puttsV = userIsA ? h.player_a_putts         : h.player_b_putts;
+        const proxV  = userIsA ? h.player_a_proximity_ft  : h.player_b_proximity_ft;
+        if (girV !== null && girV !== undefined) { girDen++; if (girV) girNum++; }
+        if (puttsV != null) { puttsSum += puttsV; puttsCount++; }
+        if (proxV  != null) { proxSum  += proxV;  proxCount++; }
+        holeCount++;
+      }
+      if (girDen > 0) gir = girNum / girDen;
+      if (puttsCount > 0) putts = puttsSum / puttsCount;
+      if (proxCount > 0)  proximity = proxSum / proxCount;
+
+      // GIR trend: per-match GIR % over the last up-to-8 completed matches (reverse chron).
+      const completedIds = list.filter(m => m.status === 'completed' && m.match_type !== '2v2').slice(0, 8).reverse().map(m => m.id);
+      for (const id of completedIds) {
+        let n = 0, d = 0;
+        for (const h of holes || []) {
+          if (h.match_id !== id) continue;
+          const m = matchById[id];
+          const userIsA = m.player_a === profileId;
+          const girV = userIsA ? h.player_a_gir : h.player_b_gir;
+          if (girV !== null && girV !== undefined) { d++; if (girV) n++; }
+        }
+        if (d > 0) girTrend.push(+(n / d).toFixed(2));
+      }
     }
 
     setStats({
@@ -53,6 +97,9 @@ function useUserStats(profileId) {
       streak,
       seasonPoints: W + 0.5 * H,
       recentMatches: list,
+      // Advanced (real) — null when the user hasn't logged any stats yet.
+      gir, putts, proximity, girTrend,
+      holesLogged: holeCount,
     });
   }, [profileId]);
 
@@ -105,6 +152,22 @@ function buildRealUser(profile, stats) {
     foundingMember: false,
     bio: profile.bio || "New to Sandbox. Sharpening the short game.",
     homeCourse: profile.home_course || 'Melreese',
+
+    // Advanced per-hole stats, computed from match_holes. Zero when the user
+    // hasn't logged any yet (screens show honest zeros instead of Alex's).
+    gir:       stats && stats.gir       != null ? stats.gir       : 0,
+    girTrend:  stats && stats.girTrend ? stats.girTrend : [],
+    putts:     stats && stats.putts     != null ? stats.putts     : 0,
+    proximity: stats && stats.proximity != null ? stats.proximity : 0,
+
+    // Scramble-specific metrics we don't track yet — overridden to honest
+    // zeros/empties rather than inheriting Alex's mock numbers. When we add
+    // per-shot tracking to 2v2 these get populated for real.
+    shotUsage: 0, shotUsageTrend: [], shotUsageRank: '—',
+    clutchUsage: 0, leadoffUsage: 0, cleanupUsage: 0,
+    proximityByDist: [],
+    parOrBetter: 0, bailoutRate: 0, concedeRate: 0,
+    holeWinByDist: [],
     // DOB / gender are in the DB but v1 screens don't render them yet.
   };
 }

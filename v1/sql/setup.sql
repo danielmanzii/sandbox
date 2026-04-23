@@ -113,6 +113,80 @@ create policy "Players can write holes in their matches"
   ));
 
 -- ─────────────────────────────────────────────────────────────────
+-- Additive migrations (safe to re-run):
+--   - match_type: 1v1 | 2v2  (Challenge a Friend modes)
+--   - player_a2, player_b2: second player on each team for 2v2
+--   - per-hole stat capture: GIR, putts, proximity-to-pin (in feet)
+-- ─────────────────────────────────────────────────────────────────
+alter table public.matches
+  add column if not exists match_type text default '1v1';
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.table_constraints
+    where table_name = 'matches' and constraint_name = 'matches_match_type_check'
+  ) then
+    alter table public.matches
+      add constraint matches_match_type_check check (match_type in ('1v1','2v2'));
+  end if;
+end $$;
+
+alter table public.matches
+  add column if not exists player_a2 uuid references public.profiles(id);
+alter table public.matches
+  add column if not exists player_b2 uuid references public.profiles(id);
+
+alter table public.match_holes
+  add column if not exists player_a_gir boolean;
+alter table public.match_holes
+  add column if not exists player_b_gir boolean;
+alter table public.match_holes
+  add column if not exists player_a_putts int;
+alter table public.match_holes
+  add column if not exists player_b_putts int;
+alter table public.match_holes
+  add column if not exists player_a_proximity_ft int;
+alter table public.match_holes
+  add column if not exists player_b_proximity_ft int;
+
+-- Broaden RLS: any of the up-to-four players (plus "waiting" visibility)
+-- can read/update their match. Player_a2/player_b2 are null for 1v1 so the
+-- policy is backward-compatible.
+drop policy if exists "Players can read relevant matches" on public.matches;
+create policy "Players can read relevant matches"
+  on public.matches for select to authenticated
+  using (
+    auth.uid() in (player_a, player_a2, player_b, player_b2)
+    or (status = 'waiting' and (player_b is null or player_b2 is null))
+  );
+
+drop policy if exists "Players can update relevant matches" on public.matches;
+create policy "Players can update relevant matches"
+  on public.matches for update to authenticated
+  using (
+    auth.uid() in (player_a, player_a2, player_b, player_b2)
+    or (status = 'waiting' and (player_b is null or player_b2 is null))
+  );
+
+drop policy if exists "Players can read holes in their matches" on public.match_holes;
+create policy "Players can read holes in their matches"
+  on public.match_holes for select to authenticated
+  using (exists (
+    select 1 from public.matches m
+    where m.id = match_holes.match_id
+      and auth.uid() in (m.player_a, m.player_a2, m.player_b, m.player_b2)
+  ));
+
+drop policy if exists "Players can write holes in their matches" on public.match_holes;
+create policy "Players can write holes in their matches"
+  on public.match_holes for all to authenticated
+  using (exists (
+    select 1 from public.matches m
+    where m.id = match_holes.match_id
+      and auth.uid() in (m.player_a, m.player_a2, m.player_b, m.player_b2)
+  ));
+
+-- ─────────────────────────────────────────────────────────────────
 -- Enable real-time replication so both phones see score updates live.
 -- Guarded so re-runs don't error on "already a member of publication".
 -- ─────────────────────────────────────────────────────────────────

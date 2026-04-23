@@ -47,39 +47,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </button>
       </div>
 
-      {/* Challenge a Friend — the one real, playable feature right now.
-          Sits above the demo content so it's the first thing the user sees. */}
-      <div style={{ padding: '8px 16px 0' }}>
-        <button onClick={() => go({ screen: 'challenge' })} className="card" style={{
-          width: '100%', textAlign: 'left',
-          padding: '18px 20px',
-          display: 'flex', alignItems: 'center', gap: 14,
-          color: 'var(--forest)',
-          position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 14,
-            background: 'var(--forest)', color: 'var(--cream)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <Icon.Tee size={26} color="currentColor" filled/>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>
-              Live 1v1 · Real match
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.01em', marginTop: 6 }}>
-              Challenge a friend
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>
-              Hole-by-hole scoring, both phones in sync.
-            </div>
-          </div>
-          <Icon.ArrowRight size={16} color="var(--forest)"/>
-        </button>
-      </div>
-
       {/* Next-up card */}
       <div style={{ padding: '16px 16px 0' }}>
         <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot}/>

@@ -5,7 +5,7 @@
 function MatchLive({ matchId, profile, onExit }) {
   const [match, setMatch]   = React.useState(null);
   const [holes, setHoles]   = React.useState([]);
-  const [opponent, setOpponent] = React.useState(null);
+  const [players, setPlayers] = React.useState({}); // id → { first_name, handle }
   const [currentHole, setCurrentHole] = React.useState(1);
   const [err, setErr] = React.useState('');
 
@@ -27,11 +27,15 @@ function MatchLive({ matchId, profile, onExit }) {
       const { data: hs } = await sbx.from('match_holes').select('*').eq('match_id', matchId).order('hole_number');
       if (!cancelled) setHoles(hs || []);
 
-      // Load opponent profile
-      const oppId = m.player_a === profile.id ? m.player_b : m.player_a;
-      if (oppId) {
-        const { data: op } = await sbx.from('profiles').select('id, first_name, last_name, handle').eq('id', oppId).maybeSingle();
-        if (!cancelled) setOpponent(op || null);
+      // Load all player profiles (up to 4 for 2v2)
+      const ids = [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean);
+      if (ids.length) {
+        const { data: ps } = await sbx.from('profiles').select('id, first_name, last_name, handle').in('id', ids);
+        if (!cancelled && ps) {
+          const byId = {};
+          for (const p of ps) byId[p.id] = p;
+          setPlayers(byId);
+        }
       }
 
       // Seed currentHole to first unscored hole
@@ -65,7 +69,9 @@ function MatchLive({ matchId, profile, onExit }) {
   // Always compute state (even before data arrives); this keeps hook count stable
   // across renders, per Rules of Hooks.
   const hasData = match && holes.length > 0;
-  const youAreA = hasData && match.player_a === profile.id;
+  // Team membership: "you are A" = profile is on team A (player_a or player_a2 for 2v2).
+  const youAreA = hasData && (match.player_a === profile.id || match.player_a2 === profile.id);
+  const is2v2   = hasData && match.match_type === '2v2';
   const state = hasData ? computeState(holes, match.total_holes) : { up: 0, remaining: 0, decided: false, margin: null, totalPlayed: 0 };
 
   // If the match just got decided this render, persist the completion.
@@ -82,11 +88,31 @@ function MatchLive({ matchId, profile, onExit }) {
     }
   }, [hasData, state.decided, state.up, state.margin, match && match.status, matchId]);
 
+  async function cancelMatch() {
+    if (!window.confirm('Cancel this match? All scores so far will be lost and the match will be marked abandoned.')) return;
+    await sbx.from('matches').update({ status: 'abandoned', completed_at: new Date().toISOString() }).eq('id', matchId);
+    try { localStorage.removeItem('spp_active_match'); } catch {}
+    onExit();
+  }
+
   if (err) return <FullScreenMessage title="Something went wrong" detail={err} onBack={onExit}/>;
   if (!hasData) return <FullScreenMessage title="Loading match…"/>;
+  if (match.status === 'abandoned') {
+    return <FullScreenMessage title="Match cancelled" detail="This match was abandoned." onBack={onExit}/>;
+  }
 
   const hole = holes.find(h => h.hole_number === currentHole) || holes[0];
   const matchDecided = match.status === 'completed' || state.decided;
+
+  // Team label helpers
+  const teamAName = is2v2
+    ? [players[match.player_a], players[match.player_a2]].filter(Boolean).map(p => p.first_name || p.handle).join(' + ') || 'Team A'
+    : (players[match.player_a] ? (players[match.player_a].first_name || players[match.player_a].handle) : 'A');
+  const teamBName = is2v2
+    ? [players[match.player_b], players[match.player_b2]].filter(Boolean).map(p => p.first_name || p.handle).join(' + ') || 'Team B'
+    : (players[match.player_b] ? (players[match.player_b].first_name || players[match.player_b].handle) : 'B');
+  const yourTeamLabel  = is2v2 ? (youAreA ? teamAName : teamBName) : 'You';
+  const theirTeamLabel = is2v2 ? (youAreA ? teamBName : teamAName) : (youAreA ? teamBName : teamAName);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -102,10 +128,10 @@ function MatchLive({ matchId, profile, onExit }) {
         </button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.55, color: 'var(--forest)' }}>
-            {match.course_name || 'Match'} · {match.total_holes} holes
+            {match.course_name || 'Match'} · {match.total_holes} holes · {match.match_type || '1v1'}
           </div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)', marginTop: 2 }}>
-            You vs {opponent ? opponent.first_name : 'waiting…'}
+            {is2v2 ? `${teamAName} vs ${teamBName}` : `You vs ${theirTeamLabel}`}
           </div>
         </div>
         <StateBadge state={state}/>
@@ -120,8 +146,12 @@ function MatchLive({ matchId, profile, onExit }) {
           <HoleCard
             hole={hole}
             youAreA={youAreA}
+            is2v2={is2v2}
+            yourTeamLabel={yourTeamLabel}
+            theirTeamLabel={theirTeamLabel}
             onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
             onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
+            onSaveStat={(col, value) => saveHoleStat(matchId, hole.hole_number, col, value)}
             onAdvance={() => {
               const next = holes.find(h => h.hole_number > currentHole && h.result == null);
               if (next) setCurrentHole(next.hole_number);
@@ -151,12 +181,22 @@ function MatchLive({ matchId, profile, onExit }) {
         </div>
       </div>
 
-      {/* Sign-out row */}
+      {/* Footer: cancel + back */}
       <div style={{ flex: 1 }}/>
-      <div style={{ padding: '24px 16px 32px', textAlign: 'center' }}>
+      <div style={{ padding: '24px 16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {!matchDecided ? (
+          <button onClick={cancelMatch} style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
+            color: 'var(--loss)', opacity: 0.85, fontWeight: 700,
+            padding: '8px 12px', borderRadius: 8,
+          }}>
+            Cancel match
+          </button>
+        ) : <span/>}
         <button onClick={onExit} style={{
           fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
           color: 'var(--forest)', opacity: 0.5, fontWeight: 700,
+          padding: '8px 12px',
         }}>
           Back to hub
         </button>
@@ -166,9 +206,18 @@ function MatchLive({ matchId, profile, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, onYourScore, onOpponentScore, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
+  const [showStats, setShowStats] = React.useState(false);
+
+  // Your per-hole stats (1v1 only). In 2v2, team-level stats need per-shot
+  // tracking which is a follow-up — so the section is only shown for 1v1.
+  const statPrefix = youAreA ? 'player_a' : 'player_b';
+  const yourGir   = hole[statPrefix + '_gir'];
+  const yourPutts = hole[statPrefix + '_putts'];
+  const yourProx  = hole[statPrefix + '_proximity_ft'];
+  const statsLogged = yourGir != null || yourPutts != null || yourProx != null;
 
   return (
     <div className="card-hero" style={{
@@ -201,9 +250,74 @@ function HoleCard({ hole, youAreA, onYourScore, onOpponentScore, onAdvance }) {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 22 }}>
-          <Stepper label="Your score" value={yourScore} onChange={onYourScore}/>
-          <Stepper label="Opponent"   value={oppScore}  onChange={onOpponentScore}/>
+          <Stepper label={yourTeamLabel || 'Your score'} value={yourScore} onChange={onYourScore}/>
+          <Stepper label={theirTeamLabel || 'Opponent'}  value={oppScore}  onChange={onOpponentScore}/>
         </div>
+
+        {/* Advanced stats — 1v1 only for now. Tap "Log stats" to expand. */}
+        {!is2v2 && yourScore != null && (
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => setShowStats(s => !s)} style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(234,226,206,0.15)',
+              color: 'var(--cream)',
+              fontSize: 12, fontWeight: 700,
+              fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <span>{statsLogged ? '✓ Stats logged' : 'Log stats (optional)'}</span>
+              <span>{showStats ? '–' : '+'}</span>
+            </button>
+
+            {showStats && (
+              <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* GIR toggle */}
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
+                    Green in regulation
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <StatChoice active={yourGir === true}  onClick={() => onSaveStat(statPrefix + '_gir', true)}>Yes</StatChoice>
+                    <StatChoice active={yourGir === false} onClick={() => onSaveStat(statPrefix + '_gir', false)}>No</StatChoice>
+                    <StatChoice active={yourGir == null}   onClick={() => onSaveStat(statPrefix + '_gir', null)}>—</StatChoice>
+                  </div>
+                </div>
+                {/* Putts stepper */}
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
+                    Putts
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                    {[0, 1, 2, 3, 4, 5].map(n => (
+                      <StatChoice key={n} active={yourPutts === n} onClick={() => onSaveStat(statPrefix + '_putts', n)}>{n}</StatChoice>
+                    ))}
+                  </div>
+                </div>
+                {/* Proximity (tee-shot to pin in feet) */}
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
+                    Proximity to pin <span style={{ opacity: 0.6 }}>· feet from tee shot</span>
+                  </div>
+                  <input
+                    type="number" inputMode="numeric" min="0" max="120"
+                    value={yourProx == null ? '' : yourProx}
+                    onChange={e => onSaveStat(statPrefix + '_proximity_ft', e.target.value === '' ? null : Number(e.target.value))}
+                    placeholder="e.g. 12"
+                    style={{
+                      marginTop: 6, width: '100%', padding: '10px 12px', borderRadius: 10,
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(234,226,206,0.18)',
+                      color: 'var(--cream)', fontSize: 15, outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {yourScore != null && oppScore != null && (
           <Button variant="primary" size="lg" full onClick={onAdvance} style={{ marginTop: 16 }}>
@@ -212,6 +326,18 @@ function HoleCard({ hole, youAreA, onYourScore, onOpponentScore, onAdvance }) {
         )}
       </div>
     </div>
+  );
+}
+
+function StatChoice({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      minWidth: 40, padding: '8px 12px', borderRadius: 10,
+      background: active ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
+      color: active ? 'var(--forest)' : 'var(--cream)',
+      border: active ? 'none' : '1px solid rgba(234,226,206,0.18)',
+      fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',
+    }}>{children}</button>
   );
 }
 
@@ -345,6 +471,12 @@ function FullScreenMessage({ title, detail, onBack }) {
 }
 
 // ─── Scoring helpers ─────────────────────────────────────────
+
+// Save a single advanced stat column for a given hole (GIR / putts / proximity).
+async function saveHoleStat(matchId, holeNumber, column, value) {
+  const patch = { [column]: value, updated_at: new Date().toISOString() };
+  await sbx.from('match_holes').update(patch).eq('match_id', matchId).eq('hole_number', holeNumber);
+}
 
 // Save a score for one player on one hole, recompute result, and bump match_holes row.
 async function saveScore(matchId, holeNumber, who, score) {
