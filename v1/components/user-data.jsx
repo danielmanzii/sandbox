@@ -131,7 +131,9 @@ function buildRealUser(profile, stats) {
     sbxTrend:      [profile.sbx || 4.0],
     sbxPercentile: 50,
     sbxPeak:       Number(profile.sbx) || 4.0,
-    sbxGlobalRank: null,
+    // 0 (not null) so `.toLocaleString()` in profile.jsx doesn't blow up
+    // for fresh accounts with no global rank yet.
+    sbxGlobalRank: 0,
     sbxReliability: Math.min(1, (stats ? stats.matchesTotal : 0) / 10),
     sbxMatchesToProvisional: Math.max(0, 5 - (stats ? stats.matchesTotal : 0)),
     matchesW:     stats ? stats.matchesW : 0,
@@ -161,9 +163,10 @@ function buildRealUser(profile, stats) {
     proximity: stats && stats.proximity != null ? stats.proximity : 0,
 
     // Scramble-specific metrics we don't track yet — overridden to honest
-    // zeros/empties rather than inheriting Alex's mock numbers. When we add
-    // per-shot tracking to 2v2 these get populated for real.
-    shotUsage: 0, shotUsageTrend: [], shotUsageRank: '—',
+    // zeros rather than inheriting Alex's mock numbers. Trends default to
+    // a single-zero array so sparkline math (`trend.length - 1` divisor,
+    // `pts[pts.length - 1]` access) doesn't crash on empty arrays.
+    shotUsage: 0, shotUsageTrend: [0], shotUsageRank: '—',
     clutchUsage: 0, leadoffUsage: 0, cleanupUsage: 0,
     proximityByDist: [],
     parOrBetter: 0, bailoutRate: 0, concedeRate: 0,

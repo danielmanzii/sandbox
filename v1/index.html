@@ -385,7 +385,55 @@ function TweaksPanel({ tier, setTier, mascot, setMascot, liveMode, setLiveMode, 
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<Root/>);
+// ─── Error boundary: if any screen throws, show a recovery UI instead of a
+// fully grey body. The "Reset app" button clears the persistent route/match
+// state that could be causing the crash and reloads.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('App error:', error, info); }
+  reset = () => {
+    try {
+      localStorage.removeItem('spp_route');
+      localStorage.removeItem('spp_active_match');
+    } catch {}
+    location.reload();
+  };
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div className="phone-wrap">
+        <PhoneStage>
+          <div style={{
+            position: 'absolute', inset: 0, padding: 24,
+            display: 'flex', flexDirection: 'column',
+            justifyContent: 'center', alignItems: 'center',
+            background: 'var(--canvas)', color: 'var(--forest)',
+          }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, letterSpacing: '-0.02em' }}>Hmm.</div>
+            <div className="caption-serif" style={{ fontSize: 15, marginTop: 10, textAlign: 'center', opacity: 0.75, maxWidth: 300 }}>
+              Something glitched. Tap below to reset the app.
+            </div>
+            <button onClick={this.reset} style={{
+              marginTop: 22, padding: '13px 22px',
+              background: 'var(--forest)', color: 'var(--cream)',
+              border: 'none', borderRadius: 999,
+              fontSize: 14, fontWeight: 700, letterSpacing: '0.02em',
+            }}>Reset app</button>
+            <div style={{ fontSize: 10, marginTop: 24, fontFamily: 'var(--font-mono)', opacity: 0.4, maxWidth: 300, textAlign: 'center', wordBreak: 'break-word' }}>
+              {String(this.state.error && this.state.error.message || this.state.error || 'Unknown error')}
+            </div>
+          </div>
+        </PhoneStage>
+      </div>
+    );
+  }
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><Root/></ErrorBoundary>);
 </script>
 </body>
 </html>
