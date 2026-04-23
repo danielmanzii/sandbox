@@ -23,8 +23,7 @@
 <!-- Supabase JS SDK (UMD build — exposes window.supabase.createClient) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Prototype-era mock data + screens (still loaded for future reuse; not on the
-     critical path for the authenticated 1v1 match flow) -->
+<!-- Mock data + primitives + all the v1 screens -->
 <script type="text/babel" src="components/data.jsx"></script>
 <script type="text/babel" src="components/primitives.jsx"></script>
 <script type="text/babel" src="components/ios-frame.jsx"></script>
@@ -35,74 +34,160 @@
 <script type="text/babel" src="components/screens/social.jsx"></script>
 <script type="text/babel" src="components/screens/membership-live-share.jsx"></script>
 
-<!-- Supabase-backed auth + match flow -->
+<!-- Supabase-backed auth + Challenge a Friend match flow -->
 <script type="text/babel" src="components/supabase-client.jsx"></script>
 <script type="text/babel" src="components/screens/auth.jsx"></script>
 <script type="text/babel" src="components/screens/match-hub.jsx"></script>
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, MatchHub, MatchLive, useSession, useProfile, useRecovering */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, signOut */
 
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "tier": "league",
+  "mascot": "full",
+  "liveMode": true,
+  "brandLoud": "full",
+  "viewingHandle": null
+}/*EDITMODE-END*/;
+
+// ─── Root: auth gate around the full v1 App ────────────────
 function Root() {
   const session = useSession();
   const [profile, , reloadProfile] = useProfile(session && session.user ? session.user.id : null);
   const [recovering, clearRecovering] = useRecovering();
 
-  // Expose reloadProfile as a global so screens deep in the auth flow can
-  // force a refetch after mutating the profile (avoids a race where
-  // useProfile queried before the insert/update landed).
   React.useEffect(() => { window.reloadProfile = reloadProfile; }, [reloadProfile]);
 
-  // "Active" match the user is currently inside. Persisted so a refresh mid-round
-  // drops them back in, and so WaitingForOpponent → MatchLive transitions are smooth.
-  const [activeMatchId, setActiveMatchId] = React.useState(() => {
-    try { return localStorage.getItem('spp_active_match'); } catch { return null; }
-  });
-
-  const openMatch = React.useCallback((id) => {
-    try { localStorage.setItem('spp_active_match', id); } catch {}
-    setActiveMatchId(id);
-  }, []);
-
-  const exitMatch = React.useCallback(() => {
-    try { localStorage.removeItem('spp_active_match'); } catch {}
-    setActiveMatchId(null);
-  }, []);
-
-  // If signed out, clear active match
-  React.useEffect(() => {
-    if (session === null) exitMatch();
-  }, [session, exitMatch]);
-
-  let screen;
+  // Loading while we resolve session/profile
   if (session === undefined || (session && profile === undefined)) {
-    screen = <LoadingScreen/>;
-  } else if (recovering && session) {
-    // User arrived via the password-reset email link. Force-set a new password
-    // before letting them into the app.
-    screen = <ResetPasswordScreen onDone={clearRecovering}/>;
-  } else if (session === null) {
-    screen = <AuthScreens/>;
-  } else if (profile === null) {
-    // Session exists but no profile row (OAuth edge case or failed insert).
-    screen = <ProfileSetupScreen session={session} onDone={reloadProfile}/>;
-  } else if (!profile.handle) {
-    // Profile exists but no display name yet — prompt for it.
-    screen = <DisplayNameScreen profile={profile}/>;
-  } else if (activeMatchId) {
-    screen = <MatchLive matchId={activeMatchId} profile={profile} onExit={exitMatch}/>;
-  } else {
-    screen = <MatchHub profile={profile} onOpenMatch={openMatch}/>;
+    return <PhoneShell><LoadingScreen/></PhoneShell>;
   }
 
+  // Recovery flow: user clicked the reset-password email link.
+  if (recovering && session) {
+    return <PhoneShell><ResetPasswordScreen onDone={clearRecovering}/></PhoneShell>;
+  }
+
+  // Not logged in
+  if (session === null) {
+    return <PhoneShell><AuthScreens/></PhoneShell>;
+  }
+
+  // Logged in but no profile row (OAuth edge case)
+  if (profile === null) {
+    return <PhoneShell><ProfileSetupScreen session={session} onDone={reloadProfile}/></PhoneShell>;
+  }
+
+  // Logged in but no display name yet
+  if (!profile.handle) {
+    return <PhoneShell><DisplayNameScreen profile={profile}/></PhoneShell>;
+  }
+
+  // Full app
+  return <App profile={profile}/>;
+}
+
+// ─── App: the original v1 App, wired to accept a signed-in profile ────
+function App({ profile }) {
+  const [route, setRoute] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('spp_route') || 'null') || { screen: 'home' }; }
+    catch { return { screen: 'home' }; }
+  });
+  const [tier, setTier]           = React.useState(() => localStorage.getItem('spp_tier')   || TWEAK_DEFAULTS.tier);
+  const [mascot, setMascot]       = React.useState(() => localStorage.getItem('spp_mascot') || TWEAK_DEFAULTS.mascot);
+  const [liveMode, setLiveMode]   = React.useState(() => {
+    const v = localStorage.getItem('spp_live');
+    return v == null ? TWEAK_DEFAULTS.liveMode : v === 'true';
+  });
+  const [brandLoud, setBrandLoud] = React.useState(() => localStorage.getItem('spp_brand') || TWEAK_DEFAULTS.brandLoud);
+  const [tweaksOn, setTweaksOn]   = React.useState(false);
+
+  React.useEffect(() => { localStorage.setItem('spp_route', JSON.stringify(route)); }, [route]);
+  React.useEffect(() => { localStorage.setItem('spp_tier', tier); }, [tier]);
+  React.useEffect(() => { localStorage.setItem('spp_mascot', mascot); }, [mascot]);
+  React.useEffect(() => { localStorage.setItem('spp_live', String(liveMode)); }, [liveMode]);
+  React.useEffect(() => { localStorage.setItem('spp_brand', brandLoud); }, [brandLoud]);
+
+  // Edit-mode protocol (used by design tools that iframe the app)
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setTweaksOn(true);
+      if (e.data.type === '__deactivate_edit_mode') setTweaksOn(false);
+    };
+    window.addEventListener('message', onMsg);
+    try { window.parent.postMessage({ type: '__edit_mode_available' }, '*'); } catch {}
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const go = (next) => setRoute(prev => ({ ...prev, ...next }));
+
+  const screenProps = { go, tier, setTier, mascot, brandLoud, liveMode, profile };
+
+  let screen;
+  switch (route.screen) {
+    case 'home':         screen = <HomeScreen {...screenProps}/>; break;
+    case 'events':       screen = <EventsScreen {...screenProps}/>; break;
+    case 'eventDetail':  screen = <EventDetailScreen {...screenProps} eventId={route.eventId}/>; break;
+    case 'stats':        screen = <StatsScreen {...screenProps}/>; break;
+    case 'profile':      screen = <ProfileScreen {...screenProps} viewingHandle={route.viewingHandle}/>; break;
+    case 'social':       screen = <SocialScreen {...screenProps}/>; break;
+    case 'membership':   screen = <MembershipScreen {...screenProps}/>; break;
+    case 'live':         screen = <LiveScorecardScreen {...screenProps}/>; break;
+    case 'resultShare':  screen = <ResultShareScreen {...screenProps}/>; break;
+
+    // Real-data routes for Challenge a Friend
+    case 'challenge':
+      screen = <MatchHub
+        profile={profile}
+        onExit={() => go({ screen: 'home' })}
+        onOpenMatch={(id) => go({ screen: 'match', matchId: id })}
+      />;
+      break;
+    case 'match':
+      screen = <MatchLive matchId={route.matchId} profile={profile} onExit={() => go({ screen: 'challenge' })}/>;
+      break;
+
+    default: screen = <HomeScreen {...screenProps}/>;
+  }
+
+  const tabs = [
+    { id: 'home',    label: 'Home',  icon: 'Home' },
+    { id: 'events',  label: 'Play',  icon: 'Tee' },
+    { id: 'social',  label: 'Board', icon: 'Trophy' },
+    { id: 'stats',   label: 'Stats', icon: 'Chart' },
+    { id: 'profile', label: 'You',   icon: 'User' },
+  ];
+
+  // Hide tab bar on deep screens where the tab UI would obscure primary actions
+  const hideTabs = ['live', 'resultShare', 'match', 'challenge'].includes(route.screen);
+
   return (
-    <div className="phone-wrap">
-      <PhoneStage>
-        <div className="screen-enter" style={{ position: 'absolute', inset: 0, overflow: 'auto' }}>
+    <>
+      <PhoneShell>
+        <div key={route.screen} className="screen-enter" style={{ position: 'absolute', inset: 0, overflow: 'auto' }}>
           {screen}
         </div>
-      </PhoneStage>
+        {!hideTabs && <TabBar tabs={tabs} active={route.screen} go={go}/>}
+      </PhoneShell>
+
+      {tweaksOn && <TweaksPanel
+        tier={tier} setTier={setTier}
+        mascot={mascot} setMascot={setMascot}
+        liveMode={liveMode} setLiveMode={setLiveMode}
+        brandLoud={brandLoud} setBrandLoud={setBrandLoud}
+        route={route} go={go}
+      />}
+    </>
+  );
+}
+
+// ─── Phone shell: phone-wrap + scaled PhoneStage ────────────
+function PhoneShell({ children }) {
+  return (
+    <div className="phone-wrap">
+      <PhoneStage>{children}</PhoneStage>
     </div>
   );
 }
@@ -120,7 +205,7 @@ function LoadingScreen() {
   );
 }
 
-// ─── Phone stage: scales a 402×874 "phone" to viewport on desktop; fullbleed on mobile ───
+// ─── Phone stage: scales a 402×874 "phone" to viewport; fullbleed on mobile ───
 function PhoneStage({ children }) {
   const W = 402, H = 874;
   const [scale, setScale] = React.useState(1);
@@ -131,9 +216,8 @@ function PhoneStage({ children }) {
       const vw = window.innerWidth, vh = window.innerHeight;
       const mobile = vw < 640;
       setIsMobile(mobile);
-      if (mobile) {
-        setScale(1);
-      } else {
+      if (mobile) { setScale(1); }
+      else {
         const pad = 40;
         setScale(Math.min((vw - pad) / W, (vh - pad) / H, 1.1));
       }
@@ -148,9 +232,7 @@ function PhoneStage({ children }) {
       <div style={{
         width: '100vw', height: '100dvh',
         background: 'var(--canvas)', position: 'relative', overflow: 'hidden',
-      }}>
-        {children}
-      </div>
+      }}>{children}</div>
     );
   }
 
@@ -165,7 +247,6 @@ function PhoneStage({ children }) {
         background: 'var(--canvas)',
         boxShadow: '0 40px 80px rgba(0,0,0,0.35), 0 0 0 10px #1a1a1a, 0 0 0 11px #2a2a2a',
       }}>
-        {/* Dynamic island */}
         <div style={{
           position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
           width: 120, height: 34, borderRadius: 22, background: '#000', zIndex: 100,
@@ -191,14 +272,104 @@ function PhoneStage({ children }) {
             <rect x="2" y="2" width="18" height="9" rx="2" fill="#fff"/>
           </svg>
         </div>
-
         {children}
-
         <div style={{
           position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
           width: 134, height: 5, borderRadius: 3, background: 'rgba(14,28,19,0.4)',
           zIndex: 100, pointerEvents: 'none',
         }}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tab bar ───────────────────────────────────────────────
+function TabBar({ tabs, active, go }) {
+  return (
+    <div style={{
+      position: 'absolute', bottom: 22, left: 14, right: 14, zIndex: 40,
+      background: 'var(--forest-deep)',
+      borderRadius: 999,
+      padding: '6px',
+      display: 'flex', gap: 2,
+      boxShadow: '0 18px 36px rgba(14,28,19,0.34), inset 0 0 0 1px rgba(234,226,206,0.08)',
+      border: '1px solid rgba(234,226,206,0.12)',
+    }}>
+      {tabs.map(t => {
+        const isActive = active === t.id || (t.id === 'events' && active === 'eventDetail') || (t.id === 'profile' && active === 'membership');
+        const IconComp = Icon[t.icon];
+        return (
+          <button key={t.id} onClick={() => go({ screen: t.id })} style={{
+            flex: 1, padding: '10px 4px', borderRadius: 999,
+            background: isActive ? 'var(--clay)' : 'transparent',
+            color: isActive ? 'var(--forest-deep)' : 'rgba(234,226,206,0.75)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            transition: 'all 0.2s',
+          }}>
+            <IconComp size={18} color="currentColor" filled={isActive}/>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Tweaks panel (design-tool overrides; dormant outside an edit iframe) ──
+function TweaksPanel({ tier, setTier, mascot, setMascot, liveMode, setLiveMode, brandLoud, setBrandLoud, route, go }) {
+  const [collapsed, setCollapsed] = React.useState(false);
+  if (collapsed) {
+    return (
+      <div className="tweaks-panel collapsed" onClick={() => setCollapsed(false)}>
+        <div className="head" style={{ borderBottom: 'none', cursor: 'pointer' }}>
+          <span>Tweaks</span><span style={{ fontSize: 14 }}>⚙</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="tweaks-panel">
+      <div className="head">
+        <span>Tweaks</span>
+        <button onClick={() => setCollapsed(true)} style={{ color: 'var(--cream)', opacity: 0.6, fontSize: 16, fontWeight: 700, lineHeight: 1 }}>−</button>
+      </div>
+      <div className="body">
+        <div className="tweak-row">
+          <label>Membership</label>
+          <div className="tweak-opts">
+            {[['walkup', 'Walk-up'], ['stats', 'Stats'], ['league', 'League'], ['leaguePlus', 'Plus']].map(([k, l]) => (
+              <button key={k} className={tier === k ? 'active' : ''} onClick={() => setTier(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="tweak-row">
+          <label>Mascot</label>
+          <div className="tweak-opts">
+            {[['off', 'Off'], ['subtle', 'Subtle'], ['full', 'Full']].map(([k, l]) => (
+              <button key={k} className={mascot === k ? 'active' : ''} onClick={() => setMascot(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="tweak-row">
+          <label>Live event</label>
+          <div className="tweak-opts">
+            <button className={liveMode ? 'active' : ''} onClick={() => setLiveMode(true)}>On</button>
+            <button className={!liveMode ? 'active' : ''} onClick={() => setLiveMode(false)}>Off</button>
+          </div>
+        </div>
+        <div className="tweak-row">
+          <label>Jump to screen</label>
+          <div className="tweak-opts" style={{ flexWrap: 'wrap', gap: 3 }}>
+            {[
+              ['home', 'Home'], ['events', 'Events'], ['eventDetail', 'Detail'],
+              ['stats', 'Stats'], ['social', 'Board'], ['membership', 'Member'],
+              ['live', 'Live'], ['resultShare', 'Share'], ['profile', 'Profile'],
+              ['challenge', 'Challenge'],
+            ].map(([k, l]) => (
+              <button key={k} className={route.screen === k ? 'active' : ''} onClick={() => go({ screen: k, eventId: k === 'eventDetail' ? 'e_sat' : undefined })} style={{ flex: '0 0 auto', padding: '6px 10px' }}>{l}</button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

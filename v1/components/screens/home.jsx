@@ -1,10 +1,12 @@
 /* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, ScoreDial, Spark, MOCK */
 // Home screen — next event, live leaderboard, activity
 
-function HomeScreen({ go, tier, brandLoud, liveMode, mascot }) {
+function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const nextEvent = liveMode ? MOCK.EVENTS.find(e => e.status === 'live') : MOCK.EVENTS.find(e => e.status === 'open' && !e.isMajor);
   const major = MOCK.EVENTS.find(e => e.isMajor);
   const isMember = tier === 'league' || tier === 'leaguePlus';
+  // Greeting name from the signed-in profile when available, otherwise the mock user.
+  const greetingName = (profile && profile.first_name) || MOCK.USER.name.split(' ')[0];
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
@@ -21,7 +23,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot }) {
             MIAMI / WK 12
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-            Hey, Alex.
+            Hey, {greetingName}.
           </div>
           <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 4, color: 'var(--forest)' }}>
             The birds are restless.
@@ -42,6 +44,39 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot }) {
             <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="2"/>
           </svg>
           <span style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 999, background: 'var(--forest)', border: '1.5px solid var(--paper)' }}/>
+        </button>
+      </div>
+
+      {/* Challenge a Friend — the one real, playable feature right now.
+          Sits above the demo content so it's the first thing the user sees. */}
+      <div style={{ padding: '8px 16px 0' }}>
+        <button onClick={() => go({ screen: 'challenge' })} className="card" style={{
+          width: '100%', textAlign: 'left',
+          padding: '18px 20px',
+          display: 'flex', alignItems: 'center', gap: 14,
+          color: 'var(--forest)',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: 'var(--forest)', color: 'var(--cream)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Icon.Tee size={26} color="currentColor" filled/>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>
+              Live 1v1 · Real match
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.01em', marginTop: 6 }}>
+              Challenge a friend
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>
+              Hole-by-hole scoring, both phones in sync.
+            </div>
+          </div>
+          <Icon.ArrowRight size={16} color="var(--forest)"/>
         </button>
       </div>
 

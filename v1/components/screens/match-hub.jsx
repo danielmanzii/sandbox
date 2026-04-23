@@ -1,8 +1,8 @@
 /* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
-function MatchHub({ profile, onOpenMatch }) {
-  const [mode, setMode] = React.useState('home'); // home | start | join | code
+function MatchHub({ profile, onOpenMatch, onExit }) {
+  const [mode, setMode] = React.useState('home'); // home | start | join | code | handle
   const [recent, setRecent] = React.useState([]);
   const [newMatch, setNewMatch] = React.useState(null);
 
@@ -19,14 +19,6 @@ function MatchHub({ profile, onOpenMatch }) {
 
   React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
-  // Auto-resume: if the user has a match in localStorage, restore into it.
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem('spp_active_match');
-      if (saved) onOpenMatch(saved);
-    } catch {}
-  }, [onOpenMatch]);
-
   if (mode === 'start') return <StartMatchView profile={profile} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
   if (mode === 'join')  return <JoinMatchView  profile={profile} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
   if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onOpponentJoined={(id) => onOpenMatch(id)}/>;
@@ -37,28 +29,34 @@ function MatchHub({ profile, onOpenMatch }) {
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ padding: '58px 20px 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
+      {/* Header with back-to-home + handle edit + sign out */}
+      <div style={{ padding: '50px 16px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        {onExit && (
+          <button onClick={onExit} title="Back to home" style={{
+            width: 38, height: 38, borderRadius: 999,
+            background: 'var(--paper)', border: 'var(--hairline)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--forest)',
+          }}>
+            <Icon.ArrowLeft size={16} color="currentColor"/>
+          </button>
+        )}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            Challenge a Friend
+          </div>
           <button onClick={() => setMode('handle')} title="Change display name" style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: 11, fontFamily: 'var(--font-mono)',
-            color: 'var(--forest)', opacity: 0.65,
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            padding: '2px 6px', marginLeft: -6, marginTop: -2,
-            borderRadius: 6, fontWeight: 700,
+            fontSize: 13, fontWeight: 700,
+            color: 'var(--forest)', opacity: 0.75,
+            padding: '2px 4px', marginLeft: -4, marginTop: 2,
+            borderRadius: 6,
           }}>
             {profile.handle}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }}>
               <path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
             </svg>
           </button>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 6, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-            Hey, {profile.first_name}.
-          </div>
-          <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 4, color: 'var(--forest)' }}>
-            Ready to play?
-          </div>
         </div>
         <button onClick={signOut} title="Sign out" style={{
           padding: '6px 12px', borderRadius: 999,
@@ -70,6 +68,15 @@ function MatchHub({ profile, onOpenMatch }) {
         }}>
           Sign out
         </button>
+      </div>
+
+      <div style={{ padding: '8px 20px 18px' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
+          Ready to play?
+        </div>
+        <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 4, color: 'var(--forest)' }}>
+          Start a match or jump back into one.
+        </div>
       </div>
 
       {/* Big primary actions */}
