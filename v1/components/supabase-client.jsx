@@ -55,4 +55,39 @@ async function signOut() {
   try { localStorage.removeItem('spp_active_match'); } catch {}
 }
 
-Object.assign(window, { useSession, useProfile, signOut });
+// ─── Recovery-mode hook ────────────────────────────────────
+// When a user clicks the password-reset email link they land back on our
+// origin with a recovery session. Supabase fires an auth event of type
+// 'PASSWORD_RECOVERY' as it picks up the URL fragment. We latch onto that so
+// the app can route them to a "set a new password" screen instead of into
+// the app itself.
+let __sbxRecovering = false;
+sbx.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') __sbxRecovering = true;
+});
+
+function useRecovering() {
+  const [r, setR] = React.useState(__sbxRecovering);
+  React.useEffect(() => {
+    const { data: sub } = sbx.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        __sbxRecovering = true;
+        setR(true);
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  const clear = React.useCallback(() => {
+    __sbxRecovering = false;
+    setR(false);
+  }, []);
+  return [r, clear];
+}
+
+// The URL the reset-password email link should return the user to. We use
+// the currently-running page so it works both on GitHub Pages and locally.
+function redirectOrigin() {
+  return window.location.origin + window.location.pathname;
+}
+
+Object.assign(window, { useSession, useProfile, useRecovering, signOut, redirectOrigin });

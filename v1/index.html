@@ -42,11 +42,12 @@
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, AuthScreens, ProfileSetupScreen, DisplayNameScreen, MatchHub, MatchLive, useSession, useProfile */
+/* global React, ReactDOM, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, MatchHub, MatchLive, useSession, useProfile, useRecovering */
 
 function Root() {
   const session = useSession();
   const [profile, , reloadProfile] = useProfile(session && session.user ? session.user.id : null);
+  const [recovering, clearRecovering] = useRecovering();
 
   // Expose reloadProfile as a global so screens deep in the auth flow can
   // force a refetch after mutating the profile (avoids a race where
@@ -77,6 +78,10 @@ function Root() {
   let screen;
   if (session === undefined || (session && profile === undefined)) {
     screen = <LoadingScreen/>;
+  } else if (recovering && session) {
+    // User arrived via the password-reset email link. Force-set a new password
+    // before letting them into the app.
+    screen = <ResetPasswordScreen onDone={clearRecovering}/>;
   } else if (session === null) {
     screen = <AuthScreens/>;
   } else if (profile === null) {

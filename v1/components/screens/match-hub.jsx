@@ -30,16 +30,30 @@ function MatchHub({ profile, onOpenMatch }) {
   if (mode === 'start') return <StartMatchView profile={profile} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
   if (mode === 'join')  return <JoinMatchView  profile={profile} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
   if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onOpponentJoined={(id) => onOpenMatch(id)}/>;
+  if (mode === 'handle' && window.DisplayNameScreen) {
+    const DNS = window.DisplayNameScreen;
+    return <DNS profile={profile} onCancel={() => setMode('home')} onDone={() => setMode('home')}/>;
+  }
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ padding: '58px 20px 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <button onClick={() => setMode('handle')} title="Change display name" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 11, fontFamily: 'var(--font-mono)',
+            color: 'var(--forest)', opacity: 0.65,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            padding: '2px 6px', marginLeft: -6, marginTop: -2,
+            borderRadius: 6, fontWeight: 700,
+          }}>
             {profile.handle}
-          </div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }}>
+              <path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 6, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
             Hey, {profile.first_name}.
           </div>
           <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 4, color: 'var(--forest)' }}>
