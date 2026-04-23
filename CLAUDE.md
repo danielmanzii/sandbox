@@ -8,15 +8,14 @@ A web-first responsive consumer app prototype for **Sandbox Pitch & Putt** — a
 
 ## Current state
 
-**Three surfaces live side-by-side:**
+**Two surfaces:**
 
-- **`v1/`** — Shipped prototype UI (editorial modern, white + forest + cream, layered shadows, shape-based result states). React via CDN + Babel-in-browser. Frozen as a reference version — only bug fixes go here.
-- **`v2/`** — In-progress UI based on a Pinterest direction. Starts as a clone of `v1/` and diverges as new design lands. Same tech stack as v1. This is where design exploration happens.
-- **`web/`** — Production Next.js 16 app (TypeScript, Tailwind v4, App Router). Where net-new work is ported once a UI version is settled. Postgres + Stripe + Clerk wired in over time.
+- **`v1/`** — The prototype. All screens built (Home, Events, Live Scorecard, Stats, Profile, Social, Membership). React via CDN + Babel-in-browser, mock data, no build step. This is the design reference and the basis for the production port.
+- **`web/`** — Production Next.js 16 app (TypeScript, Tailwind v4, App Router). Home screen ported. Postgres + Stripe + Clerk wired in over time.
 
-The root `index.html` is a landing page that lets you pick between V1 and V2. Each version has a floating `V1 / V2` pill in the top-right so you can hop between them. Run via `python -m http.server 5173` from the repo root.
+The root `index.html` redirects straight to `v1/`. Run via `python -m http.server 5173` from the repo root.
 
-When in doubt: design exploration goes in `v2/`; production code goes in `web/`. Don't edit `v1/` unless explicitly asked (it's the reference).
+When in doubt: visual/design changes go in `v1/`; production code goes in `web/`.
 
 ## Non-obvious rules to respect when making changes
 
