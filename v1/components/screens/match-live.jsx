@@ -138,7 +138,7 @@ function MatchLive({ matchId, profile, onExit }) {
       </div>
 
       {/* Decided — final result banner */}
-      {matchDecided && <FinalBanner match={match} state={state} youAreA={youAreA} opponent={opponent}/>}
+      {matchDecided && <FinalBanner match={match} state={state} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>}
 
       {/* Current hole card */}
       {!matchDecided && (
@@ -427,9 +427,10 @@ function ResultBadge({ result, youAreA }) {
 }
 
 // ─── Final banner ────────────────────────────────────────────
-function FinalBanner({ match, state, youAreA, opponent }) {
+function FinalBanner({ match, state, youAreA, theirTeamLabel }) {
   const youWon = (state.up > 0 && youAreA) || (state.up < 0 && !youAreA);
   const halved = state.up === 0;
+  const oppLabel = theirTeamLabel || 'Opponent';
   return (
     <div style={{
       margin: '8px 16px 16px',
@@ -445,9 +446,9 @@ function FinalBanner({ match, state, youAreA, opponent }) {
         {halved ? 'Halved.' : youWon ? `W ${match.final_margin || state.margin}` : `L ${match.final_margin || state.margin}`}
       </div>
       <div style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>
-        {youWon ? `You beat ${opponent?.first_name || 'your opponent'} ${match.final_margin || state.margin}.` :
+        {youWon ? `You beat ${oppLabel} ${match.final_margin || state.margin}.` :
          halved ? 'Matched hole-for-hole. Go again.' :
-         `${opponent?.first_name || 'Opponent'} took it ${match.final_margin || state.margin}.`}
+         `${oppLabel} took it ${match.final_margin || state.margin}.`}
       </div>
     </div>
   );
