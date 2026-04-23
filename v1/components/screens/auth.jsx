@@ -101,21 +101,24 @@ function SignUpView({ onBack, onSignInInstead }) {
       return;
     }
 
-    const handle = await generateHandle(firstName, lastName);
+    // Profile is saved without a handle — the next step (DisplayNameScreen)
+    // will prompt for one. Keeps the two screens doing one job each.
     const { error: profileErr } = await sbx.from('profiles').insert({
       id: user.id,
       first_name: firstName.trim(),
       last_name:  lastName.trim(),
       gender: gender || null,
       dob:    dob    || null,
-      handle,
     });
     if (profileErr) {
       setErr('Account created but profile save failed: ' + profileErr.message);
       setBusy(false);
       return;
     }
-    // AuthGate will now redirect into the app automatically.
+    // Tell Root to re-fetch the profile so the AuthGate routes us to the
+    // display-name step immediately (avoids a race where useProfile queried
+    // before this insert landed and cached a null result).
+    if (window.reloadProfile) await window.reloadProfile();
     setBusy(false);
   }
 
@@ -255,14 +258,13 @@ function ProfileSetupScreen({ session, onDone }) {
     e.preventDefault();
     if (!valid || busy) return;
     setBusy(true); setErr('');
-    const handle = await generateHandle(firstName, lastName);
+    // No handle here — DisplayNameScreen picks it up next.
     const { error } = await sbx.from('profiles').insert({
       id: session.user.id,
       first_name: firstName.trim(),
       last_name:  lastName.trim(),
       gender: gender || null,
       dob:    dob    || null,
-      handle,
     });
     if (error) { setErr(error.message); setBusy(false); return; }
     setBusy(false);
@@ -400,18 +402,185 @@ function BackButton({ onClick }) {
   );
 }
 
-// ─── Handle generator ────────────────────────────────────────
-// Builds "@firstl" from first + last name; appends a 2-digit suffix if taken.
-async function generateHandle(first, last) {
-  const base = ('@' + (first || 'player').toLowerCase().replace(/[^a-z0-9]/g, '') +
-                     (last  ? last.trim()[0].toLowerCase() : '')).slice(0, 20);
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const candidate = attempt === 0 ? base : `${base}${Math.floor(Math.random() * 90 + 10)}`;
-    const { data } = await sbx.from('profiles').select('id').eq('handle', candidate).maybeSingle();
-    if (!data) return candidate;
+// ─── Display name (handle) step ──────────────────────────────
+// Shown right after sign-up, or on first sign-in for any account that doesn't
+// have a handle yet (OAuth users, migrations). Validates format + uniqueness
+// as the user types, with a 400ms debounce.
+function DisplayNameScreen({ profile }) {
+  const [raw, setRaw] = React.useState('');
+  const [status, setStatus] = React.useState('idle'); // idle | checking | available | taken | invalid
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr]   = React.useState('');
+
+  const clean = sanitizeHandle(raw);
+  const validFormat = isValidHandle(clean);
+
+  // Debounced uniqueness check
+  React.useEffect(() => {
+    if (!raw) { setStatus('idle'); return; }
+    if (!validFormat) { setStatus('invalid'); return; }
+    setStatus('checking');
+    const t = setTimeout(async () => {
+      const { data } = await sbx.from('profiles').select('id').eq('handle', '@' + clean).maybeSingle();
+      // If we somehow matched ourselves (shouldn't happen pre-save, but just in case), treat as available.
+      if (!data || data.id === profile.id) setStatus('available');
+      else setStatus('taken');
+    }, 400);
+    return () => clearTimeout(t);
+  }, [raw, clean, validFormat, profile.id]);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (status !== 'available' || busy) return;
+    setBusy(true); setErr('');
+    const { error } = await sbx.from('profiles').update({ handle: '@' + clean }).eq('id', profile.id);
+    if (error) {
+      // Most likely the unique constraint racing — re-check and let user try a different name.
+      if (/duplicate|unique/i.test(error.message)) {
+        setStatus('taken');
+        setErr('That name was just taken. Try another.');
+      } else {
+        setErr(error.message);
+      }
+      setBusy(false);
+      return;
+    }
+    if (window.reloadProfile) await window.reloadProfile();
+    setBusy(false);
   }
-  // Fallback: deeply random
-  return base + Math.random().toString(36).slice(2, 6);
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', display: 'flex', flexDirection: 'column',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 24px 24px' }}>
+        <Eyebrow color="var(--cream)">Last step</Eyebrow>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
+          Pick a display<br/>name.
+        </div>
+        <div className="caption-serif" style={{ fontSize: 16, marginTop: 12, opacity: 0.75, maxWidth: 340 }}>
+          This is how other players will find you on the board.
+        </div>
+
+        <div style={{ marginTop: 32 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center',
+            background: 'rgba(255,255,255,0.08)',
+            border: `1px solid ${borderFor(status)}`,
+            borderRadius: 14,
+            padding: '0 14px',
+            transition: 'border-color 0.15s',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-display)', fontSize: 22,
+              color: 'rgba(234,226,206,0.5)', paddingRight: 2,
+            }}>@</span>
+            <input
+              value={raw}
+              onChange={e => setRaw(e.target.value)}
+              placeholder="yourname"
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={20}
+              style={{
+                flex: 1, padding: '16px 0',
+                background: 'transparent', border: 'none',
+                color: 'var(--cream)',
+                fontSize: 22, fontFamily: 'var(--font-display)',
+                letterSpacing: '-0.01em', outline: 'none',
+              }}
+            />
+            <StatusIcon status={status}/>
+          </div>
+
+          <div style={{
+            marginTop: 8, fontSize: 12, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.04em', opacity: 0.85,
+            color: statusTextColor(status),
+            minHeight: 18,
+          }}>
+            {statusText(status, clean)}
+          </div>
+        </div>
+
+        {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
+
+        <div style={{ flex: 1 }}/>
+
+        <Button variant="primary" size="lg" full disabled={status !== 'available' || busy} onClick={submit}>
+          {busy ? 'Saving…' : 'Continue'}
+          {!busy && <Icon.ArrowRight size={16}/>}
+        </Button>
+      </form>
+    </div>
+  );
 }
 
-Object.assign(window, { AuthScreens, ProfileSetupScreen });
+// ─── Handle validation + UI helpers ──────────────────────────
+// Handle rules: 3–20 chars; lowercase letters, digits, underscore.
+// Stripping happens live (uppercase is lowercased, other chars dropped).
+function sanitizeHandle(raw) {
+  return (raw || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+}
+function isValidHandle(clean) {
+  return /^[a-z0-9_]{3,20}$/.test(clean);
+}
+function borderFor(status) {
+  if (status === 'available') return 'rgba(62,138,87,0.9)';
+  if (status === 'taken' || status === 'invalid') return 'rgba(231,184,167,0.6)';
+  return 'rgba(234,226,206,0.2)';
+}
+function statusTextColor(status) {
+  if (status === 'available') return 'rgba(201,216,190,1)';
+  if (status === 'taken' || status === 'invalid') return 'var(--loss-soft)';
+  return 'rgba(234,226,206,0.6)';
+}
+function statusText(status, clean) {
+  switch (status) {
+    case 'idle':      return '3–20 characters. Letters, numbers, underscores.';
+    case 'checking':  return 'Checking…';
+    case 'available': return `✓ @${clean} is yours.`;
+    case 'taken':     return `✗ @${clean} is taken.`;
+    case 'invalid':   return clean.length < 3
+      ? 'Too short — at least 3 characters.'
+      : 'Only letters, numbers, and underscores.';
+    default: return '';
+  }
+}
+function StatusIcon({ status }) {
+  const size = 22;
+  if (status === 'available') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" fill="rgba(62,138,87,0.18)"/>
+        <path d="M7 12.5l3.5 3.5L17 9" stroke="#3E8A57" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  }
+  if (status === 'taken' || status === 'invalid') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" fill="rgba(155,58,46,0.2)"/>
+        <path d="M8 8l8 8M16 8l-8 8" stroke="var(--loss-soft)" strokeWidth="2.4" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+  if (status === 'checking') {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: 999,
+        border: '2px solid rgba(234,226,206,0.2)',
+        borderTopColor: 'rgba(234,226,206,0.8)',
+        animation: 'spin 0.8s linear infinite',
+      }}/>
+    );
+  }
+  return <div style={{ width: size, height: size }}/>;
+}
+
+Object.assign(window, { AuthScreens, ProfileSetupScreen, DisplayNameScreen });
