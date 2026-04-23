@@ -5,6 +5,9 @@ function ProfileScreen({ go, tier, viewingHandle }) {
   const isSelf = !viewingHandle || viewingHandle === MOCK.USER.handle;
   const user = isSelf ? MOCK.USER :
     (MOCK.FRIENDS.find(f => f.handle === viewingHandle) || MOCK.FRIENDS[0]);
+  // Use the real user's first-letter initial for the self avatar circle
+  // (old code had a hardcoded 'A' for Alex).
+  const selfInitial = (user.name || '?').charAt(0).toUpperCase();
 
   const [youAreMember] = [tier === 'league' || tier === 'leaguePlus' || tier === 'stats'];
 
@@ -45,7 +48,7 @@ function ProfileScreen({ go, tier, viewingHandle }) {
             color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 38,
             overflow: 'hidden',
           }}>
-            {isSelf ? 'A' : (
+            {isSelf ? selfInitial : (
               <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
             )}
           </div>

@@ -128,13 +128,23 @@ function MatchBoardRow({ m, last }) {
 }
 
 function SeasonLeaderboard() {
-  // Match-play ladder: record primary, holes-won tiebreak (as per user's answer)
+  // Match-play ladder: record primary, holes-won tiebreak (as per user's answer).
+  // The signed-in user's row uses MOCK.USER (real handle + real record) so the
+  // leaderboard shows them in their actual slot.
+  const u = MOCK.USER;
+  const userRow = {
+    name: u.handle,
+    W: u.matchesW, L: u.matchesL, H: u.matchesH,
+    holesW: u.holesWonTotal || 0,
+    events: u.eventsPlayed || u.matchesTotal || 0,
+    isYou: true,
+  };
   const rows = [
     { name: '@dukes', W: 9, L: 2, H: 0, holesW: 58, events: 11 },
     { name: '@bigleo', W: 8, L: 2, H: 1, holesW: 55, events: 11 },
     { name: '@jaybird', W: 7, L: 2, H: 1, holesW: 51, events: 10 },
     { name: '@riv', W: 7, L: 4, H: 0, holesW: 48, events: 11 },
-    { name: '@alex.miami', W: 6, L: 4, H: 1, holesW: 42, events: 11, isYou: true },
+    userRow,
     { name: '@theo.m', W: 5, L: 4, H: 1, holesW: 38, events: 10 },
     { name: '@maria.cg', W: 4, L: 4, H: 1, holesW: 34, events: 9 },
     { name: '@camicu', W: 3, L: 6, H: 1, holesW: 31, events: 10 },

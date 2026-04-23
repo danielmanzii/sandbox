@@ -36,12 +36,13 @@
 
 <!-- Supabase-backed auth + Challenge a Friend match flow -->
 <script type="text/babel" src="components/supabase-client.jsx"></script>
+<script type="text/babel" src="components/user-data.jsx"></script>
 <script type="text/babel" src="components/screens/auth.jsx"></script>
 <script type="text/babel" src="components/screens/match-hub.jsx"></script>
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, signOut */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "tier": "league",
@@ -90,6 +91,12 @@ function Root() {
 
 // ─── App: the original v1 App, wired to accept a signed-in profile ────
 function App({ profile }) {
+  // Globally replace MOCK.USER + MOCK.ACTIVITY with the real signed-in user's
+  // data. This is why every screen in v1 now shows the real user's name,
+  // handle, record, streak, and recent match activity without each screen
+  // having to be refactored one-by-one.
+  useRealUserSync(profile);
+
   const [route, setRoute] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('spp_route') || 'null') || { screen: 'home' }; }
     catch { return { screen: 'home' }; }
