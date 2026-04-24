@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents */
 // Home screen — next event, live leaderboard, activity
 // Reads events from Supabase via the hooks in events-data.jsx so every
 // screen here renders against real data. Tweaks-panel `liveMode=true`
@@ -217,10 +217,9 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         )}
       </div>
 
-      {/* Brand foot */}
-      <div style={{ textAlign: 'center', padding: '56px 16px 24px', opacity: 0.18 }}>
-        <Wordmark variant="forest" size={120} style={{ margin: '0 auto' }}/>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', marginTop: 8, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Pitch & Putt · Miami</div>
+      {/* Brand foot — full lockup (SANDBOX + Pitch & Putt as one unit) */}
+      <div style={{ textAlign: 'center', padding: '56px 16px 24px', opacity: 0.22 }}>
+        <Lockup variant="forest" size={180} style={{ margin: '0 auto' }}/>
       </div>
     </div>
   );
