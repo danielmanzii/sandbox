@@ -1,26 +1,45 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser */
 // Home screen — next event, live leaderboard, activity
-// Reads events from Supabase via the hooks in events-data.jsx so every
-// screen here renders against real data. Tweaks-panel `liveMode=true`
-// still falls back to a mock live event for design-preview when no
-// real event has status='live' in the DB.
+// Reads events from Supabase via the hooks in events-data.jsx and the
+// signed-in user's active match via live-data.jsx. Tweaks-panel
+// `liveMode=true` still falls back to a mock live event for design-
+// preview when nothing real is live in the DB.
 
 function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const isMember = tier === 'league' || tier === 'leaguePlus';
   const greetingName = (profile && profile.first_name) || MOCK.USER.name.split(' ')[0];
 
-  // Real event data
+  // Real data
   const [liveEvent]            = useLiveEvent();
   const [myNextEvent, nextLoading] = useNextEventForUser(profile && profile.id);
   const [major]                = useNextMajor();
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
+  const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
 
-  // The Up Next card prefers a real live event; falls back to the user's
-  // next registered/open event; design-preview keeps the MOCK live event
-  // when liveMode is on AND nothing real is live yet.
-  let nextEvent = liveEvent || myNextEvent;
-  if (!nextEvent && liveMode) {
-    nextEvent = MOCK.EVENTS.find(e => e.status === 'live') || null;
+  // Up Next card priority:
+  //   1. User has an active match → show the live preview with real
+  //      match data. We synthesize an "event"-shaped object with
+  //      status='live' so the existing NextUpCard live branch fires.
+  //   2. There's a live event in the DB → use that.
+  //   3. User's next registered/open event.
+  //   4. Tweaks design-preview fallback when liveMode is on.
+  let nextEvent = null;
+  if (activeMatch) {
+    nextEvent = {
+      id: activeMatch.id,
+      status: 'live',
+      courseShort: activeMatch.courseName || 'Live Match',
+      tagline: 'Live now',
+      img: '',
+      // The card's "Live" branch reads only courseShort + status; the
+      // real match content is rendered inside LiveInlinePreview which
+      // we now feed via the activeMatch prop.
+    };
+  } else {
+    nextEvent = liveEvent || myNextEvent;
+    if (!nextEvent && liveMode) {
+      nextEvent = MOCK.EVENTS.find(e => e.status === 'live') || null;
+    }
   }
 
   // Upcoming-teaser strip: skip whatever's already shown as Up Next.
@@ -70,7 +89,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       {/* Next-up card */}
       <div style={{ padding: '16px 16px 0' }}>
         {nextEvent ? (
-          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot}/>
+          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch}/>
         ) : nextLoading ? (
           <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>
         ) : (
@@ -225,11 +244,18 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   );
 }
 
-function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot }) {
+function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot, activeMatch }) {
   if (!event) return null;
   const live = event.status === 'live';
+  // When this card is in "live" mode and we have a real active match,
+  // route to the match screen with its id; otherwise route to live (the
+  // legacy live-scorecard route) for design preview, or eventDetail.
+  const targetScreen = live ? (activeMatch ? 'match' : 'live') : 'eventDetail';
+  const targetParams = activeMatch
+    ? { matchId: activeMatch.id }
+    : { eventId: event.id };
   return (
-    <button onClick={() => go({ screen: live ? 'live' : 'eventDetail', eventId: event.id })} className="card-hero" style={{
+    <button onClick={() => go({ screen: targetScreen, ...targetParams })} className="card-hero" style={{
       width: '100%', textAlign: 'left',
       background: 'var(--forest)',
       color: 'var(--cream)',
@@ -245,7 +271,9 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot }) {
       }}>
         <div style={{ position: 'absolute', top: 16, left: 16, display: 'flex', gap: 6 }}>
           {live ? (
-            <Chip variant="clay" icon={<LiveDot/>}>LIVE · HOLE {MOCK.LIVE.currentHole}</Chip>
+            <Chip variant="clay" icon={<LiveDot/>}>
+              LIVE · HOLE {activeMatch ? Math.min((activeMatch.thru || 0) + 1, activeMatch.totalHoles || 9) : MOCK.LIVE.currentHole}
+            </Chip>
           ) : (
             <div style={{
               padding: '6px 10px', borderRadius: 999,
@@ -273,7 +301,11 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot }) {
             {event.courseShort}
           </div>
           <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', opacity: 0.8, marginTop: 6, letterSpacing: '0.04em' }}>
-            {live ? 'WK 11 · MELREESE' : (event.dateFull || '').toUpperCase()}
+            {live
+              ? (activeMatch && activeMatch.courseName
+                  ? activeMatch.courseName.toUpperCase()
+                  : 'LIVE NOW')
+              : (event.dateFull || '').toUpperCase()}
           </div>
         </div>
       </div>
@@ -281,7 +313,7 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot }) {
       {/* Body */}
       <div style={{ padding: '18px 20px 20px' }}>
         {live ? (
-          <LiveInlinePreview/>
+          <LiveInlinePreview match={activeMatch}/>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div>
@@ -307,11 +339,15 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot }) {
   );
 }
 
-function LiveInlinePreview() {
-  const m = MOCK.LIVE.yourMatch;
+function LiveInlinePreview({ match }) {
+  // Real active match takes priority; fall back to MOCK.LIVE.yourMatch
+  // for design preview when no real one exists (Tweaks `liveMode`).
+  const m = match || MOCK.LIVE.yourMatch;
+  if (!m) return null;
   const state = m.state; // + = you up, - = down, 0 = AS
   const label = state > 0 ? `${state} UP` : state < 0 ? `${-state} DN` : 'AS';
   const accent = state > 0 ? 'var(--clay)' : state < 0 ? '#E7B8A7' : 'var(--cream)';
+  const oppName = (m.teamB && m.teamB.name) || '—';
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -324,7 +360,7 @@ function LiveInlinePreview() {
         </div>
         <div style={{ textAlign: 'right' }}>
           <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>vs</Eyebrow>
-          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{m.teamB.name}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{oppName}</div>
         </div>
       </div>
       <Button variant="clay" size="sm" full style={{ marginTop: 12 }}>
