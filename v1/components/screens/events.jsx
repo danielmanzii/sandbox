@@ -1,11 +1,13 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, registerForEvent, cancelRegistration */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration */
 // Events list + detail + register
 
 function EventsScreen({ go, tier }) {
   const [filter, setFilter] = React.useState('all');
-  const filtered = MOCK.EVENTS.filter(e => {
-    if (filter === 'all') return e.status !== 'live';
-    if (filter === 'weekly') return e.type === 'weekly' && e.status !== 'live';
+  const [allEvents, loading] = useUpcomingEvents(50); // big enough cap for the foreseeable future
+  const filtered = allEvents.filter(e => {
+    if (e.status === 'live') return false;
+    if (filter === 'all')    return true;
+    if (filter === 'weekly') return e.type === 'weekly';
     if (filter === 'majors') return e.isMajor;
     return true;
   });
@@ -37,7 +39,22 @@ function EventsScreen({ go, tier }) {
       </div>
 
       <div style={{ padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {filtered.map(e => <FullEventCard key={e.id} event={e} go={go} tier={tier}/>)}
+        {loading ? (
+          <div style={{ padding: '20px 4px', fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>
+            Loading events…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="card" style={{ padding: 22, textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1 }}>
+              No {filter === 'all' ? 'events' : filter === 'majors' ? 'Majors' : 'weekly events'} on the schedule.
+            </div>
+            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.7, marginTop: 8 }}>
+              Check back soon — the schedule updates weekly.
+            </div>
+          </div>
+        ) : (
+          filtered.map(e => <FullEventCard key={e.id} event={e} go={go} tier={tier}/>)
+        )}
       </div>
     </div>
   );
