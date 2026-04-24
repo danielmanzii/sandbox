@@ -20,6 +20,19 @@ Handoff for Rob — quick note on the production wiring + a few cleanup commits 
 - Root `index.html` (the redirect script) is now Vercel-invisible but still useful for local dev (`python -m http.server` from repo root).
 - Root redirect script updated earlier to preserve `?query` and `#hash`, so Supabase auth callbacks land safely even if anyone reaches it.
 
+### Vercel-Git connection fix (the bug that hid all this work for hours)
+
+**Heads-up Rob:** the Vercel project was originally connected to `21rob/sandbox` (your personal fork — the one with just an "Initial commit" `dbdf8a2`). None of our pushes to `danielmanzii/sandbox` since that initial setup were reaching production — Vercel was reading from the wrong repo entirely.
+
+Symptoms: new commits seemed to push fine, but `https://sbx.golf` kept serving an old snapshot regardless of what we changed. Manual "Redeploy" buttons just redeployed the same `dbdf8a2` commit.
+
+**Fix:** Vercel → Settings → Git → Disconnect `21rob/sandbox` → Connect `danielmanzii/sandbox` (this required installing Vercel's GitHub App on the `danielmanzii` account first; only `21rob` had it before). After reconnect, the next push (`e94441a`) auto-deployed with everything: Root=v1, canonical apex, query/hash redirect, favicon, **plus all your Supabase + Challenge a Friend + real-data work that had been invisible to production this whole time**.
+
+**Going forward:** every push to `danielmanzii/sandbox` `main` from either of us auto-deploys to https://sbx.golf in ~10s. No special workflow.
+
+### Favicon
+- Added the SPP monogram (Forest-White Letters) as the SVG favicon at `v1/assets/favicon.svg`. Wired into `v1/index.html` as both `rel="icon"` and `rel="apple-touch-icon"`.
+
 ### Cleanup
 - Deleted orphan `v2/` directory (was just empty subfolders + `.bak` files left over after your `ef35e4a` commit removed the tracked v2 files).
 - Deleted root `/assets/` (only `.bak` backups remained — the live brand SVGs all live inside `v1/assets/`).

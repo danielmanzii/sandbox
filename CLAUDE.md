@@ -18,7 +18,7 @@ The root `index.html` redirects straight to `v1/`. When in doubt: shipping new f
 ## Production
 
 - **Live URL:** [https://sbx.golf](https://sbx.golf) — apex is the canonical. `www.sbx.golf` 307-redirects here.
-- **Host:** Vercel (project `sandbox` under team `sbxgolf-3133`). Framework Preset = **Other** (no build step). **Root Directory = `v1`** so the app is served from the repo root URL with no `/v1/` path prefix in the address bar. Auto-deploys on push to `main`.
+- **Host:** Vercel (project `sandbox` under team `sbxgolf-3133`). Framework Preset = **Other** (no build step). **Root Directory = `v1`** so the app is served from the repo root URL with no `/v1/` path prefix in the address bar. **Connected to `danielmanzii/sandbox` (this repo)** — auto-deploys on push to `main`. Both collaborators push here; no special workflow required for production deploys.
 - **Vercel preview URL:** `sandbox-beryl-seven.vercel.app` (always points at the latest production build)
 - **DNS:** GoDaddy. `A @ → 76.76.21.21` and `CNAME www → cname.vercel-dns.com`. TLS auto-provisioned by Vercel via Let's Encrypt.
 
