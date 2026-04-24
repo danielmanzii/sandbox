@@ -201,11 +201,13 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
     if (!identity || !password || busy) return;
     setBusy(true); setErr('');
 
-    // Resolve to an email. If the user typed an email, use it directly.
-    // Otherwise treat as a handle and look up the email via the
-    // email_for_handle RPC (SECURITY DEFINER on the server).
+    // Resolve to an email. Strict email-shape regex so "@handle" or
+    // a bare "handle" both go through the username path. If it doesn't
+    // match the email regex, look up the email via the email_for_handle
+    // RPC (SECURITY DEFINER on the server, normalizes @-prefix).
     let email = identity.trim();
-    if (!email.includes('@')) {
+    const isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    if (!isEmail) {
       const handle = email.replace(/^@/, '').toLowerCase();
       const { data: foundEmail, error: lookupErr } = await sbx.rpc('email_for_handle', { handle_input: handle });
       if (lookupErr || !foundEmail) {

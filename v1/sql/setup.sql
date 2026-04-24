@@ -224,10 +224,14 @@ language sql
 security definer
 set search_path = public, auth
 as $$
+  -- Strip leading @ from BOTH the stored handle and the input before
+  -- comparing, so "alex.miami", "@alex.miami", and any case variant
+  -- all resolve to the same account regardless of how the handle is
+  -- stored in profiles.handle.
   select u.email::text
   from auth.users u
   join public.profiles p on p.id = u.id
-  where lower(p.handle) = lower(handle_input)
+  where lower(ltrim(p.handle, '@')) = lower(ltrim(handle_input, '@'))
   limit 1
 $$;
 
