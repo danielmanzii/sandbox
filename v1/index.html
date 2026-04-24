@@ -57,9 +57,10 @@
 <script type="text/babel" src="components/screens/auth.jsx"></script>
 <script type="text/babel" src="components/screens/match-hub.jsx"></script>
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
+<script type="text/babel" src="components/screens/notifications.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "tier": "league",
@@ -187,6 +188,9 @@ function App({ profile }) {
       break;
     case 'match':
       screen = <MatchLive matchId={route.matchId} profile={profile} onExit={() => go({ screen: 'events', playTab: 'unranked' })}/>;
+      break;
+    case 'notifications':
+      screen = <NotificationsScreen profile={profile} go={go}/>;
       break;
 
     default: screen = <HomeScreen {...screenProps}/>;

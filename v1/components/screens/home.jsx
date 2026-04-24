@@ -69,21 +69,27 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
             The birds are restless.
           </div>
         </div>
-        <button style={{
-          width: 42, height: 42, borderRadius: 999,
-          background: 'var(--paper)',
-          border: 'var(--hairline)',
-          boxShadow: 'var(--shadow-sm)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative',
-          color: 'var(--forest)',
-          flexShrink: 0, marginTop: 4,
-        }}>
+        <button
+          onClick={() => go({ screen: 'notifications' })}
+          aria-label={`Notifications${pendingInvites && pendingInvites.length ? ` (${pendingInvites.length} unread)` : ''}`}
+          style={{
+            width: 42, height: 42, borderRadius: 999,
+            background: 'var(--paper)',
+            border: 'var(--hairline)',
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'relative',
+            color: 'var(--forest)',
+            flexShrink: 0, marginTop: 4,
+          }}
+        >
           <svg width="16" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M12 2a6 6 0 0 0-6 6v4l-2 3h16l-2-3V8a6 6 0 0 0-6-6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
             <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="2"/>
           </svg>
-          <span style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 999, background: 'var(--forest)', border: '1.5px solid var(--paper)' }}/>
+          {pendingInvites && pendingInvites.length > 0 && (
+            <span style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 999, background: 'var(--forest)', border: '1.5px solid var(--paper)' }}/>
+          )}
         </button>
       </div>
 
