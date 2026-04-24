@@ -209,3 +209,26 @@ begin
     alter publication supabase_realtime add table public.match_holes;
   end if;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────
+-- Username (handle) → email lookup for the Sign-In screen.
+-- Lets unauthenticated users resolve a @handle to the associated
+-- email so we can pass it to sbx.auth.signInWithPassword().
+-- SECURITY DEFINER is required because anon users can't read
+-- auth.users directly; the function only returns the email column
+-- and only when a matching profile exists.
+-- ─────────────────────────────────────────────────────────────────
+create or replace function public.email_for_handle(handle_input text)
+returns text
+language sql
+security definer
+set search_path = public, auth
+as $$
+  select u.email::text
+  from auth.users u
+  join public.profiles p on p.id = u.id
+  where lower(p.handle) = lower(handle_input)
+  limit 1
+$$;
+
+grant execute on function public.email_for_handle(text) to anon, authenticated;

@@ -49,7 +49,7 @@ function WelcomeView({ onSignUp, onSignIn }) {
           <Icon.ArrowRight size={16}/>
         </Button>
         <Button variant="outlineWhite" size="lg" full onClick={onSignIn}>
-          I already have an account
+          Sign In
         </Button>
       </div>
 
@@ -190,17 +190,45 @@ function SignUpView({ onBack, onSignInInstead }) {
 
 // ─── Sign In ─────────────────────────────────────────────────
 function SignInView({ onBack, onSignUpInstead, onForgot }) {
-  const [email, setEmail]       = React.useState('');
+  const [identity, setIdentity] = React.useState(''); // email or @handle
   const [password, setPassword] = React.useState('');
+  const [remember, setRemember] = React.useState(true);
   const [busy, setBusy]         = React.useState(false);
   const [err, setErr]           = React.useState('');
 
   async function submit(e) {
     e.preventDefault();
-    if (!email || !password || busy) return;
+    if (!identity || !password || busy) return;
     setBusy(true); setErr('');
+
+    // Resolve to an email. If the user typed an email, use it directly.
+    // Otherwise treat as a handle and look up the email via the
+    // email_for_handle RPC (SECURITY DEFINER on the server).
+    let email = identity.trim();
+    if (!email.includes('@')) {
+      const handle = email.replace(/^@/, '').toLowerCase();
+      const { data: foundEmail, error: lookupErr } = await sbx.rpc('email_for_handle', { handle_input: handle });
+      if (lookupErr || !foundEmail) {
+        setErr('No account found for that username.');
+        setBusy(false);
+        return;
+      }
+      email = foundEmail;
+    }
+
     const { error } = await sbx.auth.signInWithPassword({ email, password });
     if (error) { setErr(error.message); setBusy(false); return; }
+
+    // "Remember me" controls session persistence past tab close.
+    // Supabase persists in localStorage by default (≈ "remember on").
+    // If the user unchecked it, sign them out when the tab/window closes.
+    if (!remember) {
+      sessionStorage.setItem('spp_session_only', '1');
+      window.addEventListener('beforeunload', () => { sbx.auth.signOut(); });
+    } else {
+      sessionStorage.removeItem('spp_session_only');
+    }
+
     setBusy(false);
     // AuthGate picks up the new session automatically.
   }
@@ -217,19 +245,48 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
-        <Field label="Email">
-          <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off"/>
+        <Field label="Email or username">
+          <Input value={identity} onChange={setIdentity} type="text" autoComplete="username" autoCapitalize="off" placeholder="you@example.com or @handle"/>
         </Field>
         <Field label="Password">
           <Input value={password} onChange={setPassword} type="password" autoComplete="current-password"/>
         </Field>
       </div>
 
+      {/* Remember me */}
+      <button
+        type="button"
+        onClick={() => setRemember(r => !r)}
+        style={{
+          marginTop: 14,
+          display: 'flex', alignItems: 'center', gap: 10,
+          color: 'var(--paper)', textAlign: 'left',
+          padding: 0,
+        }}
+      >
+        <span style={{
+          width: 20, height: 20, borderRadius: 6,
+          background: remember ? 'var(--paper)' : 'transparent',
+          border: '1.5px solid var(--paper)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          {remember && (
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7.5l3.2 3L12 3.5" stroke="var(--forest)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </span>
+        <span style={{ fontSize: 13, fontFamily: 'var(--font-body)', opacity: 0.9 }}>
+          Remember me
+        </span>
+      </button>
+
       {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
 
       <div style={{ flex: 1 }}/>
 
-      <Button variant="paper" size="lg" full disabled={!email || !password || busy} onClick={submit} style={{ marginTop: 18 }}>
+      <Button variant="paper" size="lg" full disabled={!identity || !password || busy} onClick={submit} style={{ marginTop: 18 }}>
         {busy ? 'Signing in…' : 'Sign in'}
         {!busy && <Icon.ArrowRight size={16}/>}
       </Button>
