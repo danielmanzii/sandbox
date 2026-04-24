@@ -17,8 +17,8 @@ The root `index.html` redirects straight to `v1/`. When in doubt: shipping new f
 
 ## Production
 
-- **Live URL:** [https://sbx.golf](https://sbx.golf) (apex 307-redirects to `https://www.sbx.golf`)
-- **Host:** Vercel (project `sandbox` under team `sbxgolf-3133`). Framework Preset = Other (no build step). Auto-deploys on push to `main`.
+- **Live URL:** [https://sbx.golf](https://sbx.golf) — apex is the canonical. `www.sbx.golf` 307-redirects here.
+- **Host:** Vercel (project `sandbox` under team `sbxgolf-3133`). Framework Preset = **Other** (no build step). **Root Directory = `v1`** so the app is served from the repo root URL with no `/v1/` path prefix in the address bar. Auto-deploys on push to `main`.
 - **Vercel preview URL:** `sandbox-beryl-seven.vercel.app` (always points at the latest production build)
 - **DNS:** GoDaddy. `A @ → 76.76.21.21` and `CNAME www → cname.vercel-dns.com`. TLS auto-provisioned by Vercel via Let's Encrypt.
 
@@ -29,8 +29,8 @@ The root `index.html` redirects straight to `v1/`. When in doubt: shipping new f
 - **Schema** lives in `v1/sql/setup.sql`. Re-run after any schema change — it uses `if not exists` / `drop policy if exists` so it's safe to apply multiple times.
 - **Realtime** is enabled on `matches` and `match_holes` so opposing players see each other's scoring live.
 - **Auth URLs** in Supabase → Authentication → URL Configuration must list:
-  - Site URL: `https://www.sbx.golf/v1/`
-  - Redirect allowlist: `https://sbx.golf/v1/**`, `https://www.sbx.golf/v1/**`, plus the Vercel preview URL for QA.
+  - Site URL: `https://sbx.golf/`
+  - Redirect allowlist: `https://sbx.golf/**`, `https://www.sbx.golf/**`, `https://sandbox-beryl-seven.vercel.app/**` (the `**` wildcard covers any path — including any future routing changes).
 
 ## Non-obvious rules to respect when making changes
 

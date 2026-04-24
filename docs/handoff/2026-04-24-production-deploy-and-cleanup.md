@@ -5,14 +5,20 @@ Handoff for Rob — quick note on the production wiring + a few cleanup commits 
 ## Done
 
 ### Production deploy
-- **Live at https://sbx.golf** (apex 307-redirects → `https://www.sbx.golf`).
-- **Vercel** is the host. Project name `sandbox` under team `sbxgolf-3133`. Framework Preset = **Other** (no build step — serves the static `v1/` directly via the root `index.html` redirect). Auto-deploys on every push to `main`.
+- **Live at https://sbx.golf** — apex is the canonical, `www.sbx.golf` 307-redirects to it.
+- **Vercel** is the host. Project name `sandbox` under team `sbxgolf-3133`. Framework Preset = **Other** (no build step). **Root Directory = `v1`** so the app serves from the URL root with no `/v1/` path in the address bar. Auto-deploys on every push to `main`.
 - **Vercel preview URL** that always tracks production: `sandbox-beryl-seven.vercel.app`.
 - **DNS** at GoDaddy:
   - `A @ → 76.76.21.21`
   - `CNAME www → cname.vercel-dns.com`
 - **HTTPS** auto-provisioned by Vercel via Let's Encrypt — both apex and www are on TLS.
-- Vercel still shows a yellow "DNS Change Recommended" badge (working but they suggest using their nameservers for resilience). Not blocking, didn't act on it. Click "Learn more" inside the project's Domains tab if you want to evaluate.
+- Vercel shows a yellow "DNS Change Recommended" badge (working but they suggest using their nameservers for resilience). Not blocking, didn't act on it.
+
+### URL polish (post-initial-deploy)
+- Apex `sbx.golf` is canonical; `www.sbx.golf` redirects 307 to apex (was the other way at first).
+- Vercel Root Directory set to `v1` so users see `https://sbx.golf/<screen>` with no `/v1/` prefix.
+- Root `index.html` (the redirect script) is now Vercel-invisible but still useful for local dev (`python -m http.server` from repo root).
+- Root redirect script updated earlier to preserve `?query` and `#hash`, so Supabase auth callbacks land safely even if anyone reaches it.
 
 ### Cleanup
 - Deleted orphan `v2/` directory (was just empty subfolders + `.bak` files left over after your `ef35e4a` commit removed the tracked v2 files).
@@ -23,17 +29,17 @@ Handoff for Rob — quick note on the production wiring + a few cleanup commits 
 - **CLAUDE.md** rewritten to reflect post-v2 reality: production URL section, Supabase backend section, accurate project map (v1 only), updated gotchas (added Babel-strict-mode, MOCK-globals warning, hideTabs reminder, Vercel cache).
 - **.env.example** updated: dropped Clerk (since we went Supabase), added Supabase vars for the eventual `web/` port to read from. Notes that `v1/` reads from inlined keys and needs no env setup.
 
-## ⚠️ User action still required
+## Supabase URL Configuration — done
 
-**Daniel needs to update Supabase Auth → URL Configuration.** Old config pointed at `https://danielmanzii.github.io/sandbox/v1/` (a GitHub Pages URL that was never deployed). New values:
+Supabase Auth → URL Configuration was updated by Daniel. The old config pointed at `https://danielmanzii.github.io/sandbox/v1/` (a GitHub Pages URL that was never deployed). New values now match the Vercel deploy + canonical-apex + no-`/v1/`-in-URL setup:
 
-- **Site URL:** `https://www.sbx.golf/v1/`
-- **Redirect URLs (allowlist, additive):**
-  - `https://sbx.golf/v1/**`
-  - `https://www.sbx.golf/v1/**`
-  - `https://sandbox-beryl-seven.vercel.app/v1/**`
+- **Site URL:** `https://sbx.golf/`
+- **Redirect URLs (allowlist):**
+  - `https://sbx.golf/**`
+  - `https://www.sbx.golf/**`
+  - `https://sandbox-beryl-seven.vercel.app/**`
 
-Until that lands, password-reset emails redirect to a 404 (not a render crash, just a broken email link).
+`/**` is the Supabase wildcard — covers any path under each origin. Password reset + email confirm flows verified working end-to-end.
 
 ## Next (continuing your priority list)
 
