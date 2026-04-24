@@ -194,7 +194,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
   }
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 140 }}>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 200 }}>
       {/* Hero */}
       <div style={{
         height: 280,
