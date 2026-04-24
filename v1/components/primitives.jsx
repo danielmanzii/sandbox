@@ -195,6 +195,7 @@ function Button({ children, onClick, variant = 'primary', size = 'md', full, sty
   };
   const variants = {
     primary: { background: 'var(--cream)', color: 'var(--forest)' },
+    paper:   { background: 'var(--paper)', color: 'var(--forest)' },
     forest: { background: 'var(--forest)', color: 'var(--cream)' },
     clay: { background: 'var(--clay)', color: 'var(--forest-deep)' },
     ghost: { background: 'rgba(234,226,206,0.12)', color: 'var(--cream)', border: '1px solid rgba(234,226,206,0.3)' },

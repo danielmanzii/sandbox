@@ -44,7 +44,7 @@ function WelcomeView({ onSignUp, onSignIn }) {
       <div style={{ flex: 1 }}/>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 32 }}>
-        <Button variant="primary" size="lg" full onClick={onSignUp}>
+        <Button variant="paper" size="lg" full onClick={onSignUp}>
           Create account
           <Icon.ArrowRight size={16}/>
         </Button>
@@ -172,7 +172,7 @@ function SignUpView({ onBack, onSignInInstead }) {
 
       <div style={{ flex: 1 }}/>
 
-      <Button variant="primary" size="lg" full disabled={!valid || busy} onClick={submit} style={{ marginTop: 18 }}>
+      <Button variant="paper" size="lg" full disabled={!valid || busy} onClick={submit} style={{ marginTop: 18 }}>
         {busy ? 'Creating…' : 'Create account'}
         {!busy && <Icon.ArrowRight size={16}/>}
       </Button>
@@ -229,7 +229,7 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
 
       <div style={{ flex: 1 }}/>
 
-      <Button variant="primary" size="lg" full disabled={!email || !password || busy} onClick={submit} style={{ marginTop: 18 }}>
+      <Button variant="paper" size="lg" full disabled={!email || !password || busy} onClick={submit} style={{ marginTop: 18 }}>
         {busy ? 'Signing in…' : 'Sign in'}
         {!busy && <Icon.ArrowRight size={16}/>}
       </Button>
@@ -297,7 +297,7 @@ function ForgotPasswordView({ onBack }) {
           </div>
           {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
           <div style={{ flex: 1 }}/>
-          <Button variant="primary" size="lg" full disabled={!email.trim() || busy} onClick={submit}>
+          <Button variant="paper" size="lg" full disabled={!email.trim() || busy} onClick={submit}>
             {busy ? 'Sending…' : 'Send reset link'}
             {!busy && <Icon.ArrowRight size={16}/>}
           </Button>
@@ -369,7 +369,7 @@ function ResetPasswordScreen({ onDone }) {
 
         <div style={{ flex: 1 }}/>
 
-        <Button variant="primary" size="lg" full disabled={!valid || busy} onClick={submit}>
+        <Button variant="paper" size="lg" full disabled={!valid || busy} onClick={submit}>
           {busy ? 'Saving…' : 'Save & continue'}
           {!busy && <Icon.ArrowRight size={16}/>}
         </Button>
@@ -451,7 +451,7 @@ function ProfileSetupScreen({ session, onDone }) {
 
         <div style={{ flex: 1 }}/>
 
-        <Button variant="primary" size="lg" full disabled={!valid || busy} onClick={submit}>
+        <Button variant="paper" size="lg" full disabled={!valid || busy} onClick={submit}>
           {busy ? 'Saving…' : 'Continue'}
           {!busy && <Icon.ArrowRight size={16}/>}
         </Button>
@@ -660,7 +660,7 @@ function DisplayNameScreen({ profile, onDone, onCancel }) {
 
         <div style={{ flex: 1 }}/>
 
-        <Button variant="primary" size="lg" full disabled={status !== 'available' || busy} onClick={submit}>
+        <Button variant="paper" size="lg" full disabled={status !== 'available' || busy} onClick={submit}>
           {busy ? 'Saving…' : 'Continue'}
           {!busy && <Icon.ArrowRight size={16}/>}
         </Button>
