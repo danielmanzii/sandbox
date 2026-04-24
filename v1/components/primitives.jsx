@@ -200,6 +200,7 @@ function Button({ children, onClick, variant = 'primary', size = 'md', full, sty
     ghost: { background: 'rgba(234,226,206,0.12)', color: 'var(--cream)', border: '1px solid rgba(234,226,206,0.3)' },
     outline: { background: 'transparent', color: 'var(--forest)', border: '1.5px solid var(--forest)' },
     outlineCream: { background: 'transparent', color: 'var(--cream)', border: '1.5px solid var(--cream)' },
+    outlineWhite: { background: 'transparent', color: 'var(--paper)', border: '1.5px solid var(--paper)' },
   };
   return (
     <button

@@ -9,7 +9,7 @@ function AuthScreens() {
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-      color: 'var(--cream)',
+      color: 'var(--paper)',
       overflow: 'auto',
       display: 'flex', flexDirection: 'column',
     }}>
@@ -48,7 +48,7 @@ function WelcomeView({ onSignUp, onSignIn }) {
           Create account
           <Icon.ArrowRight size={16}/>
         </Button>
-        <Button variant="outlineCream" size="lg" full onClick={onSignIn}>
+        <Button variant="outlineWhite" size="lg" full onClick={onSignIn}>
           I already have an account
         </Button>
       </div>
@@ -129,7 +129,7 @@ function SignUpView({ onBack, onSignInInstead }) {
       <BackButton onClick={onBack}/>
 
       <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--cream)">Create your account</Eyebrow>
+        <Eyebrow color="var(--paper)">Create your account</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
           Let's get you<br/>rated.
         </div>
@@ -179,7 +179,7 @@ function SignUpView({ onBack, onSignInInstead }) {
 
       <button type="button" onClick={onSignInInstead} style={{
         marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--cream)', opacity: 0.7, textAlign: 'center',
+        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
         letterSpacing: '0.06em',
       }}>
         Already have an account? <u>Sign in</u>
@@ -210,7 +210,7 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
       <BackButton onClick={onBack}/>
 
       <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--cream)">Welcome back</Eyebrow>
+        <Eyebrow color="var(--paper)">Welcome back</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
           Sign in.
         </div>
@@ -236,7 +236,7 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
 
       <button type="button" onClick={onForgot} style={{
         marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--cream)', opacity: 0.7, textAlign: 'center',
+        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
         letterSpacing: '0.06em',
       }}>
         Forgot your password?
@@ -244,7 +244,7 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
 
       <button type="button" onClick={onSignUpInstead} style={{
         marginTop: 8, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--cream)', opacity: 0.7, textAlign: 'center',
+        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
         letterSpacing: '0.06em',
       }}>
         New here? <u>Create an account</u>
@@ -277,7 +277,7 @@ function ForgotPasswordView({ onBack }) {
       <BackButton onClick={onBack}/>
 
       <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--cream)">Password reset</Eyebrow>
+        <Eyebrow color="var(--paper)">Password reset</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
           {sent ? 'Check your email.' : 'Reset it.'}
         </div>
@@ -307,7 +307,7 @@ function ForgotPasswordView({ onBack }) {
       {sent && (
         <>
           <div style={{ flex: 1 }}/>
-          <Button variant="outlineCream" size="lg" full onClick={onBack}>
+          <Button variant="outlineWhite" size="lg" full onClick={onBack}>
             Back to sign in
           </Button>
         </>
@@ -341,11 +341,11 @@ function ResetPasswordScreen({ onDone }) {
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-      color: 'var(--cream)', display: 'flex', flexDirection: 'column',
+      color: 'var(--paper)', display: 'flex', flexDirection: 'column',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 24px 24px' }}>
-        <Eyebrow color="var(--cream)">New password</Eyebrow>
+        <Eyebrow color="var(--paper)">New password</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
           Set a new<br/>password.
         </div>
@@ -410,11 +410,11 @@ function ProfileSetupScreen({ session, onDone }) {
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-      color: 'var(--cream)', display: 'flex', flexDirection: 'column',
+      color: 'var(--paper)', display: 'flex', flexDirection: 'column',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 24px 24px' }}>
-        <Eyebrow color="var(--cream)">One more step</Eyebrow>
+        <Eyebrow color="var(--paper)">One more step</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
           Finish your<br/>profile.
         </div>
@@ -473,7 +473,7 @@ function Field({ label, required, hint, children }) {
         letterSpacing: '0.14em', textTransform: 'uppercase',
         fontWeight: 700, opacity: 0.65, marginBottom: 6,
       }}>
-        {label} {required && <span style={{ color: 'var(--cream)' }}>*</span>}
+        {label} {required && <span style={{ color: 'var(--paper)' }}>*</span>}
       </div>
       {children}
       {hint && <div style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>{hint}</div>}
@@ -493,7 +493,7 @@ function Input({ value, onChange, type = 'text', ...rest }) {
         borderRadius: 12,
         background: 'rgba(255,255,255,0.08)',
         border: '1px solid rgba(234,226,206,0.2)',
-        color: 'var(--cream)',
+        color: 'var(--paper)',
         fontSize: 15, fontFamily: 'var(--font-body)',
         outline: 'none',
       }}
@@ -511,7 +511,7 @@ function Select({ value, onChange, options }) {
         borderRadius: 12,
         background: 'rgba(255,255,255,0.08)',
         border: '1px solid rgba(234,226,206,0.2)',
-        color: 'var(--cream)',
+        color: 'var(--paper)',
         fontSize: 15, fontFamily: 'var(--font-body)',
         outline: 'none',
         appearance: 'none',
@@ -529,7 +529,7 @@ function BackButton({ onClick }) {
       width: 38, height: 38, borderRadius: 999,
       background: 'rgba(255,255,255,0.08)',
       border: '1px solid rgba(234,226,206,0.2)',
-      color: 'var(--cream)',
+      color: 'var(--paper)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <Icon.ArrowLeft size={16} color="currentColor"/>
@@ -598,13 +598,13 @@ function DisplayNameScreen({ profile, onDone, onCancel }) {
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-      color: 'var(--cream)', display: 'flex', flexDirection: 'column',
+      color: 'var(--paper)', display: 'flex', flexDirection: 'column',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
         {onCancel && <BackButton onClick={onCancel}/>}
         <div style={{ marginTop: onCancel ? 20 : 20 }}>
-          <Eyebrow color="var(--cream)">{isChange ? 'Display name' : 'Last step'}</Eyebrow>
+          <Eyebrow color="var(--paper)">{isChange ? 'Display name' : 'Last step'}</Eyebrow>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
             {isChange ? <>Change your<br/>display name.</> : <>Pick a display<br/>name.</>}
           </div>
@@ -638,7 +638,7 @@ function DisplayNameScreen({ profile, onDone, onCancel }) {
               style={{
                 flex: 1, padding: '16px 0',
                 background: 'transparent', border: 'none',
-                color: 'var(--cream)',
+                color: 'var(--paper)',
                 fontSize: 22, fontFamily: 'var(--font-display)',
                 letterSpacing: '-0.01em', outline: 'none',
               }}
