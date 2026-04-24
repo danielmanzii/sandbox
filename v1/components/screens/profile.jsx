@@ -795,20 +795,25 @@ function SectionLabel({ children }) {
 function Field({ label, value, onChange, prefix, disabled, multiline, maxLength, placeholder, hint, counter, autoFocus }) {
   const [focused, setFocused] = React.useState(false);
   const inputStyle = {
-    width: '100%',
     display: 'block',
-    background: focused ? '#FFFFFF' : '#F5F1E8',
-    border: focused ? '1.5px solid var(--forest)' : '1.5px solid rgba(14,28,19,0.12)',
-    borderRadius: 12,
-    padding: prefix ? '13px 14px 13px 30px' : '13px 14px',
-    fontSize: 15, fontWeight: 600, color: 'var(--ink)',
-    fontFamily: 'var(--font-body)',
-    outline: 'none',
-    resize: multiline ? 'vertical' : 'none',
-    minHeight: multiline ? 88 : 'auto',
-    lineHeight: 1.4,
-    transition: 'border-color .12s, background .12s',
+    width: '100%',
     boxSizing: 'border-box',
+    margin: 0,
+    background: focused ? '#FFFFFF' : '#EDE5D0',
+    border: focused ? '2px solid var(--forest)' : '2px solid rgba(14,28,19,0.18)',
+    borderRadius: 12,
+    padding: prefix ? '14px 16px 14px 32px' : '14px 16px',
+    fontSize: 15, fontWeight: 600,
+    color: 'var(--ink)',
+    fontFamily: 'inherit',
+    lineHeight: 1.4,
+    outline: 'none',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    minHeight: multiline ? 100 : 50,
+    resize: multiline ? 'vertical' : 'none',
+    transition: 'border-color .12s, background .12s',
   };
   return (
     <div style={{ marginBottom: 14, flex: 1, minWidth: 0 }}>

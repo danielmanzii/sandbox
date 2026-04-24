@@ -343,6 +343,8 @@ function TabBar({ tabs, active, go }) {
       {tabs.map(t => {
         const isActive = active === t.id || (t.id === 'events' && active === 'eventDetail') || (t.id === 'profile' && active === 'membership');
         const IconComp = Icon[t.icon];
+        const myAvatar = (window.MOCK && window.MOCK.USER && window.MOCK.USER.avatar_url) || null;
+        const showAvatar = t.id === 'profile' && myAvatar;
         return (
           <button key={t.id} onClick={() => go({ screen: t.id, viewingHandle: null })} style={{
             flex: 1, padding: '10px 4px', borderRadius: 999,
@@ -351,7 +353,19 @@ function TabBar({ tabs, active, go }) {
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
             transition: 'all 0.2s',
           }}>
-            <IconComp size={18} color="currentColor" filled={isActive}/>
+            {showAvatar ? (
+              <img
+                src={myAvatar}
+                alt=""
+                style={{
+                  width: 22, height: 22, borderRadius: 999, objectFit: 'cover',
+                  border: isActive ? '1.5px solid var(--forest-deep)' : '1.5px solid rgba(234,226,206,0.55)',
+                  background: '#5A7B4A',
+                }}
+              />
+            ) : (
+              <IconComp size={18} color="currentColor" filled={isActive}/>
+            )}
             <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{t.label}</span>
           </button>
         );
