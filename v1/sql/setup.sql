@@ -236,3 +236,149 @@ as $$
 $$;
 
 grant execute on function public.email_for_handle(text) to anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────
+-- PHASE 1 — Events + Registrations + admin role.
+-- All idempotent (if-not-exists / drop-if-exists / on-conflict).
+-- ─────────────────────────────────────────────────────────────────
+
+-- Add is_admin flag to profiles (Daniel + Rob granted manually below).
+alter table public.profiles
+  add column if not exists is_admin boolean not null default false;
+
+-- Events table: source of truth for all bookable events on Home /
+-- Play / Event Detail. starts_at is the canonical date+time; the
+-- client formats display strings (date, dateFull, time) from it.
+create table if not exists public.events (
+  id            uuid primary key default gen_random_uuid(),
+  course_short  text not null,                 -- "Melreese", "Crandon", etc.
+  course_name   text not null,                 -- "International Links Melreese"
+  starts_at     timestamptz not null,
+  field         int  not null check (field > 0),
+  tagline       text,                          -- "Weekly Match Night"
+  description   text,                          -- short editorial blurb
+  img_url       text,                          -- hero image (Unsplash URL OK for MVP)
+  is_major      boolean not null default false,
+  type          text not null default 'weekly' check (type in ('weekly','major','social','member-only','corporate')),
+  status        text not null default 'open'   check (status in ('open','live','member-only','closed','cancelled')),
+  price_walkup  int  not null default 0,       -- whole dollars; cents = future
+  price_member  int  not null default 0,
+  created_at    timestamptz default now()
+);
+
+-- Indexes for the queries Home + Play will run constantly.
+create index if not exists events_starts_at_idx on public.events (starts_at);
+create index if not exists events_status_idx    on public.events (status);
+create index if not exists events_is_major_idx  on public.events (is_major) where is_major;
+
+alter table public.events enable row level security;
+
+-- Anyone authenticated can browse.
+drop policy if exists "Events are viewable by authenticated users" on public.events;
+create policy "Events are viewable by authenticated users"
+  on public.events for select to authenticated using (true);
+
+-- Only admins can create / edit / delete events.
+drop policy if exists "Admins can insert events" on public.events;
+create policy "Admins can insert events"
+  on public.events for insert to authenticated
+  with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+drop policy if exists "Admins can update events" on public.events;
+create policy "Admins can update events"
+  on public.events for update to authenticated
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+drop policy if exists "Admins can delete events" on public.events;
+create policy "Admins can delete events"
+  on public.events for delete to authenticated
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- Registrations join table. partner_id supports the 2-man scramble
+-- format; null for solo / not-yet-paired registrations.
+create table if not exists public.event_registrations (
+  id          uuid primary key default gen_random_uuid(),
+  event_id    uuid not null references public.events(id) on delete cascade,
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  partner_id  uuid     references public.profiles(id) on delete set null,
+  is_guest    boolean not null default false,    -- true = used a guest pass
+  created_at  timestamptz default now(),
+  unique (event_id, user_id)                      -- prevent double-registration
+);
+
+create index if not exists event_regs_event_idx on public.event_registrations (event_id);
+create index if not exists event_regs_user_idx  on public.event_registrations (user_id);
+
+alter table public.event_registrations enable row level security;
+
+-- Anyone authenticated can SEE registrations (so we can show field counts
+-- + "friends attending" badges on event cards).
+drop policy if exists "Registrations viewable by authenticated users" on public.event_registrations;
+create policy "Registrations viewable by authenticated users"
+  on public.event_registrations for select to authenticated using (true);
+
+-- Users can register themselves only.
+drop policy if exists "Users can register themselves" on public.event_registrations;
+create policy "Users can register themselves"
+  on public.event_registrations for insert to authenticated
+  with check (auth.uid() = user_id);
+
+-- Users can cancel their own registration.
+drop policy if exists "Users can cancel own registration" on public.event_registrations;
+create policy "Users can cancel own registration"
+  on public.event_registrations for delete to authenticated
+  using (auth.uid() = user_id);
+
+-- Admins can also delete any registration (manual cleanup).
+drop policy if exists "Admins can delete any registration" on public.event_registrations;
+create policy "Admins can delete any registration"
+  on public.event_registrations for delete to authenticated
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin));
+
+-- Capacity enforcement: refuse INSERT when the event is already full.
+create or replace function public.enforce_event_capacity()
+returns trigger
+language plpgsql
+as $$
+declare
+  current_count int;
+  cap int;
+begin
+  select count(*) into current_count from public.event_registrations where event_id = new.event_id;
+  select field      into cap         from public.events              where id       = new.event_id;
+  if current_count >= cap then
+    raise exception 'Event % is full (% / % registered)', new.event_id, current_count, cap;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_enforce_event_capacity on public.event_registrations;
+create trigger trg_enforce_event_capacity
+  before insert on public.event_registrations
+  for each row execute function public.enforce_event_capacity();
+
+-- Convenience view: events with live filled-counts.
+-- Home uses this so we don't have to count registrations client-side.
+create or replace view public.events_with_counts as
+  select
+    e.*,
+    coalesce(r.filled, 0) as filled
+  from public.events e
+  left join (
+    select event_id, count(*)::int as filled
+    from public.event_registrations
+    group by event_id
+  ) r on r.event_id = e.id;
+
+grant select on public.events_with_counts to authenticated;
+
+-- Realtime: surface registration changes so cards update live.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'event_registrations'
+  ) then
+    alter publication supabase_realtime add table public.event_registrations;
+  end if;
+end $$;
