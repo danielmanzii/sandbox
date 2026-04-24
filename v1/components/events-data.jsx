@@ -185,7 +185,125 @@ function useNextEventForUser(userId) {
   return [nextOpen, false];
 }
 
+// ─── Single event by id (for EventDetailScreen) ──────────────────────
+// Reads from events_with_counts so filled is included. Subscribes to
+// registration changes scoped to this event so the field count stays
+// fresh while the user is on the page.
+function useEvent(eventId) {
+  const [event, setEvent]     = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!eventId) { setEvent(null); setLoading(false); return; }
+    const { data } = await sbx
+      .from('events_with_counts')
+      .select('*')
+      .eq('id', eventId)
+      .maybeSingle();
+    setEvent(data ? mapEvent(data) : null);
+    setLoading(false);
+  }, [eventId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const channelName = React.useRef(`event-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!eventId) return;
+    const ch = sbx
+      .channel(channelName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'event_registrations', filter: `event_id=eq.${eventId}` },
+        () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [eventId, channelName, load]);
+
+  return [event, loading, load];
+}
+
+// ─── Is the signed-in user registered for this event? ────────────────
+// Returns null while loading, then true/false. Subscribes so it flips
+// instantly when the user registers or cancels.
+function useIsRegistered(eventId, userId) {
+  const [registered, setRegistered] = React.useState(null);
+
+  const load = React.useCallback(async () => {
+    if (!eventId || !userId) { setRegistered(false); return; }
+    const { data } = await sbx
+      .from('event_registrations')
+      .select('id')
+      .eq('event_id', eventId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    setRegistered(!!data);
+  }, [eventId, userId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const channelName = React.useRef(`is-reg-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!eventId || !userId) return;
+    const ch = sbx
+      .channel(channelName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'event_registrations',
+          filter: `event_id=eq.${eventId}` },
+        () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [eventId, userId, channelName, load]);
+
+  return registered;
+}
+
+// ─── Mutations ───────────────────────────────────────────────────────
+// Throws on error so the caller can show the message in the UI.
+// Capacity-full errors come back from the enforce_event_capacity()
+// trigger as Postgres exceptions; surface them human-readably.
+async function registerForEvent({ eventId, userId, partnerHandle, isGuest }) {
+  if (!eventId || !userId) throw new Error('Missing event or user.');
+
+  // Try to resolve partner by handle (strips leading @, case-insensitive).
+  // If we can't find the handle as a real profile (e.g. it's still a
+  // mock friend), just register without a partner — the UI keeps the
+  // visual choice but partner_id stays null until the friends table lands.
+  let partnerId = null;
+  if (partnerHandle && !isGuest) {
+    const h = String(partnerHandle).replace(/^@/, '').toLowerCase();
+    const { data } = await sbx.from('profiles').select('id').ilike('handle', h).maybeSingle();
+    if (data) partnerId = data.id;
+  }
+
+  const { error } = await sbx.from('event_registrations').insert({
+    event_id:   eventId,
+    user_id:    userId,
+    partner_id: partnerId,
+    is_guest:   !!isGuest,
+  });
+  if (error) {
+    if (error.message && error.message.toLowerCase().includes('full')) {
+      throw new Error('This event just filled up. Try another or join the waitlist.');
+    }
+    if (error.code === '23505') {
+      throw new Error("You're already registered for this event.");
+    }
+    throw error;
+  }
+}
+
+async function cancelRegistration({ eventId, userId }) {
+  if (!eventId || !userId) throw new Error('Missing event or user.');
+  const { error } = await sbx
+    .from('event_registrations')
+    .delete()
+    .eq('event_id', eventId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
 Object.assign(window, {
   useEvents, useUpcomingEvents, useLiveEvent, useNextMajor,
   useUserRegistrations, useNextEventForUser,
+  useEvent, useIsRegistered,
+  registerForEvent, cancelRegistration,
 });

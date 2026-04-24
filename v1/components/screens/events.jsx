@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, registerForEvent, cancelRegistration */
 // Events list + detail + register
 
 function EventsScreen({ go, tier }) {
@@ -131,14 +131,50 @@ function FullEventCard({ event, go, tier }) {
   );
 }
 
-function EventDetailScreen({ go, eventId, tier, setScreenState }) {
-  const event = MOCK.EVENTS.find(e => e.id === eventId) || MOCK.EVENTS[0];
+function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
+  // Real event + registration data
+  const [event, eventLoading] = useEvent(eventId);
+  const isRegistered = useIsRegistered(eventId, profile && profile.id);
+
   const isMember = tier === 'league' || tier === 'leaguePlus';
   const [registering, setRegistering] = React.useState(false);
   const [step, setStep] = React.useState(0);
   const [partner, setPartner] = React.useState('@jaybird');
   const [guest, setGuest] = React.useState(false);
   const [done, setDone] = React.useState(false);
+  const [cancelling, setCancelling] = React.useState(false);
+  const [actionErr, setActionErr] = React.useState('');
+
+  async function onCancel() {
+    if (!confirm('Cancel your registration for this event?')) return;
+    setCancelling(true); setActionErr('');
+    try {
+      await cancelRegistration({ eventId, userId: profile.id });
+    } catch (e) {
+      setActionErr(e.message || 'Could not cancel.');
+    }
+    setCancelling(false);
+  }
+
+  // Loading state
+  if (eventLoading) {
+    return (
+      <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', fontSize: 14, opacity: 0.6 }}>
+        Loading event…
+      </div>
+    );
+  }
+
+  // Event not found (link to deleted/invalid event)
+  if (!event) {
+    return (
+      <div style={{ background: 'var(--canvas)', minHeight: '100%', padding: '80px 24px', textAlign: 'center', color: 'var(--forest)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8 }}>Event not found.</div>
+        <div className="caption-serif" style={{ fontSize: 15, opacity: 0.7, marginBottom: 24 }}>It may have been removed or the link is wrong.</div>
+        <Button variant="forest" onClick={() => go({ screen: 'events' })}>Back to events</Button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 140 }}>
@@ -268,14 +304,32 @@ function EventDetailScreen({ go, eventId, tier, setScreenState }) {
         </div>
       </div>
 
-      {/* Sticky CTA */}
+      {/* Sticky CTA — switches to "Cancel registration" if user is in */}
       <div style={{
         position: 'absolute', bottom: 90, left: 16, right: 16, zIndex: 20,
       }}>
-        <Button variant="forest" size="lg" full onClick={() => setRegistering(true)}>
-          {isMember ? 'Claim your spot' : `Register · $${event.priceWalkup}`}
-          <Icon.ArrowRight size={16}/>
-        </Button>
+        {actionErr && (
+          <div style={{ background: 'rgba(155,58,46,0.12)', color: 'var(--loss)', fontSize: 12, padding: '8px 12px', borderRadius: 10, marginBottom: 8, textAlign: 'center' }}>
+            {actionErr}
+          </div>
+        )}
+        {isRegistered === null ? (
+          <Button variant="forest" size="lg" full disabled>Loading…</Button>
+        ) : isRegistered ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="forest" size="lg" full disabled style={{ opacity: 0.85 }}>
+              ✓ You're in
+            </Button>
+            <Button variant="outline" size="lg" onClick={onCancel} disabled={cancelling}>
+              {cancelling ? '…' : 'Cancel'}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="forest" size="lg" full onClick={() => setRegistering(true)}>
+            {isMember ? 'Claim your spot' : `Register · $${event.priceWalkup}`}
+            <Icon.ArrowRight size={16}/>
+          </Button>
+        )}
       </div>
 
       {/* Register bottom-sheet */}
@@ -283,6 +337,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState }) {
         <RegisterSheet
           event={event}
           isMember={isMember}
+          profile={profile}
           step={step}
           setStep={setStep}
           partner={partner}
@@ -328,7 +383,27 @@ function PriceTile({ label, price, sub, primary }) {
   );
 }
 
-function RegisterSheet({ event, isMember, step, setStep, partner, setPartner, guest, setGuest, done, setDone, onClose }) {
+function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPartner, guest, setGuest, done, setDone, onClose }) {
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitErr, setSubmitErr]   = React.useState('');
+
+  async function submitRegistration() {
+    if (!profile || !profile.id) { setSubmitErr('Sign in required.'); return; }
+    setSubmitting(true); setSubmitErr('');
+    try {
+      await registerForEvent({
+        eventId:       event.id,
+        userId:        profile.id,
+        partnerHandle: guest ? null : partner,
+        isGuest:       guest,
+      });
+      setDone(true);
+    } catch (e) {
+      setSubmitErr(e.message || 'Could not register.');
+    }
+    setSubmitting(false);
+  }
+
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 100,
@@ -350,7 +425,7 @@ function RegisterSheet({ event, isMember, step, setStep, partner, setPartner, gu
         {done ? <DoneState event={event} onClose={onClose}/> :
          step === 0 ? <Step0 event={event} isMember={isMember} onNext={() => setStep(1)}/> :
          step === 1 ? <Step1 partner={partner} setPartner={setPartner} guest={guest} setGuest={setGuest} onNext={() => setStep(2)}/> :
-         <Step2 event={event} isMember={isMember} partner={partner} guest={guest} onConfirm={() => setDone(true)}/>
+         <Step2 event={event} isMember={isMember} partner={partner} guest={guest} submitting={submitting} submitErr={submitErr} onConfirm={submitRegistration}/>
         }
       </div>
     </div>
@@ -434,7 +509,7 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
   );
 }
 
-function Step2({ event, isMember, partner, guest, onConfirm }) {
+function Step2({ event, isMember, partner, guest, submitting, submitErr, onConfirm }) {
   const price = isMember ? 0 : event.priceMember;
   return (
     <div>
@@ -446,7 +521,7 @@ function Step2({ event, isMember, partner, guest, onConfirm }) {
       <div style={{ background: 'var(--paper)', borderRadius: 14, padding: 14, marginTop: 14, border: '1px solid rgba(14,28,19,0.08)' }}>
         <DetailRow label="Event" value={`${event.courseShort} · ${event.date}`}/>
         <div className="hairline"/>
-        <DetailRow label="Partner" value={guest ? 'Guest pass (1 left)' : partner}/>
+        <DetailRow label="Partner" value={guest ? 'Guest pass' : partner}/>
         <div className="hairline"/>
         <DetailRow label="Total" value={price === 0 ? 'Free · included' : `$${price}.00`}/>
       </div>
@@ -455,9 +530,15 @@ function Step2({ event, isMember, partner, guest, onConfirm }) {
         By registering you grant Sandbox the right to use photos/video of you in content. Weather credit auto-applies for cancellations.
       </div>
 
-      <Button variant="forest" full size="lg" onClick={onConfirm} style={{ marginTop: 18 }}>
-        {price === 0 ? 'Confirm spot' : `Pay $${price}.00`}
-        <Icon.ArrowRight size={14}/>
+      {submitErr && (
+        <div style={{ marginTop: 12, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.12)', padding: '10px 12px', borderRadius: 12 }}>
+          {submitErr}
+        </div>
+      )}
+
+      <Button variant="forest" full size="lg" onClick={onConfirm} disabled={submitting} style={{ marginTop: 18 }}>
+        {submitting ? 'Submitting…' : (price === 0 ? 'Confirm spot' : `Pay $${price}.00`)}
+        {!submitting && <Icon.ArrowRight size={14}/>}
       </Button>
     </div>
   );
