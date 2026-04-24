@@ -194,7 +194,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
   }
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 200 }}>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
       {/* Hero */}
       <div style={{
         height: 280,
@@ -321,10 +321,9 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         </div>
       </div>
 
-      {/* Sticky CTA — switches to "Cancel registration" if user is in */}
-      <div style={{
-        position: 'absolute', bottom: 90, left: 16, right: 16, zIndex: 20,
-      }}>
+      {/* CTA — inline at the bottom of content (was absolutely positioned
+          and floating over content mid-scroll). */}
+      <div style={{ padding: '24px 16px 0' }}>
         {actionErr && (
           <div style={{ background: 'rgba(155,58,46,0.12)', color: 'var(--loss)', fontSize: 12, padding: '8px 12px', borderRadius: 10, marginBottom: 8, textAlign: 'center' }}>
             {actionErr}
