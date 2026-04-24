@@ -651,6 +651,13 @@ function EditProfileSheet({ profile, onClose }) {
   const [busy,      setBusy]      = React.useState(false);
   const [err,       setErr]       = React.useState('');
 
+  // Lock background scroll while sheet is open.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   async function save() {
     setErr(''); setBusy(true);
     try {
@@ -674,7 +681,7 @@ function EditProfileSheet({ profile, onClose }) {
       onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(6px)',
+        background: 'rgba(14,28,19,0.65)', backdropFilter: 'blur(6px)',
         WebkitBackdropFilter: 'blur(6px)',
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
         zIndex: 1000,
@@ -684,123 +691,184 @@ function EditProfileSheet({ profile, onClose }) {
         width: '100%', maxWidth: 440,
         background: 'var(--canvas)',
         borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        padding: '20px 20px 32px',
-        boxShadow: '0 -20px 60px rgba(0,0,0,0.25)',
-        maxHeight: '92%', overflowY: 'auto',
+        boxShadow: '0 -20px 60px rgba(0,0,0,0.3)',
+        maxHeight: '92vh',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
       }}>
-        <div style={{
-          width: 36, height: 4, borderRadius: 999,
-          background: 'rgba(14,28,19,0.18)',
-          margin: '0 auto 14px',
-        }}/>
-        <div style={{
-          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-          marginBottom: 18,
-        }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)' }}>
-            Edit profile
+        {/* Header (sticky) */}
+        <div style={{ padding: '14px 20px 16px', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
+          <div style={{
+            width: 38, height: 4, borderRadius: 999,
+            background: 'rgba(14,28,19,0.18)', margin: '0 auto 14px',
+          }}/>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', lineHeight: 1 }}>
+              Edit profile
+            </div>
+            <button onClick={busy ? undefined : onClose} style={{
+              background: 'transparent', border: 'none', color: 'var(--forest)',
+              fontSize: 13, fontWeight: 700, opacity: busy ? 0.4 : 0.7, cursor: busy ? 'wait' : 'pointer',
+              padding: '4px 0',
+            }}>Cancel</button>
           </div>
-          <button onClick={busy ? undefined : onClose} style={{
-            background: 'transparent', border: 'none', color: 'var(--forest)',
-            fontSize: 13, fontWeight: 700, opacity: busy ? 0.4 : 0.65, cursor: busy ? 'wait' : 'pointer',
-          }}>Cancel</button>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-          <Field label="First name" value={firstName} onChange={setFirstName} disabled={busy}/>
-          <Field label="Last name"  value={lastName}  onChange={setLastName}  disabled={busy}/>
+        {/* Scrollable body */}
+        <div style={{ padding: '18px 20px 12px', overflowY: 'auto', flex: 1 }}>
+          <SectionLabel>Identity</SectionLabel>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Field label="First name" value={firstName} onChange={setFirstName} disabled={busy} autoFocus/>
+            <Field label="Last name"  value={lastName}  onChange={setLastName}  disabled={busy}/>
+          </div>
+          <Field
+            label="Username"
+            value={handle}
+            onChange={(v) => setHandle(v.replace(/^@/, '').toLowerCase())}
+            prefix="@"
+            disabled={busy}
+            hint="Letters, numbers, _ and . — 2 to 24 characters"
+            placeholder="yourhandle"
+          />
+
+          <div style={{ height: 8 }}/>
+          <SectionLabel>About</SectionLabel>
+          <Field
+            label="Home course"
+            value={home}
+            onChange={setHome}
+            disabled={busy}
+            placeholder="e.g. Melreese"
+          />
+          <Field
+            label="Bio"
+            value={bio}
+            onChange={setBio}
+            disabled={busy}
+            multiline
+            maxLength={200}
+            placeholder="A line about your game…"
+            counter
+          />
+
+          {err && (
+            <div style={{
+              background: 'rgba(196,69,54,0.08)',
+              border: '1px solid rgba(196,69,54,0.25)',
+              color: '#9C2E22',
+              borderRadius: 10,
+              padding: '10px 12px',
+              fontSize: 13, fontWeight: 600,
+              marginTop: 8,
+            }}>{err}</div>
+          )}
         </div>
 
-        <Field
-          label="Username"
-          value={handle}
-          onChange={(v) => setHandle(v.replace(/^@/, '').toLowerCase())}
-          prefix="@"
-          disabled={busy}
-          hint="Letters, numbers, _ and . — 2–24 chars"
-        />
-
-        <Field
-          label="Home course"
-          value={home}
-          onChange={setHome}
-          disabled={busy}
-          placeholder="e.g. Melreese"
-        />
-
-        <Field
-          label="Bio"
-          value={bio}
-          onChange={setBio}
-          disabled={busy}
-          multiline
-          maxLength={200}
-          placeholder="A line about your game…"
-        />
-
-        {err && (
-          <div style={{ color: 'var(--loss, #C44536)', fontSize: 12, marginTop: 6, marginBottom: 4 }}>{err}</div>
-        )}
-
-        <Button variant="forest" full size="md" onClick={save} disabled={busy} style={{ marginTop: 18 }}>
-          {busy ? 'Saving…' : 'Save changes'}
-        </Button>
+        {/* Footer (sticky) */}
+        <div style={{
+          padding: '14px 20px 22px',
+          borderTop: '1px solid rgba(14,28,19,0.06)',
+          background: 'var(--canvas)',
+        }}>
+          <Button variant="forest" full size="md" onClick={save} disabled={busy}>
+            {busy ? 'Saving…' : 'Save changes'}
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
 
-function Field({ label, value, onChange, prefix, disabled, multiline, maxLength, placeholder, hint }) {
-  const baseInputStyle = {
-    flex: 1, width: '100%',
-    background: 'var(--paper)',
-    border: '1px solid rgba(14,28,19,0.08)',
-    borderRadius: 10,
-    padding: prefix ? '11px 12px 11px 26px' : '11px 12px',
-    fontSize: 14, fontWeight: 600, color: 'var(--ink)',
+function SectionLabel({ children }) {
+  return (
+    <div style={{
+      fontSize: 10, fontFamily: 'var(--font-mono)',
+      color: 'var(--forest)', opacity: 0.55,
+      letterSpacing: '0.16em', textTransform: 'uppercase',
+      marginBottom: 10,
+    }}>{children}</div>
+  );
+}
+
+function Field({ label, value, onChange, prefix, disabled, multiline, maxLength, placeholder, hint, counter, autoFocus }) {
+  const [focused, setFocused] = React.useState(false);
+  const inputStyle = {
+    width: '100%',
+    display: 'block',
+    background: focused ? '#FFFFFF' : '#F5F1E8',
+    border: focused ? '1.5px solid var(--forest)' : '1.5px solid rgba(14,28,19,0.12)',
+    borderRadius: 12,
+    padding: prefix ? '13px 14px 13px 30px' : '13px 14px',
+    fontSize: 15, fontWeight: 600, color: 'var(--ink)',
     fontFamily: 'var(--font-body)',
     outline: 'none',
     resize: multiline ? 'vertical' : 'none',
-    minHeight: multiline ? 72 : 'auto',
+    minHeight: multiline ? 88 : 'auto',
+    lineHeight: 1.4,
+    transition: 'border-color .12s, background .12s',
+    boxSizing: 'border-box',
   };
   return (
-    <div style={{ marginBottom: 12, flex: 1 }}>
+    <div style={{ marginBottom: 14, flex: 1, minWidth: 0 }}>
       <div style={{
-        fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55,
-        letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6,
-      }}>{label}</div>
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        marginBottom: 6,
+      }}>
+        <label style={{
+          fontSize: 11, fontFamily: 'var(--font-mono)',
+          color: 'var(--forest)', opacity: 0.7,
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+          fontWeight: 700,
+        }}>{label}</label>
+        {counter && maxLength && (
+          <span style={{
+            fontSize: 10, fontFamily: 'var(--font-mono)',
+            color: (value || '').length >= maxLength ? 'var(--clay)' : 'var(--forest)',
+            opacity: 0.55,
+          }}>{(value || '').length}/{maxLength}</span>
+        )}
+      </div>
       <div style={{ position: 'relative' }}>
         {prefix && (
           <span style={{
-            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-            color: 'var(--forest)', opacity: 0.55, fontSize: 14, fontWeight: 700,
-            pointerEvents: 'none',
+            position: 'absolute', left: 14,
+            top: multiline ? 14 : '50%',
+            transform: multiline ? 'none' : 'translateY(-50%)',
+            color: 'var(--forest)', opacity: 0.5, fontSize: 15, fontWeight: 700,
+            pointerEvents: 'none', zIndex: 1,
           }}>{prefix}</span>
         )}
         {multiline ? (
           <textarea
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             disabled={disabled}
             maxLength={maxLength}
             placeholder={placeholder}
             rows={3}
-            style={baseInputStyle}
+            style={inputStyle}
           />
         ) : (
           <input
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             disabled={disabled}
             maxLength={maxLength}
             placeholder={placeholder}
-            style={baseInputStyle}
+            autoFocus={autoFocus}
+            style={inputStyle}
           />
         )}
       </div>
       {hint && (
-        <div style={{ fontSize: 10, color: 'var(--ink)', opacity: 0.5, marginTop: 4 }}>{hint}</div>
+        <div style={{ fontSize: 11, color: 'var(--ink)', opacity: 0.55, marginTop: 6, fontStyle: 'italic' }}>{hint}</div>
       )}
     </div>
   );
