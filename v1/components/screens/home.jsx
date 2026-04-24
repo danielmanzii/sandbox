@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, acceptInvite, declineInvite */
 // Home screen — next event, live leaderboard, activity
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
@@ -15,6 +15,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [major]                = useNextMajor();
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
+  const [pendingInvites]       = useMyPendingInvites(profile && profile.id);
 
   // Up Next card priority:
   //   1. User has an active match → show the live preview with real
@@ -85,6 +86,15 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           <span style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 999, background: 'var(--forest)', border: '1.5px solid var(--paper)' }}/>
         </button>
       </div>
+
+      {/* Match invite banners — pending invites the signed-in user got */}
+      {pendingInvites && pendingInvites.length > 0 && (
+        <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {pendingInvites.map(inv => (
+            <InviteBanner key={inv.id} invite={inv} profile={profile} go={go}/>
+          ))}
+        </div>
+      )}
 
       {/* Next-up card */}
       <div style={{ padding: '16px 16px 0' }}>
@@ -470,4 +480,73 @@ function AvatarBy({ handle, size = 36 }) {
   );
 }
 
-Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy });
+// ─── Match invite banner (shown on Home when user has pending invites) ─
+function InviteBanner({ invite, profile, go }) {
+  const [busy, setBusy] = React.useState(null); // 'accept' | 'decline' | null
+  const [err, setErr]   = React.useState('');
+
+  const senderLabel = invite.invited_by_handle || invite.invited_by_first_name || 'A friend';
+  const modeLabel   = invite.match_type === '2v2' ? '2v2' : '1v1';
+  const courseHint  = invite.course_name ? ` at ${invite.course_name}` : '';
+
+  async function onAccept() {
+    setBusy('accept'); setErr('');
+    try {
+      const matchId = await acceptInvite({ invite, profile });
+      go({ screen: 'match', matchId });
+    } catch (e) {
+      setErr(e.message || 'Could not accept.');
+      setBusy(null);
+    }
+  }
+
+  async function onDecline() {
+    setBusy('decline'); setErr('');
+    try {
+      await declineInvite({ invite });
+    } catch (e) {
+      setErr(e.message || 'Could not decline.');
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="card" style={{
+      padding: 14,
+      background: `linear-gradient(135deg, var(--forest) 0%, var(--moss) 100%)`,
+      color: 'var(--paper)',
+      border: 'none',
+    }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+        Match invite
+      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1.15, marginTop: 6, letterSpacing: '-0.01em' }}>
+        {senderLabel} invited you to a {modeLabel}{courseHint}.
+      </div>
+      {err && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#E7B8A7' }}>{err}</div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button onClick={onAccept} disabled={!!busy} style={{
+          flex: 1, padding: '10px 0', borderRadius: 999,
+          background: 'var(--paper)', color: 'var(--forest)',
+          border: 'none', fontWeight: 800, fontSize: 13,
+          opacity: busy ? 0.6 : 1,
+        }}>
+          {busy === 'accept' ? 'Joining…' : 'Accept'}
+        </button>
+        <button onClick={onDecline} disabled={!!busy} style={{
+          padding: '10px 16px', borderRadius: 999,
+          background: 'transparent', color: 'var(--paper)',
+          border: '1px solid rgba(255,255,255,0.4)',
+          fontWeight: 700, fontSize: 13,
+          opacity: busy ? 0.6 : 1,
+        }}>
+          {busy === 'decline' ? '…' : 'Decline'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner });

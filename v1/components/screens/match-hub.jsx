@@ -1,4 +1,4 @@
-/* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut */
+/* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut, useMatchInvitesForMatch, sendInviteByHandle, cancelInvite */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
 function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', initialJoinCode }) {
@@ -347,11 +347,119 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
 
         {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
         <ShareCodeButton code={match.join_code} mode={is2v2 ? '2v2' : '1v1'}/>
+
+        {/* Invite by username — pushes a notification to that player */}
+        <InviteByHandle matchId={match.id} profile={profile}/>
       </div>
 
       <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
         Cancel match
       </Button>
+    </div>
+  );
+}
+
+// ─── Invite-by-username panel ────────────────────────────────────────
+function InviteByHandle({ matchId, profile }) {
+  const [handle, setHandle]   = React.useState('');
+  const [busy, setBusy]       = React.useState(false);
+  const [err, setErr]         = React.useState('');
+  const [okMsg, setOkMsg]     = React.useState('');
+  const [invites]             = useMatchInvitesForMatch(matchId);
+
+  async function send() {
+    setErr(''); setOkMsg('');
+    if (!handle.trim() || busy) return;
+    setBusy(true);
+    try {
+      await sendInviteByHandle({ matchId, invitedBy: profile.id, handle });
+      setOkMsg(`Invited ${handle.startsWith('@') ? handle : '@' + handle}.`);
+      setHandle('');
+      setTimeout(() => setOkMsg(''), 2200);
+    } catch (e) {
+      setErr(e.message || 'Could not send invite.');
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div style={{
+      width: '100%', maxWidth: 360, marginTop: 22,
+      padding: 14, borderRadius: 18,
+      background: 'rgba(234,226,206,0.08)',
+      border: '1px solid rgba(234,226,206,0.16)',
+    }}>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>
+        Or invite by username
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={handle}
+          onChange={e => setHandle(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') send(); }}
+          placeholder="@handle"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          style={{
+            flex: 1, padding: '10px 12px', borderRadius: 999,
+            border: '1px solid rgba(234,226,206,0.22)',
+            background: 'rgba(234,226,206,0.06)',
+            color: 'var(--cream)', fontSize: 14, outline: 'none',
+            fontFamily: 'var(--font-body)',
+          }}
+        />
+        <button onClick={send} disabled={busy || !handle.trim()} style={{
+          padding: '10px 16px', borderRadius: 999,
+          background: 'var(--paper)', color: 'var(--forest)',
+          border: 'none', fontWeight: 700, fontSize: 13,
+          opacity: busy || !handle.trim() ? 0.5 : 1,
+        }}>
+          {busy ? '…' : 'Invite'}
+        </button>
+      </div>
+      {err && <div style={{ marginTop: 8, fontSize: 12, color: '#E7B8A7' }}>{err}</div>}
+      {okMsg && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--cream)', opacity: 0.85 }}>{okMsg}</div>}
+
+      {invites.length > 0 && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {invites.map(inv => {
+            const label = inv.invitee_handle || inv.invitee_first_name || '@unknown';
+            const statusColor = inv.status === 'accepted' ? '#B8E0A4'
+                              : inv.status === 'declined' ? '#E7B8A7'
+                              : 'rgba(234,226,206,0.7)';
+            const statusText  = inv.status === 'pending' ? 'pending'
+                              : inv.status === 'accepted' ? 'accepted ✓'
+                              : inv.status === 'declined' ? 'declined'
+                              : 'cancelled';
+            return (
+              <div key={inv.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 8px', borderRadius: 10,
+                background: 'rgba(234,226,206,0.04)',
+                fontSize: 12,
+              }}>
+                <span style={{ fontWeight: 700 }}>{label}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: statusColor, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+                    {statusText}
+                  </span>
+                  {inv.status === 'pending' && (
+                    <button
+                      onClick={() => cancelInvite({ invite: inv })}
+                      title="Cancel this invite"
+                      style={{
+                        background: 'transparent', color: 'rgba(234,226,206,0.55)',
+                        border: 'none', padding: 0, fontSize: 14, lineHeight: 1,
+                      }}
+                    >×</button>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
