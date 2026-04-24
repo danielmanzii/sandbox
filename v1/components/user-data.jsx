@@ -126,6 +126,8 @@ function buildRealUser(profile, stats) {
     id:            profile.id,
     handle:        profile.handle,
     name:          fullName || profile.handle,
+    avatar_url:    profile.avatar_url || null,
+    avatar:        profile.avatar_url || null,    // alias used by AvatarBy
     sbx:           Number(profile.sbx) || 4.0,
     sbxDelta:      0,
     sbxTrend:      [profile.sbx || 4.0],

@@ -1,15 +1,57 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, followUser, unfollowUser, uploadAvatar */
 // Profile (self + public) with member-gated stats
 
-function ProfileScreen({ go, tier, viewingHandle }) {
+function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const isSelf = !viewingHandle || viewingHandle === MOCK.USER.handle;
-  const user = isSelf ? MOCK.USER :
-    (MOCK.FRIENDS.find(f => f.handle === viewingHandle) || MOCK.FRIENDS[0]);
-  // Use the real user's first-letter initial for the self avatar circle
-  // (old code had a hardcoded 'A' for Alex).
-  const selfInitial = (user.name || '?').charAt(0).toUpperCase();
+
+  // For other users, fetch their real profile from Supabase by handle
+  // (tolerates @-prefix). Falls back to the legacy mock lookup so
+  // links from MOCK-driven screens (e.g. Social leaderboard) still work.
+  const [realTarget, targetLoading] = useProfileByHandle(isSelf ? null : viewingHandle);
+  const mockTarget = isSelf ? null : (MOCK.FRIENDS.find(f => f.handle === viewingHandle) || null);
+
+  const user = isSelf
+    ? MOCK.USER
+    : (realTarget
+        ? {
+            id:           realTarget.id,
+            handle:       realTarget.handle,
+            name:         [realTarget.first_name, realTarget.last_name].filter(Boolean).join(' ') || realTarget.handle,
+            avatar:       realTarget.avatar_url || null,
+            avatar_url:   realTarget.avatar_url || null,
+            sbx:          Number(realTarget.sbx) || 4.0,
+            color:        'var(--moss)',
+          }
+        : (mockTarget || MOCK.FRIENDS[0]));
+
+  const userInitial = (user.name || user.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  const targetId    = (realTarget && realTarget.id) || (isSelf ? MOCK.USER.id : null);
+
+  // Real follow state + counts
+  const viewerId = signedInProfile && signedInProfile.id;
+  const [counts] = useFollowCounts(targetId);
+  const isFollowing = useIsFollowing(viewerId, targetId);
+  const [followBusy, setFollowBusy] = React.useState(false);
+
+  async function toggleFollow() {
+    if (!viewerId || !targetId || viewerId === targetId || followBusy) return;
+    setFollowBusy(true);
+    try {
+      if (isFollowing) await unfollowUser({ viewerId, targetId });
+      else             await followUser({ viewerId, targetId });
+    } catch (_) { /* swallow — RLS errors etc. */ }
+    setFollowBusy(false);
+  }
 
   const [youAreMember] = [tier === 'league' || tier === 'leaguePlus' || tier === 'stats'];
+
+  if (!isSelf && targetLoading && !mockTarget) {
+    return (
+      <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>
+        Loading…
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
@@ -40,18 +82,12 @@ function ProfileScreen({ go, tier, viewingHandle }) {
 
       <div style={{ padding: '0 20px', marginTop: -50, position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-          <div style={{
-            width: 96, height: 96, borderRadius: 999,
-            background: isSelf ? '#5A7B4A' : (user.color || 'var(--moss)'),
-            border: '4px solid var(--cream)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 38,
-            overflow: 'hidden',
-          }}>
-            {isSelf ? selfInitial : (
-              <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
-            )}
-          </div>
+          <AvatarCircle
+            url={user.avatar || user.avatar_url}
+            initial={userInitial}
+            isSelf={isSelf}
+            userId={viewerId}
+          />
           <div style={{ flex: 1, paddingBottom: 8 }}>
             {isSelf && MOCK.USER.foundingMember && (
               <div style={{
@@ -63,8 +99,16 @@ function ProfileScreen({ go, tier, viewingHandle }) {
               }}>⛳ Founding</div>
             )}
           </div>
-          {!isSelf && (
-            <Button variant="forest" size="sm" style={{ marginBottom: 8 }}>Follow</Button>
+          {!isSelf && viewerId && targetId && viewerId !== targetId && (
+            <Button
+              variant={isFollowing ? 'outline' : 'forest'}
+              size="sm"
+              onClick={toggleFollow}
+              disabled={followBusy || isFollowing === null}
+              style={{ marginBottom: 8 }}
+            >
+              {isFollowing === null ? '…' : (isFollowing ? 'Following' : 'Follow')}
+            </Button>
           )}
         </div>
 
@@ -78,6 +122,11 @@ function ProfileScreen({ go, tier, viewingHandle }) {
               "{user.bio}"
             </div>
           )}
+          {/* Follow stats — works for self + others */}
+          <div style={{ display: 'flex', gap: 18, marginTop: 12, alignItems: 'baseline' }}>
+            <FollowStat label="Followers" value={counts.followers}/>
+            <FollowStat label="Following" value={counts.following}/>
+          </div>
           <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
             <Mini label="Home" value={isSelf ? user.homeCourse : 'Melreese'}/>
             <Mini label="Joined" value={isSelf ? user.joined : 'Jan 2026'}/>
@@ -285,6 +334,98 @@ function MenuRow({ label, onClick, last }) {
       <span style={{ flex: 1 }}>{label}</span>
       <Icon.Chevron dir="right" size={12} color="var(--forest)"/>
     </button>
+  );
+}
+
+// ─── Avatar circle with optional upload UI for self ───────────────────
+function AvatarCircle({ url, initial, isSelf, userId }) {
+  const fileRef = React.useRef(null);
+  const [busy, setBusy]   = React.useState(false);
+  const [err, setErr]     = React.useState('');
+
+  async function onPick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !userId) return;
+    setErr(''); setBusy(true);
+    try {
+      await uploadAvatar({ userId, file });
+      // useProfile re-runs via window.reloadProfile inside uploadAvatar;
+      // MOCK.USER.avatar_url is then refreshed via useRealUserSync.
+    } catch (e) {
+      setErr(e.message || 'Upload failed.');
+    }
+    setBusy(false);
+    e.target.value = ''; // reset so the same file can be reselected
+  }
+
+  const circle = (
+    <div style={{
+      width: 96, height: 96, borderRadius: 999,
+      background: '#5A7B4A',
+      border: '4px solid var(--cream)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 38,
+      overflow: 'hidden', position: 'relative',
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      {url ? (
+        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+      ) : (
+        initial
+      )}
+      {isSelf && (
+        <div style={{
+          position: 'absolute', right: -2, bottom: -2,
+          width: 28, height: 28, borderRadius: 999,
+          background: 'var(--forest)', color: 'var(--cream)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '2px solid var(--cream)',
+          fontSize: 14, fontWeight: 800,
+        }}>
+          {busy ? '…' : '+'}
+        </div>
+      )}
+    </div>
+  );
+
+  if (!isSelf) return circle;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => fileRef.current && fileRef.current.click()}
+        disabled={busy}
+        aria-label="Change profile photo"
+        style={{ padding: 0, background: 'transparent', border: 'none', cursor: busy ? 'wait' : 'pointer' }}
+      >
+        {circle}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={onPick}
+        style={{ display: 'none' }}
+      />
+      {err && (
+        <div style={{ fontSize: 11, color: 'var(--loss)', marginTop: 4 }}>{err}</div>
+      )}
+    </>
+  );
+}
+
+// ─── Follower / Following stat (compact display) ──────────────────────
+function FollowStat({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4 }}>
+        {label}
+      </div>
+    </div>
   );
 }
 
