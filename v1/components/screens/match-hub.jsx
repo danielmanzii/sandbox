@@ -1,8 +1,10 @@
 /* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
-function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1' }) {
-  const [mode, setMode] = React.useState('home'); // home | start | join | code | handle
+function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', initialJoinCode }) {
+  // If we received a deep-link ?join=CODE, jump straight to the join
+  // view with the code pre-filled.
+  const [mode, setMode] = React.useState(initialJoinCode ? 'join' : 'home'); // home | start | join | code | handle
   const [recent, setRecent] = React.useState([]);
   const [newMatch, setNewMatch] = React.useState(null);
 
@@ -20,7 +22,7 @@ function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1' }) {
   React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
   if (mode === 'start') return <StartMatchView profile={profile} matchType={matchType} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
-  if (mode === 'join')  return <JoinMatchView  profile={profile} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
+  if (mode === 'join')  return <JoinMatchView  profile={profile} initialCode={initialJoinCode} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
   if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} profile={profile} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onReady={(id) => onOpenMatch(id)}/>;
   if (mode === 'handle' && window.DisplayNameScreen) {
     const DNS = window.DisplayNameScreen;
@@ -342,6 +344,9 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
         <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
           Players tap <b>Join match</b> on the Unranked tab and type this code. {is2v2 ? 'First to join becomes your partner; the next two are the opposing team.' : ''}
         </div>
+
+        {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
+        <ShareCodeButton code={match.join_code} mode={is2v2 ? '2v2' : '1v1'}/>
       </div>
 
       <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
@@ -351,9 +356,53 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
   );
 }
 
+// ─── Share button: native share sheet → text/WhatsApp/etc., or copy ──
+function ShareCodeButton({ code, mode }) {
+  const [copied, setCopied] = React.useState(false);
+  // Deep-link so the recipient lands directly in the Join flow with
+  // the code pre-filled. The URL handler is in App (root) below.
+  const url = `${window.location.origin}/?join=${encodeURIComponent(code)}`;
+  const text = `Match me at Sandbox Pitch & Putt (${mode}). Code: ${code}\n${url}`;
+
+  async function onShare() {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Sandbox Pitch & Putt', text });
+        return;
+      }
+    } catch (_) { /* user cancelled — no-op */ }
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (_) {
+      // Last-resort fallback: prompt
+      window.prompt('Copy this:', text);
+    }
+  }
+
+  return (
+    <button onClick={onShare} style={{
+      marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 8,
+      padding: '10px 18px', borderRadius: 999,
+      background: 'var(--paper)', color: 'var(--forest)',
+      border: 'none', boxShadow: 'var(--shadow-sm)',
+      fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 700,
+      letterSpacing: '0.02em',
+    }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+        <line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>
+      </svg>
+      {copied ? 'Copied!' : 'Share code'}
+    </button>
+  );
+}
+
 // ─── Join Match view ─────────────────────────────────────────
-function JoinMatchView({ profile, onCancel, onJoined }) {
-  const [code, setCode] = React.useState('');
+function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
+  const [code, setCode] = React.useState((initialCode || '').toUpperCase());
   const [busy, setBusy] = React.useState(false);
   const [err, setErr]   = React.useState('');
 

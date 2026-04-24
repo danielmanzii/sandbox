@@ -132,6 +132,19 @@ function App({ profile }) {
   React.useEffect(() => { localStorage.setItem('spp_live', String(liveMode)); }, [liveMode]);
   React.useEffect(() => { localStorage.setItem('spp_brand', brandLoud); }, [brandLoud]);
 
+  // ─── Deep-link handler: ?join=CODE → land in Challenge → Join with the code prefilled ──
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get('join');
+    if (joinCode) {
+      setRoute(prev => ({ ...prev, screen: 'challenge', joinCode: joinCode.toUpperCase() }));
+      // Clean the URL so a refresh doesn't re-trigger the deep link.
+      const url = new URL(window.location.href);
+      url.searchParams.delete('join');
+      window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : '') + url.hash);
+    }
+  }, []);
+
   // Edit-mode protocol (used by design tools that iframe the app)
   React.useEffect(() => {
     const onMsg = (e) => {
@@ -166,6 +179,7 @@ function App({ profile }) {
       screen = <MatchHub
         profile={profile}
         mode={route.mode || '1v1'}
+        initialJoinCode={route.joinCode}
         onExit={() => go({ screen: 'events', playTab: 'unranked' })}
         onOpenMatch={(id) => go({ screen: 'match', matchId: id })}
       />;
