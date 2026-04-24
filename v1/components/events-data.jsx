@@ -70,16 +70,21 @@ function useEvents() {
   React.useEffect(() => { load(); }, [load]);
 
   // Realtime: any registration change re-pulls the view (which recomputes
-  // filled). Cheap — view is small and Supabase handles the broadcast.
+  // filled). Channel names are GLOBAL in Supabase — calling
+  // sbx.channel('foo') twice returns the SAME channel, so the second
+  // .on() call after .subscribe() throws. We generate a unique name per
+  // hook instance so multiple consumers (useUpcomingEvents,
+  // useLiveEvent, useNextMajor — all wrap useEvents) don't collide.
+  const channelName = React.useRef(`event-regs-${Math.random().toString(36).slice(2, 10)}`).current;
   React.useEffect(() => {
     const ch = sbx
-      .channel('event-regs-changes')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_registrations' }, () => {
         load();
       })
       .subscribe();
     return () => { sbx.removeChannel(ch); };
-  }, [load]);
+  }, [channelName, load]);
 
   return [events, loading, error, load];
 }
@@ -140,16 +145,19 @@ function useUserRegistrations(userId) {
 
   React.useEffect(() => { load(); }, [load]);
 
+  // Same global-channel-name caveat as useEvents — generate a unique
+  // suffix per hook instance so multiple consumers don't collide.
+  const userChannelName = React.useRef(`user-regs-${Math.random().toString(36).slice(2, 10)}`).current;
   React.useEffect(() => {
     if (!userId) return;
     const ch = sbx
-      .channel(`user-regs-${userId}`)
+      .channel(userChannelName)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'event_registrations', filter: `user_id=eq.${userId}` },
         () => load())
       .subscribe();
     return () => { sbx.removeChannel(ch); };
-  }, [userId, load]);
+  }, [userId, userChannelName, load]);
 
   return [registrations, loading, load];
 }
