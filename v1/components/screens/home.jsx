@@ -1,12 +1,32 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, ScoreDial, Spark, MOCK */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents */
 // Home screen — next event, live leaderboard, activity
+// Reads events from Supabase via the hooks in events-data.jsx so every
+// screen here renders against real data. Tweaks-panel `liveMode=true`
+// still falls back to a mock live event for design-preview when no
+// real event has status='live' in the DB.
 
 function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
-  const nextEvent = liveMode ? MOCK.EVENTS.find(e => e.status === 'live') : MOCK.EVENTS.find(e => e.status === 'open' && !e.isMajor);
-  const major = MOCK.EVENTS.find(e => e.isMajor);
   const isMember = tier === 'league' || tier === 'leaguePlus';
-  // Greeting name from the signed-in profile when available, otherwise the mock user.
   const greetingName = (profile && profile.first_name) || MOCK.USER.name.split(' ')[0];
+
+  // Real event data
+  const [liveEvent]            = useLiveEvent();
+  const [myNextEvent, nextLoading] = useNextEventForUser(profile && profile.id);
+  const [major]                = useNextMajor();
+  const [upcoming, upcomingLoading] = useUpcomingEvents(4);
+
+  // The Up Next card prefers a real live event; falls back to the user's
+  // next registered/open event; design-preview keeps the MOCK live event
+  // when liveMode is on AND nothing real is live yet.
+  let nextEvent = liveEvent || myNextEvent;
+  if (!nextEvent && liveMode) {
+    nextEvent = MOCK.EVENTS.find(e => e.status === 'live') || null;
+  }
+
+  // Upcoming-teaser strip: skip whatever's already shown as Up Next.
+  const upcomingForTeaser = upcoming
+    .filter(e => !nextEvent || e.id !== nextEvent.id)
+    .slice(0, 3);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
@@ -49,72 +69,107 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
 
       {/* Next-up card */}
       <div style={{ padding: '16px 16px 0' }}>
-        <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot}/>
+        {nextEvent ? (
+          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot}/>
+        ) : nextLoading ? (
+          <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>
+        ) : (
+          <button onClick={() => go({ screen: 'events' })} className="card" style={{ width: '100%', textAlign: 'left', padding: 22, borderRadius: 22 }}>
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Up Next</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>Nothing on your card yet.</div>
+            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.7, marginTop: 8 }}>Browse the schedule and grab a spot.</div>
+            <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--forest)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              See events <Icon.ArrowRight size={12}/>
+            </div>
+          </button>
+        )}
       </div>
 
-      {/* Quick stats strip */}
+      {/* Quick stats strip — real values from MOCK.USER (overridden by useRealUserSync) */}
       <div style={{ display: 'flex', gap: 10, padding: '16px 16px 0', overflowX: 'auto' }} className="scroll-hide">
-        <QuickStat label="SBX" value="5.412" trend="+0.04" sub="top 38%" locked={!isMember && tier !== 'stats'} featured/>
-        <QuickStat label="Record" value="11–7–2" sub="season"/>
-        <QuickStat label="Unbeaten" value="3" sub="matches" icon={<Icon.Fire size={14} color="var(--forest)"/>}/>
-        <QuickStat label="Passes" value="2" sub="this mo"/>
+        <QuickStat
+          label="SBX"
+          value={(MOCK.USER.sbx || 0).toFixed(3)}
+          trend={MOCK.USER.sbxDelta != null ? `${MOCK.USER.sbxDelta >= 0 ? '+' : ''}${MOCK.USER.sbxDelta.toFixed(3)}` : null}
+          sub={MOCK.USER.sbxPercentile ? `top ${100 - MOCK.USER.sbxPercentile}%` : 'provisional'}
+          locked={!isMember && tier !== 'stats'}
+          featured
+        />
+        <QuickStat
+          label="Record"
+          value={`${MOCK.USER.matchesW || 0}–${MOCK.USER.matchesL || 0}–${MOCK.USER.matchesH || 0}`}
+          sub="season"
+        />
+        <QuickStat
+          label="Unbeaten"
+          value={String(MOCK.USER.streak || 0)}
+          sub="matches"
+          icon={<Icon.Fire size={14} color="var(--forest)"/>}
+        />
+        <QuickStat
+          label="Passes"
+          value={String(MOCK.USER.guestPassesLeft || 0)}
+          sub="this mo"
+        />
       </div>
 
-      {/* Major banner — editorial poster */}
-      <div style={{ padding: '16px 16px 0' }}>
-        <button onClick={() => go({ screen: 'eventDetail', eventId: major.id })} style={{
-          width: '100%', textAlign: 'left',
-          borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
-          background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 45%, var(--moss) 100%)`,
-          color: 'var(--cream)',
-          padding: 22,
-          position: 'relative',
-          border: 'none',
-          display: 'block',
-          boxShadow: 'var(--shadow-md)',
-        }}>
-          <div style={{ position: 'absolute', right: -24, top: -24, opacity: 0.14 }}>
-            <img src="assets/mascot-full-cream.svg" alt="" style={{ width: 180, transform: 'rotate(14deg)' }}/>
-          </div>
-          <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-          <div style={{ position: 'relative' }}>
-            <div style={{
-              display: 'inline-block',
-              padding: '5px 10px', borderRadius: 999,
-              background: 'rgba(234,226,206,0.12)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(234,226,206,0.22)',
-              fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase',
-            }}>⛳ Major</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>
-              THE BILTMORE
+      {/* Major banner — only shown when there's an upcoming Major in the DB */}
+      {major && (
+        <div style={{ padding: '16px 16px 0' }}>
+          <button onClick={() => go({ screen: 'eventDetail', eventId: major.id })} style={{
+            width: '100%', textAlign: 'left',
+            borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
+            background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 45%, var(--moss) 100%)`,
+            color: 'var(--cream)',
+            padding: 22,
+            position: 'relative',
+            border: 'none',
+            display: 'block',
+            boxShadow: 'var(--shadow-md)',
+          }}>
+            <div style={{ position: 'absolute', right: -24, top: -24, opacity: 0.14 }}>
+              <img src="assets/mascot-full-cream.svg" alt="" style={{ width: 180, transform: 'rotate(14deg)' }}/>
             </div>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 8, letterSpacing: '0.06em' }}>
-              MAY 17 · SHOTGUN · 80 PLAYERS
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  height: 4, borderRadius: 999, background: 'rgba(234,226,206,0.14)', position: 'relative', overflow: 'hidden',
-                }}>
-                  <div style={{ width: '42.5%', height: '100%', background: 'var(--cream)', borderRadius: 999 }}/>
-                </div>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 6, letterSpacing: '0.06em' }}>
-                  34/80 REGISTERED
-                </div>
-              </div>
+            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+            <div style={{ position: 'relative' }}>
               <div style={{
-                padding: '9px 14px', borderRadius: 999,
-                background: 'var(--cream)', color: 'var(--forest)',
-                fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                boxShadow: '0 6px 14px rgba(14,28,19,0.25)',
-              }}>
-                Register <Icon.ArrowRight size={14}/>
+                display: 'inline-block',
+                padding: '5px 10px', borderRadius: 999,
+                background: 'rgba(234,226,206,0.12)', backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(234,226,206,0.22)',
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase',
+              }}>⛳ Major</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>
+                {(major.tagline || major.courseShort || '').toUpperCase()}
+              </div>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 8, letterSpacing: '0.06em' }}>
+                {(major.date || '').toUpperCase()} · {(major.time || '').toUpperCase()} · {major.field} PLAYERS
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    height: 4, borderRadius: 999, background: 'rgba(234,226,206,0.14)', position: 'relative', overflow: 'hidden',
+                  }}>
+                    <div style={{ width: `${Math.min(100, (major.filled / Math.max(1, major.field)) * 100)}%`, height: '100%', background: 'var(--cream)', borderRadius: 999 }}/>
+                  </div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 6, letterSpacing: '0.06em' }}>
+                    {major.filled}/{major.field} REGISTERED
+                  </div>
+                </div>
+                <div style={{
+                  padding: '9px 14px', borderRadius: 999,
+                  background: 'var(--cream)', color: 'var(--forest)',
+                  fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  boxShadow: '0 6px 14px rgba(14,28,19,0.25)',
+                }}>
+                  Register <Icon.ArrowRight size={14}/>
+                </div>
               </div>
             </div>
-          </div>
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
 
       {/* Activity feed — cleaner rhythm */}
       <div style={{ padding: '28px 16px 0' }}>
@@ -147,11 +202,19 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Up Next</div>
           <button onClick={() => go({ screen: 'events' })} style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Browse all →</button>
         </div>
-        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 16px 4px' }} className="scroll-hide">
-          {MOCK.EVENTS.filter(e => e.status !== 'live').slice(0, 3).map(e => (
-            <MiniEventCard key={e.id} event={e} go={go}/>
-          ))}
-        </div>
+        {upcomingLoading ? (
+          <div style={{ padding: '0 20px', fontSize: 12, color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>
+        ) : upcomingForTeaser.length === 0 ? (
+          <div style={{ padding: '0 20px', fontSize: 13, color: 'var(--forest)', opacity: 0.6, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
+            No upcoming events yet — check back soon.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 16px 4px' }} className="scroll-hide">
+            {upcomingForTeaser.map(e => (
+              <MiniEventCard key={e.id} event={e} go={go}/>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Brand foot */}
