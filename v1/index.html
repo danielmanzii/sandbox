@@ -344,7 +344,7 @@ function TabBar({ tabs, active, go }) {
         const isActive = active === t.id || (t.id === 'events' && active === 'eventDetail') || (t.id === 'profile' && active === 'membership');
         const IconComp = Icon[t.icon];
         return (
-          <button key={t.id} onClick={() => go({ screen: t.id })} style={{
+          <button key={t.id} onClick={() => go({ screen: t.id, viewingHandle: null })} style={{
             flex: 1, padding: '10px 4px', borderRadius: 999,
             background: isActive ? 'var(--clay)' : 'transparent',
             color: isActive ? 'var(--forest-deep)' : 'rgba(234,226,206,0.75)',

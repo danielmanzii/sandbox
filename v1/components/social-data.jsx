@@ -243,8 +243,44 @@ async function uploadAvatar({ userId, file }) {
   return url;
 }
 
+// ─── Profile editing ──────────────────────────────────────────────────
+// Updates editable profile fields. Throws a friendly Error on the most
+// common failures (handle taken, missing required field, etc.) so the
+// UI can show them inline.
+async function updateProfile({ userId, first_name, last_name, handle, bio, home_course }) {
+  if (!userId) throw new Error('Not signed in.');
+  if (!first_name || !first_name.trim()) throw new Error('First name is required.');
+  if (!last_name  || !last_name.trim())  throw new Error('Last name is required.');
+  if (!handle     || !handle.trim())     throw new Error('Username is required.');
+
+  // Normalize handle: strip leading @, lowercase, validate charset.
+  const cleanedHandle = handle.trim().replace(/^@/, '').toLowerCase();
+  if (cleanedHandle.length < 2)  throw new Error('Username must be at least 2 characters.');
+  if (cleanedHandle.length > 24) throw new Error('Username must be 24 characters or fewer.');
+  if (!/^[a-z0-9_.]+$/.test(cleanedHandle)) {
+    throw new Error('Username can only contain letters, numbers, _ and .');
+  }
+
+  const patch = {
+    first_name:  first_name.trim(),
+    last_name:   last_name.trim(),
+    handle:      cleanedHandle,
+    bio:         (bio || '').trim() || null,
+    home_course: (home_course || '').trim() || null,
+  };
+
+  const { error } = await sbx.from('profiles').update(patch).eq('id', userId);
+  if (error) {
+    if (error.code === '23505') throw new Error('That username is already taken.');
+    throw new Error(error.message || 'Could not save profile.');
+  }
+
+  // Refresh the global profile so MOCK.USER updates everywhere.
+  try { if (typeof window.reloadProfile === 'function') window.reloadProfile(); } catch (_) {}
+}
+
 Object.assign(window, {
   useFollowCounts, useIsFollowing, useFollowing, useFollowers,
   useUserSearch, useProfileByHandle,
-  followUser, unfollowUser, uploadAvatar,
+  followUser, unfollowUser, uploadAvatar, updateProfile,
 });

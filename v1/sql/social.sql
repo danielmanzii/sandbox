@@ -8,7 +8,9 @@
 -- resulting public URL here.
 -- ─────────────────────────────────────────────────────────────────
 alter table public.profiles
-  add column if not exists avatar_url text;
+  add column if not exists avatar_url  text,
+  add column if not exists bio         text,
+  add column if not exists home_course text;
 
 -- ─────────────────────────────────────────────────────────────────
 -- follows: directed (Twitter-style). Following someone makes their

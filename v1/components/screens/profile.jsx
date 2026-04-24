@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, followUser, unfollowUser, uploadAvatar */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, followUser, unfollowUser, uploadAvatar, updateProfile */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -32,6 +32,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const [counts] = useFollowCounts(targetId);
   const isFollowing = useIsFollowing(viewerId, targetId);
   const [followBusy, setFollowBusy] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
 
   async function toggleFollow() {
     if (!viewerId || !targetId || viewerId === targetId || followBusy) return;
@@ -108,6 +109,16 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
               style={{ marginBottom: 8 }}
             >
               {isFollowing === null ? '…' : (isFollowing ? 'Following' : 'Follow')}
+            </Button>
+          )}
+          {isSelf && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing(true)}
+              style={{ marginBottom: 8 }}
+            >
+              Edit profile
             </Button>
           )}
         </div>
@@ -188,6 +199,13 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
             <MenuRow label="Sign out" last/>
           </div>
         </div>
+      )}
+
+      {editing && isSelf && (
+        <EditProfileSheet
+          profile={signedInProfile}
+          onClose={() => setEditing(false)}
+        />
       )}
     </div>
   );
@@ -619,6 +637,171 @@ function FollowStat({ label, value }) {
       <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4 }}>
         {label}
       </div>
+    </div>
+  );
+}
+
+// ─── Edit Profile sheet ──────────────────────────────────────────────
+function EditProfileSheet({ profile, onClose }) {
+  const [firstName, setFirstName] = React.useState(profile.first_name || '');
+  const [lastName,  setLastName]  = React.useState(profile.last_name  || '');
+  const [handle,    setHandle]    = React.useState((profile.handle || '').replace(/^@/, ''));
+  const [bio,       setBio]       = React.useState(profile.bio || '');
+  const [home,      setHome]      = React.useState(profile.home_course || '');
+  const [busy,      setBusy]      = React.useState(false);
+  const [err,       setErr]       = React.useState('');
+
+  async function save() {
+    setErr(''); setBusy(true);
+    try {
+      await updateProfile({
+        userId:      profile.id,
+        first_name:  firstName,
+        last_name:   lastName,
+        handle,
+        bio,
+        home_course: home,
+      });
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Could not save.');
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        zIndex: 1000,
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 440,
+        background: 'var(--canvas)',
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        padding: '20px 20px 32px',
+        boxShadow: '0 -20px 60px rgba(0,0,0,0.25)',
+        maxHeight: '92%', overflowY: 'auto',
+      }}>
+        <div style={{
+          width: 36, height: 4, borderRadius: 999,
+          background: 'rgba(14,28,19,0.18)',
+          margin: '0 auto 14px',
+        }}/>
+        <div style={{
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+          marginBottom: 18,
+        }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)' }}>
+            Edit profile
+          </div>
+          <button onClick={busy ? undefined : onClose} style={{
+            background: 'transparent', border: 'none', color: 'var(--forest)',
+            fontSize: 13, fontWeight: 700, opacity: busy ? 0.4 : 0.65, cursor: busy ? 'wait' : 'pointer',
+          }}>Cancel</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+          <Field label="First name" value={firstName} onChange={setFirstName} disabled={busy}/>
+          <Field label="Last name"  value={lastName}  onChange={setLastName}  disabled={busy}/>
+        </div>
+
+        <Field
+          label="Username"
+          value={handle}
+          onChange={(v) => setHandle(v.replace(/^@/, '').toLowerCase())}
+          prefix="@"
+          disabled={busy}
+          hint="Letters, numbers, _ and . — 2–24 chars"
+        />
+
+        <Field
+          label="Home course"
+          value={home}
+          onChange={setHome}
+          disabled={busy}
+          placeholder="e.g. Melreese"
+        />
+
+        <Field
+          label="Bio"
+          value={bio}
+          onChange={setBio}
+          disabled={busy}
+          multiline
+          maxLength={200}
+          placeholder="A line about your game…"
+        />
+
+        {err && (
+          <div style={{ color: 'var(--loss, #C44536)', fontSize: 12, marginTop: 6, marginBottom: 4 }}>{err}</div>
+        )}
+
+        <Button variant="forest" full size="md" onClick={save} disabled={busy} style={{ marginTop: 18 }}>
+          {busy ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, prefix, disabled, multiline, maxLength, placeholder, hint }) {
+  const baseInputStyle = {
+    flex: 1, width: '100%',
+    background: 'var(--paper)',
+    border: '1px solid rgba(14,28,19,0.08)',
+    borderRadius: 10,
+    padding: prefix ? '11px 12px 11px 26px' : '11px 12px',
+    fontSize: 14, fontWeight: 600, color: 'var(--ink)',
+    fontFamily: 'var(--font-body)',
+    outline: 'none',
+    resize: multiline ? 'vertical' : 'none',
+    minHeight: multiline ? 72 : 'auto',
+  };
+  return (
+    <div style={{ marginBottom: 12, flex: 1 }}>
+      <div style={{
+        fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55,
+        letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6,
+      }}>{label}</div>
+      <div style={{ position: 'relative' }}>
+        {prefix && (
+          <span style={{
+            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+            color: 'var(--forest)', opacity: 0.55, fontSize: 14, fontWeight: 700,
+            pointerEvents: 'none',
+          }}>{prefix}</span>
+        )}
+        {multiline ? (
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            maxLength={maxLength}
+            placeholder={placeholder}
+            rows={3}
+            style={baseInputStyle}
+          />
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            maxLength={maxLength}
+            placeholder={placeholder}
+            style={baseInputStyle}
+          />
+        )}
+      </div>
+      {hint && (
+        <div style={{ fontSize: 10, color: 'var(--ink)', opacity: 0.5, marginTop: 4 }}>{hint}</div>
+      )}
     </div>
   );
 }
