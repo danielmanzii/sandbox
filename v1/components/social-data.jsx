@@ -243,6 +243,211 @@ async function uploadAvatar({ userId, file }) {
   return url;
 }
 
+// ─── Friend feed: signups + match results from people you follow ─────
+// Returns a unified, time-sorted list of activity items. Subscribes to
+// event_registrations + matches realtime so new activity flows in live.
+//
+// Item shape:
+//   { id, type: 'event_signup'|'match_result', ts, actor: {...}, payload: {...} }
+function useFriendFeed(userId, limit = 25) {
+  const [items, setItems]     = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [followCount, setFollowCount] = React.useState(0);
+
+  const load = React.useCallback(async () => {
+    if (!userId) { setItems([]); setLoading(false); return; }
+
+    // 1) Who do I follow? (always include myself so my own activity shows up)
+    const { data: followRows } = await sbx
+      .from('follows').select('following_id').eq('follower_id', userId);
+    const ids = Array.from(new Set([userId, ...((followRows || []).map(r => r.following_id))]));
+    setFollowCount((followRows || []).length);
+    if (ids.length === 0) { setItems([]); setLoading(false); return; }
+
+    const idsCsv = ids.join(',');
+
+    // 2) Event signups by those users
+    const signupsP = sbx.from('event_registrations')
+      .select(`
+        id, created_at, user_id,
+        actor:profiles!event_registrations_user_id_fkey(id, handle, first_name, last_name, avatar_url),
+        event:events!event_registrations_event_id_fkey(id, course_short, course_name, starts_at, tagline)
+      `)
+      .in('user_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    // 3) Completed matches involving any of those users (as A or B)
+    const matchesP = sbx.from('matches')
+      .select(`
+        id, status, result, final_margin, completed_at, course_name,
+        player_a, player_b,
+        a:profiles!matches_player_a_fkey(id, handle, first_name, last_name, avatar_url),
+        b:profiles!matches_player_b_fkey(id, handle, first_name, last_name, avatar_url)
+      `)
+      .eq('status', 'completed')
+      .or(`player_a.in.(${idsCsv}),player_b.in.(${idsCsv})`)
+      .order('completed_at', { ascending: false })
+      .limit(limit);
+
+    const [{ data: signups }, { data: matches }] = await Promise.all([signupsP, matchesP]);
+
+    // 4) Normalize into activity items
+    const out = [];
+    (signups || []).forEach(r => {
+      if (!r.actor || !r.event) return;
+      out.push({
+        id:     `sg-${r.id}`,
+        type:   'event_signup',
+        ts:     r.created_at,
+        actor:  r.actor,
+        payload: { event: r.event },
+      });
+    });
+    (matches || []).forEach(m => {
+      // Pick the "actor" — prefer the friend who isn't me; if both are friends, prefer A.
+      const aIsFriend = ids.includes(m.player_a);
+      const bIsFriend = m.player_b && ids.includes(m.player_b);
+      let actor, opponent, won;
+      if (aIsFriend && (!bIsFriend || m.player_a !== userId)) {
+        actor = m.a; opponent = m.b;
+        won = m.result === 'A';
+      } else if (bIsFriend) {
+        actor = m.b; opponent = m.a;
+        won = m.result === 'B';
+      } else {
+        return;
+      }
+      if (!actor) return;
+      out.push({
+        id:     `mt-${m.id}`,
+        type:   'match_result',
+        ts:     m.completed_at || m.created_at,
+        actor,
+        payload: {
+          opponent,
+          result: m.result,           // 'A' | 'B' | 'H'
+          margin: m.final_margin,     // "3&2" etc.
+          won,
+          courseName: m.course_name,
+        },
+      });
+    });
+
+    out.sort((x, y) => new Date(y.ts) - new Date(x.ts));
+    setItems(out.slice(0, limit));
+    setLoading(false);
+  }, [userId, limit]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  // Realtime: refetch when relevant rows change
+  const channelName = React.useRef(`friend-feed-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!userId) return;
+    const ch = sbx.channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_registrations' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `follower_id=eq.${userId}` }, () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [userId, channelName, load]);
+
+  return [items, loading, followCount];
+}
+
+// ─── Friends registered for events (for "X friends here" pill) ──────
+// Returns a Map<event_id, [profile, ...]> covering every friend (people
+// the viewer follows) who has registered for one of the given events.
+function useFriendsRegisteredForEvents(viewerId, eventIds) {
+  const [byEvent, setByEvent] = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+
+  // Stable key so we don't refetch when the array reference changes but values don't.
+  const eventKey = (eventIds || []).slice().sort().join(',');
+
+  const load = React.useCallback(async () => {
+    if (!viewerId || !eventIds || eventIds.length === 0) {
+      setByEvent({}); setLoading(false); return;
+    }
+    // Who do I follow?
+    const { data: followRows } = await sbx
+      .from('follows').select('following_id').eq('follower_id', viewerId);
+    const friendIds = (followRows || []).map(r => r.following_id);
+    if (friendIds.length === 0) { setByEvent({}); setLoading(false); return; }
+
+    // Friends registered for any of these events.
+    const { data: regs } = await sbx.from('event_registrations')
+      .select(`
+        event_id, user_id,
+        actor:profiles!event_registrations_user_id_fkey(id, handle, first_name, last_name, avatar_url)
+      `)
+      .in('event_id', eventIds)
+      .in('user_id', friendIds);
+
+    const out = {};
+    (regs || []).forEach(r => {
+      if (!r.actor) return;
+      (out[r.event_id] = out[r.event_id] || []).push(r.actor);
+    });
+    setByEvent(out);
+    setLoading(false);
+  }, [viewerId, eventKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => { load(); }, [load]);
+
+  // Realtime: refetch on any change to follows or event_registrations.
+  const channelName = React.useRef(`friends-on-events-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!viewerId) return;
+    const ch = sbx.channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_registrations' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `follower_id=eq.${viewerId}` }, () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [viewerId, channelName, load]);
+
+  return [byEvent, loading];
+}
+
+// ─── New followers (for notifications) ───────────────────────────────
+// Recent rows where someone followed YOU. Returns last `windowDays`.
+function useNewFollowers(userId, windowDays = 30) {
+  const [list, setList]       = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!userId) { setList([]); setLoading(false); return; }
+    const since = new Date(Date.now() - windowDays * 86400 * 1000).toISOString();
+    const { data } = await sbx.from('follows')
+      .select(`
+        created_at, follower_id,
+        follower:profiles!follows_follower_id_fkey(id, handle, first_name, last_name, avatar_url)
+      `)
+      .eq('following_id', userId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setList((data || []).filter(r => r.follower));
+    setLoading(false);
+  }, [userId, windowDays]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const channelName = React.useRef(`new-followers-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!userId) return;
+    const ch = sbx.channel(channelName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'follows', filter: `following_id=eq.${userId}` },
+        () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [userId, channelName, load]);
+
+  return [list, loading];
+}
+
 // ─── Profile editing ──────────────────────────────────────────────────
 // Updates editable profile fields. Throws a friendly Error on the most
 // common failures (handle taken, missing required field, etc.) so the
@@ -282,5 +487,6 @@ async function updateProfile({ userId, first_name, last_name, handle, bio, home_
 Object.assign(window, {
   useFollowCounts, useIsFollowing, useFollowing, useFollowers,
   useUserSearch, useProfileByHandle,
+  useFriendFeed, useNewFollowers, useFriendsRegisteredForEvents,
   followUser, unfollowUser, uploadAvatar, updateProfile,
 });

@@ -1,7 +1,7 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere */
 // Events list + detail + register
 
-function EventsScreen({ go, tier }) {
+function EventsScreen({ go, tier, profile }) {
   const [filter, setFilter] = React.useState('all');
   const [allEvents, loading] = useUpcomingEvents(50); // big enough cap for the foreseeable future
   const filtered = allEvents.filter(e => {
@@ -11,6 +11,9 @@ function EventsScreen({ go, tier }) {
     if (filter === 'majors') return e.isMajor;
     return true;
   });
+
+  const filteredIds = React.useMemo(() => filtered.map(e => e.id), [filtered]);
+  const [friendsByEvent] = useFriendsRegisteredForEvents(profile && profile.id, filteredIds);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
@@ -53,14 +56,14 @@ function EventsScreen({ go, tier }) {
             </div>
           </div>
         ) : (
-          filtered.map(e => <FullEventCard key={e.id} event={e} go={go} tier={tier}/>)
+          filtered.map(e => <FullEventCard key={e.id} event={e} go={go} tier={tier} friendsHere={friendsByEvent[e.id] || []}/>)
         )}
       </div>
     </div>
   );
 }
 
-function FullEventCard({ event, go, tier }) {
+function FullEventCard({ event, go, tier, friendsHere }) {
   const isMember = tier === 'league' || tier === 'leaguePlus';
   const pct = event.filled / event.field;
   const nearFull = pct > 0.85;
@@ -113,6 +116,11 @@ function FullEventCard({ event, go, tier }) {
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 6, letterSpacing: '0.06em' }}>
             {event.date.toUpperCase()} · {event.time}
           </div>
+          {friendsHere && friendsHere.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <FriendsHere friends={friendsHere} size={20} max={4} light/>
+            </div>
+          )}
         </div>
       </div>
       <div style={{ padding: '14px 16px 16px' }}>

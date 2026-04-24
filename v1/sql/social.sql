@@ -55,6 +55,39 @@ begin
 end $$;
 
 -- ─────────────────────────────────────────────────────────────────
+-- Friend feed: completed matches need to be visible to non-players
+-- so the social feed can render "Rob beat Alex 3&2" type events.
+-- The original RLS only allowed players themselves to read their
+-- matches; for completed games this is overly restrictive given we
+-- already publish results on profile pages.
+-- ─────────────────────────────────────────────────────────────────
+drop policy if exists "Completed matches viewable by authenticated users" on public.matches;
+create policy "Completed matches viewable by authenticated users"
+  on public.matches for select to authenticated
+  using (status = 'completed');
+
+-- Realtime on event_registrations + matches so the feed updates live
+-- when a friend signs up or finishes a match.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'event_registrations'
+  ) then
+    alter publication supabase_realtime add table public.event_registrations;
+  end if;
+end $$;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'matches'
+  ) then
+    alter publication supabase_realtime add table public.matches;
+  end if;
+end $$;
+
+-- ─────────────────────────────────────────────────────────────────
 -- Storage policies on the `avatars` bucket.
 -- Run these AFTER you create the bucket in the dashboard.
 -- (The bucket itself can also be created via SQL — see commented

@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, acceptInvite, declineInvite */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useFriendFeed, useNewFollowers, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
 // Home screen — next event, live leaderboard, activity
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
@@ -16,6 +16,16 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
   const [pendingInvites]       = useMyPendingInvites(profile && profile.id);
+  const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
+  const [newFollowers]         = useNewFollowers(profile && profile.id);
+  const notificationCount      = (pendingInvites || []).length + (newFollowers || []).length;
+
+  // Friends-here pills on the Up Next teaser cards.
+  const upcomingIds = React.useMemo(
+    () => (upcoming || []).slice(0, 4).map(e => e.id),
+    [upcoming]
+  );
+  const [friendsByEvent] = useFriendsRegisteredForEvents(profile && profile.id, upcomingIds);
 
   // Up Next card priority:
   //   1. User has an active match → show the live preview with real
@@ -71,7 +81,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </div>
         <button
           onClick={() => go({ screen: 'notifications' })}
-          aria-label={`Notifications${pendingInvites && pendingInvites.length ? ` (${pendingInvites.length} unread)` : ''}`}
+          aria-label={`Notifications${notificationCount ? ` (${notificationCount} unread)` : ''}`}
           style={{
             width: 42, height: 42, borderRadius: 999,
             background: 'var(--paper)',
@@ -87,7 +97,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
             <path d="M12 2a6 6 0 0 0-6 6v4l-2 3h16l-2-3V8a6 6 0 0 0-6-6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
             <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="2"/>
           </svg>
-          {pendingInvites && pendingInvites.length > 0 && (
+          {notificationCount > 0 && (
             <span style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 999, background: 'var(--forest)', border: '1.5px solid var(--paper)' }}/>
           )}
         </button>
@@ -206,29 +216,42 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </div>
       )}
 
-      {/* Activity feed — cleaner rhythm */}
+      {/* Friend feed — real activity from people you follow (+ yourself) */}
       <div style={{ padding: '28px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 4px' }}>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>The Feed</div>
-          <button style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>See all →</button>
+          <button onClick={() => go({ screen: 'social' })} style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Find people →</button>
         </div>
-        <div className="card" style={{ padding: '6px 4px' }}>
-          {MOCK.ACTIVITY.map((a, i) => (
-            <div key={a.id} style={{
-              padding: '14px 14px',
-              display: 'flex', alignItems: 'center', gap: 12,
-              borderBottom: i < MOCK.ACTIVITY.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
-            }}>
-              <AvatarBy handle={a.user} size={36}/>
-              <div style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>
-                <span style={{ fontWeight: 700, color: 'var(--forest)' }}>{a.user}</span>
-                <span style={{ opacity: 0.7 }}> {a.detail}</span>
-              </div>
-              {a.badge && <span style={{ fontSize: 18 }}>{a.badge}</span>}
-              <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)' }}>{a.time}</span>
+        {feedLoading ? (
+          <div className="card" style={{ padding: 24, fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>Loading…</div>
+        ) : feed.length === 0 ? (
+          <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1.1 }}>
+              {followCount === 0 ? 'Quiet feed.' : 'No recent activity.'}
             </div>
-          ))}
-        </div>
+            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.7, marginTop: 6 }}>
+              {followCount === 0
+                ? 'Follow players to see their event signups and match results here.'
+                : 'When friends sign up for events or finish matches, it shows up here.'}
+            </div>
+            {followCount === 0 && (
+              <Button variant="forest" size="sm" onClick={() => go({ screen: 'social' })} style={{ marginTop: 14 }}>
+                Find players
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="card" style={{ padding: '6px 4px' }}>
+            {feed.map((a, i) => (
+              <FeedRow
+                key={a.id}
+                item={a}
+                last={i === feed.length - 1}
+                onOpen={() => go({ screen: 'profile', viewingHandle: a.actor.handle })}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Upcoming events teaser */}
@@ -246,7 +269,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         ) : (
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 16px 4px' }} className="scroll-hide">
             {upcomingForTeaser.map(e => (
-              <MiniEventCard key={e.id} event={e} go={go}/>
+              <MiniEventCard key={e.id} event={e} go={go} friendsHere={friendsByEvent[e.id] || []}/>
             ))}
           </div>
         )}
@@ -427,7 +450,148 @@ function QuickStat({ label, value, sub, trend, icon, locked, featured }) {
   );
 }
 
-function MiniEventCard({ event, go }) {
+// ─── Friend feed row ─────────────────────────────────────────────────
+function FeedRow({ item, last, onOpen }) {
+  const a = item.actor;
+  const initial = ((a.first_name || a.handle || '?').replace(/^@/, '') || '?').charAt(0).toUpperCase();
+
+  let primary, accent;
+  if (item.type === 'event_signup') {
+    const ev = item.payload.event;
+    primary = (
+      <>
+        <span style={{ fontWeight: 700, color: 'var(--forest)' }}>{formatHandle(a.handle)}</span>
+        <span style={{ opacity: 0.75 }}> signed up for </span>
+        <span style={{ fontWeight: 700, color: 'var(--forest)' }}>{ev.course_short || ev.course_name}</span>
+      </>
+    );
+    accent = '⛳';
+  } else if (item.type === 'match_result') {
+    const p   = item.payload;
+    const opp = p.opponent;
+    const oppLabel = opp ? (opp.handle ? formatHandle(opp.handle) : (opp.first_name || 'opponent')) : 'opponent';
+    if (p.result === 'H') {
+      primary = (
+        <>
+          <span style={{ fontWeight: 700, color: 'var(--forest)' }}>{formatHandle(a.handle)}</span>
+          <span style={{ opacity: 0.75 }}> halved with </span>
+          <span style={{ fontWeight: 700 }}>{oppLabel}</span>
+        </>
+      );
+      accent = '½';
+    } else if (p.won) {
+      primary = (
+        <>
+          <span style={{ fontWeight: 700, color: 'var(--forest)' }}>{formatHandle(a.handle)}</span>
+          <span style={{ opacity: 0.75 }}> beat </span>
+          <span style={{ fontWeight: 700 }}>{oppLabel}</span>
+          {p.margin && <span style={{ opacity: 0.6 }}> · {p.margin}</span>}
+        </>
+      );
+      accent = '🏆';
+    } else {
+      primary = (
+        <>
+          <span style={{ fontWeight: 700, color: 'var(--forest)' }}>{formatHandle(a.handle)}</span>
+          <span style={{ opacity: 0.75 }}> lost to </span>
+          <span style={{ fontWeight: 700 }}>{oppLabel}</span>
+          {p.margin && <span style={{ opacity: 0.6 }}> · {p.margin}</span>}
+        </>
+      );
+    }
+  }
+
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        width: '100%', textAlign: 'left',
+        padding: '14px 14px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        background: 'transparent', border: 'none',
+        borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{
+        width: 36, height: 36, borderRadius: 999,
+        background: '#5A7B4A', color: 'var(--cream)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--font-display)', fontSize: 16,
+        overflow: 'hidden', flexShrink: 0,
+        border: '2px solid var(--cream)',
+      }}>
+        {a.avatar_url
+          ? <img src={a.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+          : initial}
+      </div>
+      <div style={{ flex: 1, fontSize: 13, lineHeight: 1.4, color: 'var(--ink)' }}>{primary}</div>
+      {accent && <span style={{ fontSize: 16 }}>{accent}</span>}
+      <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)' }}>
+        {timeAgoShort(item.ts)}
+      </span>
+    </button>
+  );
+}
+
+function timeAgoShort(iso) {
+  if (!iso) return '';
+  const diff = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)        return 'now';
+  if (diff < 3600)      return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400)     return `${Math.floor(diff / 3600)}h`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ─── Friends-here pill (avatar stack on event cards) ─────────────────
+function FriendsHere({ friends, size = 18, max = 4, light = false }) {
+  if (!friends || friends.length === 0) return null;
+  const shown = friends.slice(0, max);
+  const extra = friends.length - shown.length;
+  const fg = light ? 'var(--cream)' : 'var(--forest)';
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '4px 8px 4px 4px', borderRadius: 999,
+      background: light ? 'rgba(14,28,19,0.45)' : 'rgba(14,28,19,0.06)',
+      backdropFilter: light ? 'blur(8px)' : 'none',
+      WebkitBackdropFilter: light ? 'blur(8px)' : 'none',
+      border: light ? '1px solid rgba(234,226,206,0.18)' : '1px solid rgba(14,28,19,0.04)',
+    }}>
+      <div style={{ display: 'inline-flex' }}>
+        {shown.map((f, i) => {
+          const initial = ((f.first_name || f.handle || '?').replace(/^@/, '') || '?').charAt(0).toUpperCase();
+          return (
+            <div key={f.id} style={{
+              width: size, height: size, borderRadius: 999,
+              marginLeft: i === 0 ? 0 : -6,
+              background: '#5A7B4A', color: 'var(--cream)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: Math.round(size * 0.5), fontWeight: 700, fontFamily: 'var(--font-display)',
+              overflow: 'hidden',
+              border: `1.5px solid ${light ? '#0E1C13' : 'var(--paper)'}`,
+              boxSizing: 'content-box',
+            }}>
+              {f.avatar_url
+                ? <img src={f.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                : initial}
+            </div>
+          );
+        })}
+      </div>
+      <span style={{
+        fontSize: 11, fontWeight: 700, color: fg,
+        opacity: light ? 1 : 0.85,
+      }}>
+        {friends.length} {friends.length === 1 ? 'friend' : 'friends'}
+        {extra > 0 ? '' : ' here'}
+      </span>
+    </div>
+  );
+}
+
+function MiniEventCard({ event, go, friendsHere }) {
   return (
     <button onClick={() => go({ screen: 'eventDetail', eventId: event.id })} className="card" style={{
       minWidth: 190, maxWidth: 190,
@@ -470,6 +634,11 @@ function MiniEventCard({ event, go }) {
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.7, letterSpacing: '0.04em' }}>
           {event.date.toUpperCase()} · {event.time}
         </div>
+        {friendsHere && friendsHere.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <FriendsHere friends={friendsHere} size={18} max={3}/>
+          </div>
+        )}
       </div>
     </button>
   );
@@ -555,4 +724,4 @@ function InviteBanner({ invite, profile, go }) {
   );
 }
 
-Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner });
+Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner, FeedRow, FriendsHere });

@@ -1,10 +1,24 @@
-/* global React, Icon, Button, useMyPendingInvites, acceptInvite, declineInvite */
+/* global React, Icon, Button, useMyPendingInvites, useNewFollowers, useIsFollowing, followUser, formatHandle, acceptInvite, declineInvite */
 // Notifications screen — opened from the bell on Home.
-// MVP: surfaces pending match invites with Accept / Decline.
-// Phase 5 will add event reminders, follow notifications, etc.
+// Surfaces:
+//   - Pending match invites (Accept / Decline)
+//   - New followers (Follow back)
 
 function NotificationsScreen({ profile, go }) {
-  const [invites, loading] = useMyPendingInvites(profile && profile.id);
+  const [invites, invitesLoading]    = useMyPendingInvites(profile && profile.id);
+  const [followers, followersLoading] = useNewFollowers(profile && profile.id);
+  const loading = invitesLoading || followersLoading;
+
+  // Merge invites + follower notifications, sorted by time desc.
+  const items = React.useMemo(() => {
+    const a = (invites || []).map(inv => ({
+      kind: 'invite', id: `inv-${inv.id}`, ts: inv.created_at, payload: inv,
+    }));
+    const b = (followers || []).map(f => ({
+      kind: 'follow', id: `fol-${f.follower_id}-${f.created_at}`, ts: f.created_at, payload: f,
+    }));
+    return [...a, ...b].sort((x, y) => new Date(y.ts) - new Date(x.ts));
+  }, [invites, followers]);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120, position: 'relative' }}>
@@ -50,19 +64,21 @@ function NotificationsScreen({ profile, go }) {
           <div style={{ padding: '20px 4px', fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>
             Loading…
           </div>
-        ) : invites.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="card" style={{ padding: 28, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>
               All caught up.
             </div>
             <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.7, marginTop: 8 }}>
-              No notifications right now. Match invites and reminders will land here.
+              No notifications right now. Match invites and new followers will land here.
             </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {invites.map(inv => (
-              <NotificationCard key={inv.id} invite={inv} profile={profile} go={go}/>
+            {items.map(it => (
+              it.kind === 'invite'
+                ? <NotificationCard key={it.id} invite={it.payload} profile={profile} go={go}/>
+                : <FollowerCard    key={it.id} row={it.payload} viewerId={profile && profile.id} go={go}/>
             ))}
           </div>
         )}
@@ -119,6 +135,71 @@ function NotificationCard({ invite, profile, go }) {
           {busy === 'decline' ? '…' : 'Decline'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ─── New-follower notification card ──────────────────────────────────
+function FollowerCard({ row, viewerId, go }) {
+  const f = row.follower;
+  const ago = timeAgo(row.created_at);
+  const isFollowingBack = useIsFollowing(viewerId, f && f.id);
+  const [busy, setBusy] = React.useState(false);
+  if (!f) return null;
+  const name = [f.first_name, f.last_name].filter(Boolean).join(' ') || f.handle;
+  const initial = (name || '?').replace(/^@/, '').charAt(0).toUpperCase();
+
+  async function followBack() {
+    if (!viewerId || !f.id || busy) return;
+    setBusy(true);
+    try { await followUser({ viewerId, targetId: f.id }); }
+    catch (_) {}
+    setBusy(false);
+  }
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          New follower
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink)', opacity: 0.45 }}>
+          {ago}
+        </div>
+      </div>
+      <button
+        onClick={() => go({ screen: 'profile', viewingHandle: f.handle })}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12, marginTop: 10,
+          background: 'transparent', border: 'none', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer',
+        }}
+      >
+        <div style={{
+          width: 40, height: 40, borderRadius: 999,
+          background: '#5A7B4A', color: 'var(--cream)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontSize: 18, overflow: 'hidden',
+          flexShrink: 0,
+        }}>
+          {f.avatar_url
+            ? <img src={f.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+            : initial}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{name}</div>
+          <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>{formatHandle(f.handle)} started following you</div>
+        </div>
+      </button>
+      {!isFollowingBack && isFollowingBack !== null && (
+        <Button variant="forest" size="sm" full onClick={followBack} disabled={busy} style={{ marginTop: 12 }}>
+          {busy ? '…' : 'Follow back'}
+        </Button>
+      )}
+      {isFollowingBack && (
+        <div style={{ fontSize: 12, color: 'var(--forest)', opacity: 0.6, marginTop: 12, textAlign: 'center', fontWeight: 700 }}>
+          You follow each other
+        </div>
+      )}
     </div>
   );
 }
