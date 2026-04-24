@@ -642,59 +642,13 @@ function FollowStat({ label, value }) {
 }
 
 // ─── Edit Profile sheet ──────────────────────────────────────────────
-const INPUT_STYLE = {
-  display: 'block',
-  width: '100%',
-  height: 50,
-  boxSizing: 'border-box',
-  margin: 0,
-  padding: '0 16px',
-  background: '#EDE5D0',
-  border: '2px solid #1C492A',
-  borderRadius: 12,
-  fontSize: 15,
-  fontWeight: 600,
-  color: '#0E1C13',
-  fontFamily: 'inherit',
-  outline: 'none',
-  WebkitAppearance: 'none',
-  appearance: 'none',
-};
-const TEXTAREA_STYLE = {
-  ...INPUT_STYLE,
-  height: 'auto',
-  minHeight: 96,
-  padding: '12px 16px',
-  lineHeight: 1.4,
-  resize: 'vertical',
-};
-const LABEL_STYLE = {
-  display: 'block',
-  fontSize: 11,
-  fontFamily: 'var(--font-mono)',
-  color: '#1C492A',
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  fontWeight: 700,
-  marginBottom: 6,
-};
-const SECTION_STYLE = {
-  fontSize: 10,
-  fontFamily: 'var(--font-mono)',
-  color: '#1C492A',
-  opacity: 0.5,
-  letterSpacing: '0.16em',
-  textTransform: 'uppercase',
-  marginBottom: 10,
-  marginTop: 4,
-};
-
 function EditProfileSheet({ profile, onClose }) {
   const [firstName, setFirstName] = React.useState(profile.first_name || '');
   const [lastName,  setLastName]  = React.useState(profile.last_name  || '');
   const [handle,    setHandle]    = React.useState((profile.handle || '').replace(/^@/, ''));
   const [bio,       setBio]       = React.useState(profile.bio || '');
   const [home,      setHome]      = React.useState(profile.home_course || '');
+  const [focused,   setFocused]   = React.useState(null);
   const [busy,      setBusy]      = React.useState(false);
   const [err,       setErr]       = React.useState('');
 
@@ -721,13 +675,46 @@ function EditProfileSheet({ profile, onClose }) {
     setBusy(false);
   }
 
+  // ── Modern field styling: filled subtle background, no border by default,
+  // ── thin forest border on focus.
+  const fieldShell = (id) => ({
+    background: focused === id ? '#FFFFFF' : '#F4EFE2',
+    borderRadius: 14,
+    padding: '12px 16px',
+    border: focused === id ? '1.5px solid #1C492A' : '1.5px solid transparent',
+    transition: 'border-color .15s, background .15s',
+  });
+  const inputBase = {
+    display: 'block',
+    width: '100%',
+    boxSizing: 'border-box',
+    margin: 0, padding: 0,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 16, fontWeight: 500,
+    color: '#0E1C13',
+    fontFamily: 'inherit',
+    outline: 'none',
+    WebkitAppearance: 'none',
+    appearance: 'none',
+    lineHeight: 1.3,
+  };
+  const inputLabel = {
+    display: 'block',
+    fontSize: 11,
+    fontWeight: 500,
+    color: 'rgba(14,28,19,0.55)',
+    marginBottom: 4,
+    letterSpacing: '0.01em',
+  };
+
   return (
     <div
       onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(14,28,19,0.65)',
-        backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+        background: 'rgba(14,28,19,0.55)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
         zIndex: 1000,
       }}
@@ -735,127 +722,148 @@ function EditProfileSheet({ profile, onClose }) {
       <div style={{
         width: '100%', maxWidth: 440,
         background: '#FFFFFF',
-        borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        boxShadow: '0 -20px 60px rgba(0,0,0,0.3)',
-        maxHeight: '92vh',
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        boxShadow: '0 -24px 72px rgba(0,0,0,0.35)',
+        maxHeight: '94vh',
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
       }}>
+        {/* Drag handle */}
+        <div style={{
+          width: 40, height: 4, borderRadius: 999,
+          background: 'rgba(14,28,19,0.16)',
+          margin: '10px auto 0',
+        }}/>
+
         {/* Header */}
-        <div style={{ padding: '14px 20px 16px', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
-          <div style={{ width: 38, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.18)', margin: '0 auto 14px' }}/>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: '#1C492A', lineHeight: 1 }}>
-              Edit profile
-            </div>
-            <button onClick={busy ? undefined : onClose} style={{
-              background: 'transparent', border: 'none', color: '#1C492A',
-              fontSize: 13, fontWeight: 700,
-              opacity: busy ? 0.4 : 0.7, cursor: busy ? 'wait' : 'pointer',
-              padding: '4px 0',
-            }}>Cancel</button>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 22px 18px',
+        }}>
+          <button onClick={busy ? undefined : onClose} style={{
+            background: 'transparent', border: 'none', color: '#1C492A',
+            fontSize: 15, fontWeight: 500,
+            opacity: busy ? 0.4 : 0.75, cursor: busy ? 'wait' : 'pointer',
+            padding: 0,
+          }}>Cancel</button>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0E1C13' }}>
+            Edit profile
           </div>
+          <button
+            onClick={busy ? undefined : save}
+            disabled={busy}
+            style={{
+              background: 'transparent', border: 'none',
+              color: '#1C492A', fontSize: 15, fontWeight: 700,
+              opacity: busy ? 0.4 : 1, cursor: busy ? 'wait' : 'pointer',
+              padding: 0,
+            }}>{busy ? 'Saving…' : 'Save'}</button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: '18px 20px 12px', overflowY: 'auto', flex: 1 }}>
-          <div style={SECTION_STYLE}>Identity</div>
-
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <label style={LABEL_STYLE}>First name</label>
+        <div style={{
+          padding: '4px 22px 24px',
+          overflowY: 'auto', flex: 1,
+        }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+            <div style={{ ...fieldShell('first'), flex: 1, minWidth: 0 }}>
+              <label style={inputLabel}>First name</label>
               <input
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
+                onFocus={() => setFocused('first')}
+                onBlur={() => setFocused(null)}
                 disabled={busy}
                 autoFocus
-                style={INPUT_STYLE}
+                style={inputBase}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <label style={LABEL_STYLE}>Last name</label>
+            <div style={{ ...fieldShell('last'), flex: 1, minWidth: 0 }}>
+              <label style={inputLabel}>Last name</label>
               <input
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+                onFocus={() => setFocused('last')}
+                onBlur={() => setFocused(null)}
                 disabled={busy}
-                style={INPUT_STYLE}
+                style={inputBase}
               />
             </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={LABEL_STYLE}>Username</label>
-            <input
-              type="text"
-              value={handle}
-              onChange={(e) => setHandle(e.target.value.replace(/^@/, '').toLowerCase())}
-              disabled={busy}
-              placeholder="yourhandle"
-              style={INPUT_STYLE}
-            />
-            <div style={{ fontSize: 11, color: '#0E1C13', opacity: 0.5, marginTop: 6, fontStyle: 'italic' }}>
-              Letters, numbers, _ and . — 2 to 24 characters
+          <div style={{ ...fieldShell('handle'), marginBottom: 4 }}>
+            <label style={inputLabel}>Username</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <span style={{ fontSize: 16, fontWeight: 500, color: 'rgba(14,28,19,0.4)', lineHeight: 1.3 }}>@</span>
+              <input
+                type="text"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value.replace(/^@/, '').toLowerCase())}
+                onFocus={() => setFocused('handle')}
+                onBlur={() => setFocused(null)}
+                disabled={busy}
+                placeholder="yourhandle"
+                style={inputBase}
+              />
             </div>
           </div>
+          <div style={{ fontSize: 12, color: 'rgba(14,28,19,0.5)', padding: '6px 4px 16px' }}>
+            Letters, numbers, _ and . — 2 to 24 characters.
+          </div>
 
-          <div style={{ ...SECTION_STYLE, marginTop: 14 }}>About</div>
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={LABEL_STYLE}>Home course</label>
+          <div style={{ ...fieldShell('home'), marginBottom: 12 }}>
+            <label style={inputLabel}>Home course</label>
             <input
               type="text"
               value={home}
               onChange={(e) => setHome(e.target.value)}
+              onFocus={() => setFocused('home')}
+              onBlur={() => setFocused(null)}
               disabled={busy}
               placeholder="e.g. Melreese"
-              style={INPUT_STYLE}
+              style={inputBase}
             />
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-              <label style={{ ...LABEL_STYLE, marginBottom: 0 }}>Bio</label>
+          <div style={{ ...fieldShell('bio'), marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <label style={inputLabel}>Bio</label>
               <span style={{
-                fontSize: 10, fontFamily: 'var(--font-mono)',
-                color: bio.length >= 200 ? '#C44536' : '#1C492A',
-                opacity: 0.55,
+                fontSize: 11,
+                color: bio.length >= 200 ? '#C44536' : 'rgba(14,28,19,0.4)',
+                fontVariantNumeric: 'tabular-nums',
               }}>{bio.length}/200</span>
             </div>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
+              onFocus={() => setFocused('bio')}
+              onBlur={() => setFocused(null)}
               disabled={busy}
               maxLength={200}
               placeholder="A line about your game…"
               rows={3}
-              style={TEXTAREA_STYLE}
+              style={{
+                ...inputBase,
+                minHeight: 64,
+                resize: 'none',
+                lineHeight: 1.4,
+              }}
             />
           </div>
 
           {err && (
             <div style={{
               background: 'rgba(196,69,54,0.08)',
-              border: '1px solid rgba(196,69,54,0.25)',
               color: '#9C2E22',
-              borderRadius: 10,
-              padding: '10px 12px',
-              fontSize: 13, fontWeight: 600,
-              marginTop: 8,
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 13, fontWeight: 500,
+              marginTop: 16,
             }}>{err}</div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          padding: '14px 20px 22px',
-          borderTop: '1px solid rgba(14,28,19,0.06)',
-          background: '#FFFFFF',
-        }}>
-          <Button variant="forest" full size="md" onClick={save} disabled={busy}>
-            {busy ? 'Saving…' : 'Save changes'}
-          </Button>
         </div>
       </div>
     </div>
