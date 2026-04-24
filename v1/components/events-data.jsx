@@ -264,14 +264,18 @@ async function registerForEvent({ eventId, userId, partnerHandle, isGuest }) {
   if (!eventId || !userId) throw new Error('Missing event or user.');
 
   // Try to resolve partner by handle (strips leading @, case-insensitive).
+  // Tolerates both storage conventions ("rob" and "@rob") via .or().
   // If we can't find the handle as a real profile (e.g. it's still a
   // mock friend), just register without a partner — the UI keeps the
   // visual choice but partner_id stays null until the friends table lands.
   let partnerId = null;
   if (partnerHandle && !isGuest) {
     const h = String(partnerHandle).replace(/^@/, '').toLowerCase();
-    const { data } = await sbx.from('profiles').select('id').ilike('handle', h).maybeSingle();
-    if (data) partnerId = data.id;
+    const { data } = await sbx.from('profiles')
+      .select('id')
+      .or(`handle.ilike.${h},handle.ilike.@${h}`)
+      .limit(1);
+    if (data && data[0]) partnerId = data[0].id;
   }
 
   const { error } = await sbx.from('event_registrations').insert({

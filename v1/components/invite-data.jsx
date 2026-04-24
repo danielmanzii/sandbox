@@ -137,12 +137,15 @@ async function sendInviteByHandle({ matchId, invitedBy, handle }) {
   const cleaned = String(handle).replace(/^@/, '').trim().toLowerCase();
   if (!cleaned) throw new Error('Enter a username.');
 
-  // Look up the invitee via the @-stripping ilike pattern setup uses.
-  const { data: target } = await sbx
+  // Lookup is tolerant of either storage convention: the handle column
+  // might be saved as "rob" or "@rob" depending on when the profile was
+  // created. Try both via .or() so either matches.
+  const { data } = await sbx
     .from('profiles')
     .select('id, handle')
-    .ilike('handle', cleaned)
-    .maybeSingle();
+    .or(`handle.ilike.${cleaned},handle.ilike.@${cleaned}`)
+    .limit(1);
+  const target = data && data[0];
   if (!target) throw new Error(`No user with handle @${cleaned}.`);
   if (target.id === invitedBy) throw new Error("You can't invite yourself.");
 
