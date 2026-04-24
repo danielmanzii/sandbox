@@ -1,4 +1,4 @@
-/* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut, useMatchInvitesForMatch, sendInviteByHandle, cancelInvite */
+/* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut, useMatchInvitesForMatch, sendInviteByHandle, cancelInvite, formatHandle */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
 function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', initialJoinCode }) {
@@ -54,7 +54,7 @@ function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', initi
             padding: '2px 4px', marginLeft: -4, marginTop: 2,
             borderRadius: 6,
           }}>
-            {profile.handle}
+            {formatHandle(profile.handle)}
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }}>
               <path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
             </svg>

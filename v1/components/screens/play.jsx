@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Wordmark, EventsScreen, EventDetailScreen, MOCK */
+/* global React, Icon, Button, Eyebrow, Wordmark, EventsScreen, EventDetailScreen, MOCK, formatHandle */
 // Play tab — split into Ranked (upcoming events) and Unranked (Challenge a Friend).
 //   - Ranked uses the existing EventsScreen (mock events for now).
 //   - Unranked shows mode cards for 1v1 and 2v2 that route into the real
@@ -89,7 +89,7 @@ function UnrankedView({ go, profile }) {
           Playing as
         </div>
         <div style={{ marginTop: 4, fontSize: 14, color: 'var(--forest)', fontWeight: 700 }}>
-          {profile.handle}
+          {formatHandle(profile.handle)}
         </div>
       </div>
     </div>

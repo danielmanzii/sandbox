@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, followUser, unfollowUser, uploadAvatar, updateProfile */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -127,7 +127,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, color: 'var(--forest)' }}>
             {user.name}
           </div>
-          <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4, fontWeight: 600 }}>{user.handle}</div>
+          <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4, fontWeight: 600 }}>{formatHandle(user.handle)}</div>
           {isSelf && (
             <div className="caption-serif" style={{ fontSize: 15, marginTop: 8, color: 'var(--ink)', opacity: 0.85 }}>
               "{user.bio}"

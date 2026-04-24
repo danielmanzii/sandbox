@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle */
 // Events list + detail + register
 
 function EventsScreen({ go, tier }) {
@@ -494,7 +494,7 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
           }}>
             <AvatarBy handle={f.handle} size={36}/>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{f.handle}</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{formatHandle(f.handle)}</div>
               <div style={{ fontSize: 11, opacity: 0.7 }}>{f.name} · SBX {f.sbx?.toFixed(3) ?? '—'}</div>
             </div>
             {partner === f.handle && !guest && <Icon.Chevron dir="right" size={14} color="var(--cream)"/>}

@@ -1,6 +1,15 @@
 /* global React */
 // Shared primitive components for Sandbox Pitch & Putt app
 
+// ─── Display helpers ─────────────────────────────────────
+// Always renders a handle with a leading @, regardless of how it's
+// stored ("rob" or "@rob" both → "@rob"). Returns '' for falsy input.
+function formatHandle(h) {
+  if (!h) return '';
+  const s = String(h).trim();
+  return s.startsWith('@') ? s : `@${s}`;
+}
+
 // ─── Icons ──────────────────────────────────────────────
 const Icon = {
   Flag: ({ size = 20, color = 'currentColor' }) => (
@@ -328,4 +337,5 @@ function Spark({ data, width = 60, height = 20, color = 'currentColor' }) {
 
 Object.assign(window, {
   Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark,
+  formatHandle,
 });
