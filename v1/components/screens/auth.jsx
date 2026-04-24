@@ -31,13 +31,14 @@ function AuthScreens() {
 // ─── Welcome ─────────────────────────────────────────────────
 function WelcomeView({ onSignUp, onSignIn }) {
   return (
-    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 28px 32px' }}>
-      <Wordmark variant="cream" size={160}/>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.92, letterSpacing: '-0.02em', marginTop: 28 }}>
-        Pitch &<br/>putt,<br/>rated.
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 28px 32px', color: 'var(--paper)' }}>
+      <Wordmark variant="white" size={160}/>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 28, whiteSpace: 'nowrap', color: 'var(--paper)' }}>
+        Pitch & Putt, Rated.
       </div>
-      <div className="caption-serif" style={{ fontSize: 18, marginTop: 18, opacity: 0.8, maxWidth: 320 }}>
-        Miami's match-play league. Real matches, real ratings, bragging rights.
+      <div className="caption-serif" style={{ fontSize: 18, marginTop: 18, opacity: 0.85, maxWidth: 340, color: 'var(--paper)', lineHeight: 1.4 }}>
+        Miami's pitch &amp; putt, match play league.<br/>
+        Real matches, real ratings, real bragging rights.
       </div>
 
       <div style={{ flex: 1 }}/>
@@ -52,7 +53,7 @@ function WelcomeView({ onSignUp, onSignIn }) {
         </Button>
       </div>
 
-      <div style={{ fontSize: 10, opacity: 0.55, textAlign: 'center', marginTop: 20, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+      <div style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', marginTop: 20, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--paper)' }}>
         v1 prototype · real data · real matches
       </div>
     </div>
