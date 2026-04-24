@@ -1,5 +1,5 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy */
-// Social: leaderboards + member directory-lite
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useUserSearch, useIsFollowing, followUser, unfollowUser */
+// Social: people search + leaderboards + member directory-lite
 
 function SocialScreen({ go, tier }) {
   const [tab, setTab] = React.useState('live');
@@ -12,6 +12,8 @@ function SocialScreen({ go, tier }) {
           Talk less. Shoot lower.
         </div>
       </div>
+
+      <FindPlayers go={go}/>
 
       <div style={{ display: 'flex', gap: 4, margin: '0 16px 0', background: 'rgba(14,28,19,0.05)', borderRadius: 14, padding: 4 }}>
         {[['live', 'Live'], ['season', 'Season'], ['alltime', 'All-time']].map(([k, l]) => (
@@ -32,6 +34,123 @@ function SocialScreen({ go, tier }) {
       {tab === 'live' && <LiveLeaderboard go={go}/>}
       {tab === 'season' && <SeasonLeaderboard/>}
       {tab === 'alltime' && <AllTimeLeaderboard/>}
+    </div>
+  );
+}
+
+// ─── Find players: live search + inline follow ───────────────────────
+function FindPlayers({ go }) {
+  const [q, setQ] = React.useState('');
+  const [results, loading] = useUserSearch(q, 8);
+  const viewerId = MOCK.USER && MOCK.USER.id;
+
+  return (
+    <div style={{ padding: '0 16px 18px' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: 'var(--paper)', borderRadius: 14,
+        padding: '12px 14px',
+        border: '1px solid rgba(14,28,19,0.06)',
+      }}>
+        <Icon.Search size={16} color="var(--forest)"/>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Find players by handle or name…"
+          style={{
+            flex: 1, background: 'transparent', border: 'none', outline: 'none',
+            fontSize: 14, color: 'var(--ink)', fontWeight: 600,
+          }}
+        />
+        {q && (
+          <button onClick={() => setQ('')} style={{
+            background: 'transparent', border: 'none', color: 'var(--forest)',
+            fontSize: 12, opacity: 0.6, cursor: 'pointer', padding: 0,
+          }}>Clear</button>
+        )}
+      </div>
+
+      {q.trim().length > 0 && (
+        <div className="card" style={{ marginTop: 10, overflow: 'hidden' }}>
+          {loading && (
+            <div style={{ padding: 14, fontSize: 12, opacity: 0.55, textAlign: 'center' }}>Searching…</div>
+          )}
+          {!loading && results.length === 0 && (
+            <div style={{ padding: 14, fontSize: 12, opacity: 0.55, textAlign: 'center' }}>No players found.</div>
+          )}
+          {!loading && results.map((r, i) => (
+            <SearchResultRow
+              key={r.id}
+              row={r}
+              viewerId={viewerId}
+              last={i === results.length - 1}
+              onOpen={() => go({ screen: 'profile', viewingHandle: r.handle })}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SearchResultRow({ row, viewerId, last, onOpen }) {
+  const isSelf = viewerId === row.id;
+  const isFollowing = useIsFollowing(viewerId, isSelf ? null : row.id);
+  const [busy, setBusy] = React.useState(false);
+  const name = [row.first_name, row.last_name].filter(Boolean).join(' ') || row.handle;
+  const initial = (name || row.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+
+  async function toggle(e) {
+    e.stopPropagation();
+    if (!viewerId || isSelf || busy) return;
+    setBusy(true);
+    try {
+      if (isFollowing) await unfollowUser({ viewerId, targetId: row.id });
+      else             await followUser({ viewerId, targetId: row.id });
+    } catch (_) {}
+    setBusy(false);
+  }
+
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 14px',
+        borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{
+        width: 36, height: 36, borderRadius: 999,
+        background: '#5A7B4A', color: 'var(--cream)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--font-display)', fontSize: 16, overflow: 'hidden',
+        flexShrink: 0,
+      }}>
+        {row.avatar_url
+          ? <img src={row.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+          : initial}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{name}</div>
+        <div style={{ fontSize: 11, opacity: 0.55, marginTop: 2 }}>
+          {row.handle.startsWith('@') ? row.handle : `@${row.handle}`}
+        </div>
+      </div>
+      {!isSelf && viewerId && (
+        <Button
+          variant={isFollowing ? 'outline' : 'forest'}
+          size="sm"
+          onClick={toggle}
+          disabled={busy || isFollowing === null}
+        >
+          {isFollowing === null ? '…' : (isFollowing ? 'Following' : 'Follow')}
+        </Button>
+      )}
+      {isSelf && (
+        <span style={{ fontSize: 10, opacity: 0.5, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>You</span>
+      )}
     </div>
   );
 }

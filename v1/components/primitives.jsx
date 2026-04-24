@@ -142,6 +142,12 @@ const Icon = {
       <path d="M5 12c3-2 5-6 5-10 4 4 4 8 6 10s4 4 4 8a8 8 0 0 1-16 0c0-3 1-5 1-8z" fill={color}/>
     </svg>
   ),
+  Search: ({ size = 16, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7"/>
+      <path d="m20 20-3.5-3.5"/>
+    </svg>
+  ),
 };
 
 // ─── Live dot ────────────────────────────────────────────

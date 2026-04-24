@@ -359,28 +359,35 @@ function AvatarCircle({ url, initial, isSelf, userId }) {
   }
 
   const circle = (
-    <div style={{
-      width: 96, height: 96, borderRadius: 999,
-      background: '#5A7B4A',
-      border: '4px solid var(--cream)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 38,
-      overflow: 'hidden', position: 'relative',
-      boxShadow: 'var(--shadow-sm)',
-    }}>
-      {url ? (
-        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
-      ) : (
-        initial
-      )}
+    <div style={{ position: 'relative', width: 96, height: 96 }}>
+      {/* Image clipped to circle */}
+      <div style={{
+        width: 96, height: 96, borderRadius: 999,
+        background: '#5A7B4A',
+        border: '4px solid var(--cream)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 38,
+        overflow: 'hidden',
+        boxShadow: 'var(--shadow-sm)',
+        boxSizing: 'border-box',
+      }}>
+        {url ? (
+          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+        ) : (
+          initial
+        )}
+      </div>
+      {/* Badge sits OVER the picture, just inside the bottom-right edge */}
       {isSelf && (
         <div style={{
-          position: 'absolute', right: -2, bottom: -2,
-          width: 28, height: 28, borderRadius: 999,
+          position: 'absolute', right: 4, bottom: 4,
+          width: 30, height: 30, borderRadius: 999,
           background: 'var(--forest)', color: 'var(--cream)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           border: '2px solid var(--cream)',
-          fontSize: 14, fontWeight: 800,
+          fontSize: 16, fontWeight: 800, lineHeight: 1,
+          boxShadow: 'var(--shadow-sm)',
+          pointerEvents: 'none',
         }}>
           {busy ? '…' : '+'}
         </div>
