@@ -216,7 +216,9 @@ function useUserSearch(query, limit = 10) {
 // URL to profiles.avatar_url. Returns the new public URL.
 async function uploadAvatar({ userId, file }) {
   if (!userId || !file) throw new Error('Missing user or file.');
-  if (file.size > 5 * 1024 * 1024) throw new Error('Image must be under 5 MB.');
+  // 20 MB cap is for the SELECTED file. The cropper downscales to 512×512
+  // before this function is called, so the actual upload is usually <200 KB.
+  if (file.size > 20 * 1024 * 1024) throw new Error('Image must be under 20 MB.');
 
   const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [])[1] || 'jpg';
   // Stable path so re-uploads overwrite the prior file (upsert: true).

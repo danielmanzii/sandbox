@@ -340,22 +340,31 @@ function MenuRow({ label, onClick, last }) {
 // ─── Avatar circle with optional upload UI for self ───────────────────
 function AvatarCircle({ url, initial, isSelf, userId }) {
   const fileRef = React.useRef(null);
-  const [busy, setBusy]   = React.useState(false);
-  const [err, setErr]     = React.useState('');
+  const [busy, setBusy]       = React.useState(false);
+  const [err, setErr]         = React.useState('');
+  const [pending, setPending] = React.useState(null); // file to crop
 
-  async function onPick(e) {
+  function onPick(e) {
     const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // allow reselecting same file later
     if (!file || !userId) return;
-    setErr(''); setBusy(true);
+    if (file.size > 20 * 1024 * 1024) {
+      setErr('Image must be under 20 MB.');
+      return;
+    }
+    setErr('');
+    setPending(file);
+  }
+
+  async function onCropConfirm(croppedFile) {
+    setBusy(true);
     try {
-      await uploadAvatar({ userId, file });
-      // useProfile re-runs via window.reloadProfile inside uploadAvatar;
-      // MOCK.USER.avatar_url is then refreshed via useRealUserSync.
+      await uploadAvatar({ userId, file: croppedFile });
+      setPending(null);
     } catch (e) {
       setErr(e.message || 'Upload failed.');
     }
     setBusy(false);
-    e.target.value = ''; // reset so the same file can be reselected
   }
 
   const circle = (
@@ -418,7 +427,185 @@ function AvatarCircle({ url, initial, isSelf, userId }) {
       {err && (
         <div style={{ fontSize: 11, color: 'var(--loss)', marginTop: 4 }}>{err}</div>
       )}
+      {pending && (
+        <AvatarCropper
+          file={pending}
+          busy={busy}
+          onCancel={() => { if (!busy) setPending(null); }}
+          onConfirm={onCropConfirm}
+        />
+      )}
     </>
+  );
+}
+
+// ─── Avatar cropper (modal) ──────────────────────────────────────────
+// Lets the user pan + zoom the picked image inside a circular crop
+// window, then exports a 512×512 jpg of exactly what's in the circle.
+function AvatarCropper({ file, busy, onCancel, onConfirm }) {
+  const FRAME = 280;             // circle window size on screen
+  const OUT   = 512;             // exported image size
+
+  const [src,   setSrc]    = React.useState(null);
+  const [imgW,  setImgW]   = React.useState(0);
+  const [imgH,  setImgH]   = React.useState(0);
+  const [zoom,  setZoom]   = React.useState(1);   // multiplier on top of "cover" base
+  const [pos,   setPos]    = React.useState({ x: 0, y: 0 }); // image-center offset from frame-center, screen px
+  const [drag,  setDrag]   = React.useState(null);
+  const [err,   setErr]    = React.useState('');
+  const imgRef = React.useRef(null);
+
+  // Read the file into a data URL once
+  React.useEffect(() => {
+    const reader = new FileReader();
+    reader.onload = (e) => setSrc(e.target.result);
+    reader.onerror = () => setErr('Could not read image.');
+    reader.readAsDataURL(file);
+  }, [file]);
+
+  function onImgLoad(e) {
+    setImgW(e.target.naturalWidth);
+    setImgH(e.target.naturalHeight);
+    setZoom(1);
+    setPos({ x: 0, y: 0 });
+  }
+
+  // Cover-the-frame base scale × user zoom
+  const baseScale       = (imgW && imgH) ? Math.max(FRAME / imgW, FRAME / imgH) : 1;
+  const effectiveScale  = baseScale * zoom;
+  const renderedW       = imgW * effectiveScale;
+  const renderedH       = imgH * effectiveScale;
+
+  // Drag-to-pan (mouse + touch) with global listeners while dragging
+  function pointOf(e) {
+    const t = e.touches && e.touches[0];
+    return { x: (t || e).clientX, y: (t || e).clientY };
+  }
+  function startDrag(e) {
+    const p = pointOf(e);
+    setDrag({ x: p.x - pos.x, y: p.y - pos.y });
+  }
+  React.useEffect(() => {
+    if (!drag) return;
+    const move = (e) => {
+      e.preventDefault();
+      const p = pointOf(e);
+      setPos({ x: p.x - drag.x, y: p.y - drag.y });
+    };
+    const end = () => setDrag(null);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', end);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', end);
+    };
+  }, [drag]);
+
+  async function confirm() {
+    if (!imgRef.current || !imgW || !imgH) return;
+    setErr('');
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = OUT; canvas.height = OUT;
+      const ctx = canvas.getContext('2d');
+
+      // Source rect (in original image pixels) that ends up in the frame.
+      // Image center on screen = (FRAME/2 + pos.x, FRAME/2 + pos.y)
+      // Image top-left on screen = (FRAME/2 + pos.x - renderedW/2, ...)
+      // Source x at frame's screen-x=0 = (renderedW/2 - FRAME/2 - pos.x) / effectiveScale
+      const sx = (renderedW / 2 - FRAME / 2 - pos.x) / effectiveScale;
+      const sy = (renderedH / 2 - FRAME / 2 - pos.y) / effectiveScale;
+      const sw = FRAME / effectiveScale;
+      const sh = FRAME / effectiveScale;
+
+      ctx.drawImage(imgRef.current, sx, sy, sw, sh, 0, 0, OUT, OUT);
+
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+      if (!blob) throw new Error('Could not encode image.');
+      const baseName = (file.name || 'avatar').replace(/\.[^.]+$/, '') || 'avatar';
+      const cropped = new File([blob], baseName + '.jpg', { type: 'image/jpeg' });
+      await onConfirm(cropped);
+    } catch (e) {
+      setErr(e.message || 'Crop failed.');
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(14,28,19,0.88)', backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 20,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}
+    >
+      <div style={{ color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 4 }}>
+        Crop your photo
+      </div>
+      <div style={{ color: 'rgba(234,226,206,0.55)', fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 18 }}>
+        Drag to reposition · slider to zoom
+      </div>
+
+      <div
+        style={{
+          width: FRAME, height: FRAME, position: 'relative',
+          overflow: 'hidden', borderRadius: 999,
+          background: '#000',
+          boxShadow: '0 0 0 4px var(--cream), 0 24px 60px rgba(0,0,0,0.5)',
+          touchAction: 'none', cursor: drag ? 'grabbing' : 'grab',
+          userSelect: 'none',
+        }}
+        onMouseDown={startDrag}
+        onTouchStart={startDrag}
+      >
+        {src && (
+          <img
+            ref={imgRef}
+            src={src}
+            onLoad={onImgLoad}
+            draggable={false}
+            alt=""
+            style={{
+              position: 'absolute',
+              left: '50%', top: '50%',
+              width: renderedW || 'auto',
+              height: renderedH || 'auto',
+              maxWidth: 'none', maxHeight: 'none',
+              transform: `translate(${-renderedW / 2 + pos.x}px, ${-renderedH / 2 + pos.y}px)`,
+              userSelect: 'none', pointerEvents: 'none',
+            }}
+          />
+        )}
+      </div>
+
+      <div style={{ width: FRAME, marginTop: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ color: 'var(--cream)', fontSize: 14, opacity: 0.6, fontWeight: 800 }}>−</span>
+        <input
+          type="range" min="1" max="4" step="0.02"
+          value={zoom}
+          onChange={(e) => setZoom(Number(e.target.value))}
+          style={{ flex: 1, accentColor: 'var(--cream)' }}
+        />
+        <span style={{ color: 'var(--cream)', fontSize: 14, opacity: 0.6, fontWeight: 800 }}>+</span>
+      </div>
+
+      {err && (
+        <div style={{ color: '#E7B8A7', fontSize: 12, marginTop: 10 }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 12, marginTop: 22 }}>
+        <Button variant="outlineCream" onClick={onCancel} disabled={busy}>Cancel</Button>
+        <Button variant="primary" onClick={confirm} disabled={busy || !src}>
+          {busy ? 'Uploading…' : 'Save photo'}
+        </Button>
+      </div>
+    </div>
   );
 }
 
