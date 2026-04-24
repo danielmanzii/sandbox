@@ -2,10 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta http-equiv="refresh" content="0; url=v1/"/>
 <title>Sandbox Pitch & Putt</title>
 </head>
 <body>
-<script>window.location.replace("v1/");</script>
+<script>
+  // Forward to /v1/ while preserving any query string and hash.
+  // Critical for Supabase auth callbacks (password reset / email confirm)
+  // which arrive as either ?access_token=... or #access_token=... and
+  // must reach the v1 app intact for the auth handler to read them.
+  window.location.replace("v1/" + window.location.search + window.location.hash);
+</script>
+<noscript>
+  <meta http-equiv="refresh" content="0; url=v1/"/>
+  If your browser doesn't redirect, <a href="v1/">click here</a>.
+</noscript>
 </body>
 </html>
