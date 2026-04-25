@@ -1,3 +1,5 @@
+> Working principles for all Claude sessions in this repo: **[CLAUDE_PRINCIPLES.md](CLAUDE_PRINCIPLES.md)** — read before coding.
+
 # For AI coding agents (Claude Code, Cursor, etc.)
 
 **Read [docs/BUSINESS_CONTEXT.md](docs/BUSINESS_CONTEXT.md) before writing any code.** It's the source-of-truth document for what Sandbox Pitch & Putt is, how it monetizes, the key business rules the software must enforce, and the target personas. Every feature, copy decision, and data-model choice should be consistent with that doc.
