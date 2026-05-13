@@ -1,5 +1,34 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite */
 // Events list + detail + register
+
+// ─── Calendar download ────────────────────────────────────────────────
+function downloadCalendar(event) {
+  const start = new Date(event.startsAt);
+  const end   = new Date(start.getTime() + 60 * 60 * 1000); // +1 hour
+  const fmt   = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Sandbox Pitch & Putt//EN',
+    'BEGIN:VEVENT',
+    `UID:${event.id}@sbx.golf`,
+    `DTSTAMP:${fmt(new Date())}`,
+    `DTSTART:${fmt(start)}`,
+    `DTEND:${fmt(end)}`,
+    `SUMMARY:Sandbox P&P @ ${event.courseShort}`,
+    `DESCRIPTION:${(event.description || '9 holes. 2-man scramble. Sandbox Pitch & Putt.').replace(/\n/g, '\\n')}`,
+    `LOCATION:${event.courseName}, Miami, FL`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `sandbox-${event.courseShort.toLowerCase().replace(/\s+/g, '-')}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function EventsScreen({ go, tier, profile }) {
   const [filter, setFilter] = React.useState('all');
@@ -169,6 +198,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
   const [done, setDone] = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
   const [actionErr, setActionErr] = React.useState('');
+  const [inviteOpen, setInviteOpen] = React.useState(false);
 
   async function onCancel() {
     if (!confirm('Cancel your registration for this event?')) return;
@@ -340,13 +370,30 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         {isRegistered === null ? (
           <Button variant="forest" size="lg" full disabled>Loading…</Button>
         ) : isRegistered ? (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="forest" size="lg" full disabled style={{ opacity: 0.85 }}>
-              ✓ You're in
-            </Button>
-            <Button variant="outline" size="lg" onClick={onCancel} disabled={cancelling}>
-              {cancelling ? '…' : 'Cancel'}
-            </Button>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: 'var(--forest)', color: 'var(--cream)',
+                padding: '12px 20px', borderRadius: 999,
+                fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.08em', textTransform: 'uppercase', flex: 1,
+                justifyContent: 'center',
+              }}>
+                ✓ Coming Up
+              </div>
+              <Button variant="outline" size="lg" onClick={onCancel} disabled={cancelling}>
+                {cancelling ? '…' : 'Cancel'}
+              </Button>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="outline" full onClick={() => downloadCalendar(event)}>
+                Add to calendar
+              </Button>
+              <Button variant="outline" full onClick={() => setInviteOpen(true)}>
+                Invite a friend
+              </Button>
+            </div>
           </div>
         ) : (
           <Button variant="forest" size="lg" full onClick={() => setRegistering(true)}>
@@ -371,6 +418,15 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
           done={done}
           setDone={setDone}
           onClose={() => { setRegistering(false); setStep(0); setDone(false); }}
+        />
+      )}
+
+      {/* Invite-a-friend bottom-sheet */}
+      {inviteOpen && event && (
+        <InviteToEventSheet
+          event={event}
+          profile={profile}
+          onClose={() => setInviteOpen(false)}
         />
       )}
     </div>
@@ -421,6 +477,19 @@ function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPa
         partnerHandle: guest ? null : partner,
         isGuest:       guest,
       });
+      // If a named partner was picked, send them a partner invite +
+      // auto-register them. Errors here are swallowed — registration
+      // already succeeded and partner can be invited manually later.
+      if (!guest && partner) {
+        try {
+          await sendEventInvite({
+            eventId:       event.id,
+            invitedBy:     profile.id,
+            inviteeHandle: partner,
+            inviteType:    'partner',
+          });
+        } catch (_) {}
+      }
       setDone(true);
     } catch (e) {
       setSubmitErr(e.message || 'Could not register.');
@@ -584,8 +653,96 @@ function DoneState({ event, onClose }) {
         <DetailRow label="Where" value={event.courseName}/>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-        <Button variant="outline" full onClick={onClose}>Add to calendar</Button>
+        <Button variant="outline" full onClick={() => downloadCalendar(event)}>Add to calendar</Button>
         <Button variant="forest" full onClick={onClose}>Done</Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Invite-a-friend bottom-sheet ─────────────────────────────────────
+function InviteToEventSheet({ event, profile, onClose }) {
+  const [handle, setHandle]   = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [err, setErr]         = React.useState('');
+  const [done, setDone]       = React.useState(false);
+
+  async function sendInvite() {
+    if (!handle.trim()) return;
+    setSending(true); setErr('');
+    try {
+      await sendEventInvite({
+        eventId:       event.id,
+        invitedBy:     profile.id,
+        inviteeHandle: handle,
+        inviteType:    'general',
+      });
+      setDone(true);
+    } catch (e) {
+      setErr(e.message || 'Could not send invite.');
+    }
+    setSending(false);
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 100,
+      background: 'rgba(14,28,19,0.5)',
+      display: 'flex', alignItems: 'flex-end',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%',
+        background: 'var(--cream)',
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        padding: '18px 20px 30px',
+        animation: 'sheet-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+      }}>
+        <style>{`@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        <div style={{ width: 36, height: 4, borderRadius: 3, background: 'rgba(14,28,19,0.2)', margin: '0 auto 18px' }}/>
+
+        {done ? (
+          <div style={{ textAlign: 'center', paddingBottom: 10 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--forest)', marginBottom: 8 }}>Invite sent.</div>
+            <p className="caption-serif" style={{ fontSize: 15, opacity: 0.7, marginBottom: 22, color: 'var(--ink)' }}>
+              They'll get a notification to join you at {event.courseShort}.
+            </p>
+            <Button variant="forest" full onClick={onClose}>Done</Button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Invite to event</div>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 30, margin: '10px 0 6px', lineHeight: 0.95, color: 'var(--forest)', letterSpacing: '-0.02em' }}>
+              Bring someone to<br/>{event.courseShort}.
+            </h2>
+            <p className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 0, marginBottom: 18, color: 'var(--ink)' }}>
+              Enter their @handle and they'll get a notification to join.
+            </p>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+                fontSize: 15, color: 'var(--forest)', opacity: 0.5,
+                fontFamily: 'var(--font-mono)', pointerEvents: 'none',
+              }}>@</span>
+              <input
+                value={handle}
+                onChange={e => setHandle(e.target.value.replace(/^@/, ''))}
+                placeholder="username"
+                style={{
+                  width: '100%', padding: '14px 14px 14px 28px',
+                  borderRadius: 14, background: 'var(--paper)',
+                  border: '1px solid rgba(14,28,19,0.12)',
+                  fontSize: 16, fontFamily: 'var(--font-mono)', color: 'var(--forest)',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            {err && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--loss)' }}>{err}</div>}
+            <Button variant="forest" full size="lg" onClick={sendInvite} disabled={sending || !handle.trim()} style={{ marginTop: 18 }}>
+              {sending ? 'Sending…' : 'Send invite'}
+              {!sending && <Icon.ArrowRight size={14}/>}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

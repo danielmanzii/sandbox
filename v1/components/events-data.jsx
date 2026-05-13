@@ -305,9 +305,140 @@ async function cancelRegistration({ eventId, userId }) {
   if (error) throw error;
 }
 
+// ─── Hook: pending event invites where I'm the invitee ───────────────
+function useMyPendingEventInvites(userId) {
+  const [invites, setInvites] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!userId) { setInvites([]); setLoading(false); return; }
+    const { data: rows } = await sbx
+      .from('event_invites')
+      .select('*')
+      .eq('invitee_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (!rows || rows.length === 0) { setInvites([]); setLoading(false); return; }
+
+    const eventIds  = [...new Set(rows.map(r => r.event_id))];
+    const senderIds = [...new Set(rows.map(r => r.invited_by))];
+
+    const [{ data: events }, { data: senders }] = await Promise.all([
+      sbx.from('events').select('id, course_short, course_name, starts_at').in('id', eventIds),
+      sbx.from('profiles').select('id, handle, first_name').in('id', senderIds),
+    ]);
+
+    const evById = Object.fromEntries((events || []).map(e => [e.id, e]));
+    const sById  = Object.fromEntries((senders || []).map(s => [s.id, s]));
+
+    const enriched = rows.map(r => {
+      const ev = evById[r.event_id] || {};
+      const s  = sById[r.invited_by] || {};
+      const d  = ev.starts_at ? new Date(ev.starts_at) : null;
+      return {
+        id:                   r.id,
+        event_id:             r.event_id,
+        invite_type:          r.invite_type,
+        status:               r.status,
+        created_at:           r.created_at,
+        invited_by:           r.invited_by,
+        invited_by_handle:    s.handle ? `@${String(s.handle).replace(/^@/, '')}` : null,
+        invited_by_first_name: s.first_name || null,
+        event_course_short:   ev.course_short || 'Event',
+        event_course_name:    ev.course_name  || '',
+        event_date: d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' }) : '',
+        event_time: d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) : '',
+      };
+    });
+
+    setInvites(enriched);
+    setLoading(false);
+  }, [userId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const channelName = React.useRef(`my-event-invites-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!userId) return;
+    const ch = sbx
+      .channel(channelName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'event_invites', filter: `invitee_id=eq.${userId}` },
+        () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [userId, channelName, load]);
+
+  return [invites, loading, load];
+}
+
+// ─── Event invite mutations ───────────────────────────────────────────
+// Send a general or partner event invite. For partner invites, also
+// auto-registers the invitee so their spot is held immediately.
+async function sendEventInvite({ eventId, invitedBy, inviteeHandle, inviteType = 'general' }) {
+  const cleaned = String(inviteeHandle).replace(/^@/, '').trim().toLowerCase();
+  if (!cleaned) throw new Error('Enter a username.');
+
+  const { data } = await sbx
+    .from('profiles')
+    .select('id, handle')
+    .or(`handle.ilike.${cleaned},handle.ilike.@${cleaned}`)
+    .limit(1);
+  const target = data && data[0];
+  if (!target) throw new Error(`No user found with handle @${cleaned}.`);
+  if (target.id === invitedBy) throw new Error("You can't invite yourself.");
+
+  // Partner invite: auto-register the invitee so their spot is held.
+  if (inviteType === 'partner') {
+    const { error: regErr } = await sbx.from('event_registrations').insert({
+      event_id:   eventId,
+      user_id:    target.id,
+      partner_id: invitedBy,
+    });
+    if (regErr && regErr.code !== '23505') {
+      if (regErr.message && regErr.message.toLowerCase().includes('full')) {
+        throw new Error('Event is full — cannot auto-register your partner.');
+      }
+      throw regErr;
+    }
+  }
+
+  const { error } = await sbx.from('event_invites').insert({
+    event_id:    eventId,
+    invited_by:  invitedBy,
+    invitee_id:  target.id,
+    invite_type: inviteType,
+  });
+  if (error && error.code !== '23505') throw error;
+}
+
+// Accept a pending event invite (marks accepted; partner is already registered).
+async function acceptEventInvite({ invite }) {
+  await sbx.from('event_invites').update({
+    status: 'accepted', responded_at: new Date().toISOString(),
+  }).eq('id', invite.id);
+}
+
+// Decline a pending event invite. For partner invites, also removes
+// the auto-registration so the spot opens back up.
+async function declineEventInvite({ invite, userId }) {
+  await sbx.from('event_invites').update({
+    status: 'declined', responded_at: new Date().toISOString(),
+  }).eq('id', invite.id);
+  if (invite.invite_type === 'partner' && userId) {
+    await sbx.from('event_registrations')
+      .delete()
+      .eq('event_id', invite.event_id)
+      .eq('user_id', userId);
+  }
+}
+
 Object.assign(window, {
   useEvents, useUpcomingEvents, useLiveEvent, useNextMajor,
   useUserRegistrations, useNextEventForUser,
   useEvent, useIsRegistered,
   registerForEvent, cancelRegistration,
+  useMyPendingEventInvites,
+  sendEventInvite, acceptEventInvite, declineEventInvite,
 });

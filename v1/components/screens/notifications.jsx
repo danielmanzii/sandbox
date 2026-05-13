@@ -1,15 +1,17 @@
-/* global React, Icon, Button, useMyPendingInvites, useNewFollowers, useIsFollowing, followUser, formatHandle, acceptInvite, declineInvite */
+/* global React, Icon, Button, useMyPendingInvites, useMyPendingEventInvites, useNewFollowers, useIsFollowing, followUser, formatHandle, acceptInvite, declineInvite, acceptEventInvite, declineEventInvite */
 // Notifications screen — opened from the bell on Home.
 // Surfaces:
+//   - Pending event partner/general invites (Accept / Decline / View)
 //   - Pending match invites (Accept / Decline)
 //   - New followers (Follow back)
 
 function NotificationsScreen({ profile, go }) {
-  const [invites, invitesLoading]    = useMyPendingInvites(profile && profile.id);
-  const [followers, followersLoading] = useNewFollowers(profile && profile.id);
-  const loading = invitesLoading || followersLoading;
+  const [invites, invitesLoading]         = useMyPendingInvites(profile && profile.id);
+  const [eventInvites, eventInvLoading]   = useMyPendingEventInvites(profile && profile.id);
+  const [followers, followersLoading]     = useNewFollowers(profile && profile.id);
+  const loading = invitesLoading || eventInvLoading || followersLoading;
 
-  // Merge invites + follower notifications, sorted by time desc.
+  // Merge all notification types, sorted by time desc.
   const items = React.useMemo(() => {
     const a = (invites || []).map(inv => ({
       kind: 'invite', id: `inv-${inv.id}`, ts: inv.created_at, payload: inv,
@@ -17,8 +19,11 @@ function NotificationsScreen({ profile, go }) {
     const b = (followers || []).map(f => ({
       kind: 'follow', id: `fol-${f.follower_id}-${f.created_at}`, ts: f.created_at, payload: f,
     }));
-    return [...a, ...b].sort((x, y) => new Date(y.ts) - new Date(x.ts));
-  }, [invites, followers]);
+    const c = (eventInvites || []).map(ei => ({
+      kind: 'event-invite', id: `ei-${ei.id}`, ts: ei.created_at, payload: ei,
+    }));
+    return [...a, ...b, ...c].sort((x, y) => new Date(y.ts) - new Date(x.ts));
+  }, [invites, followers, eventInvites]);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120, position: 'relative' }}>
@@ -76,9 +81,11 @@ function NotificationsScreen({ profile, go }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {items.map(it => (
-              it.kind === 'invite'
-                ? <NotificationCard key={it.id} invite={it.payload} profile={profile} go={go}/>
-                : <FollowerCard    key={it.id} row={it.payload} viewerId={profile && profile.id} go={go}/>
+              it.kind === 'event-invite'
+                ? <EventInviteCard key={it.id} invite={it.payload} profile={profile} go={go}/>
+                : it.kind === 'invite'
+                  ? <NotificationCard key={it.id} invite={it.payload} profile={profile} go={go}/>
+                  : <FollowerCard key={it.id} row={it.payload} viewerId={profile && profile.id} go={go}/>
             ))}
           </div>
         )}
@@ -200,6 +207,78 @@ function FollowerCard({ row, viewerId, go }) {
           You follow each other
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Event invite notification card ──────────────────────────────────
+function EventInviteCard({ invite, profile, go }) {
+  const [busy, setBusy] = React.useState(null); // 'accept' | 'decline' | null
+  const [err, setErr]   = React.useState('');
+  const isPartner = invite.invite_type === 'partner';
+  const senderLabel = invite.invited_by_handle || invite.invited_by_first_name || 'Someone';
+  const ago = timeAgo(invite.created_at);
+
+  async function onAccept() {
+    setBusy('accept'); setErr('');
+    try { await acceptEventInvite({ invite }); }
+    catch (e) { setErr(e.message || 'Could not accept.'); }
+    setBusy(null);
+  }
+
+  async function onDecline() {
+    setBusy('decline'); setErr('');
+    try { await declineEventInvite({ invite, userId: profile && profile.id }); }
+    catch (e) { setErr(e.message || 'Could not decline.'); }
+    setBusy(null);
+  }
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          {isPartner ? 'Partner invite' : 'Event invite'}
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink)', opacity: 0.45 }}>{ago}</div>
+      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', lineHeight: 1.2, marginTop: 8, letterSpacing: '-0.01em' }}>
+        {isPartner
+          ? `${senderLabel} tagged you as their scramble partner for ${invite.event_course_short}.`
+          : `${senderLabel} invited you to ${invite.event_course_short}.`
+        }
+      </div>
+      {invite.event_date ? (
+        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4, color: 'var(--ink)' }}>
+          {invite.event_date}{invite.event_time ? ` · ${invite.event_time}` : ''}
+        </div>
+      ) : null}
+      {isPartner && (
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--forest)', fontWeight: 600 }}>
+          You've been registered — decline to opt out.
+        </div>
+      )}
+      {err && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--loss)' }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        {isPartner ? (
+          <>
+            <Button variant="forest" full onClick={onAccept} disabled={!!busy}>
+              {busy === 'accept' ? '…' : '✓ Looks good'}
+            </Button>
+            <Button variant="outline" onClick={onDecline} disabled={!!busy}>
+              {busy === 'decline' ? '…' : 'Decline'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="forest" full onClick={() => go({ screen: 'eventDetail', eventId: invite.event_id })} disabled={!!busy}>
+              View event
+            </Button>
+            <Button variant="outline" onClick={onDecline} disabled={!!busy}>
+              {busy === 'decline' ? '…' : 'Dismiss'}
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useFriendFeed, useNewFollowers, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
 // Home screen — next event, live leaderboard, activity
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
@@ -16,9 +16,10 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
   const [pendingInvites]       = useMyPendingInvites(profile && profile.id);
+  const [pendingEventInvites]  = useMyPendingEventInvites(profile && profile.id);
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
   const [newFollowers]         = useNewFollowers(profile && profile.id);
-  const notificationCount      = (pendingInvites || []).length + (newFollowers || []).length;
+  const notificationCount      = (pendingInvites || []).length + (newFollowers || []).length + (pendingEventInvites || []).length;
 
   // Friends-here pills on the Up Next teaser cards.
   const upcomingIds = React.useMemo(
