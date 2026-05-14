@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent, updateEvent, useUserSearch */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, useEventRegistrations, registerForEvent, cancelRegistration, cancelEvent, closeEvent, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent, updateEvent, useUserSearch */
 // Events list + detail + register
 
 // ─── Calendar download ────────────────────────────────────────────────
@@ -219,22 +219,47 @@ function FullEventCard({ event, go, tier, friendsHere }) {
 }
 
 function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
-  // Real event + registration data
   const [event, eventLoading, reloadEvent] = useEvent(eventId);
   const isRegistered = useIsRegistered(eventId, profile && profile.id);
+  const [liveRegs, liveRegsLoading] = useEventRegistrations(eventId);
 
   const isMember = tier === 'league' || tier === 'plus';
   const isAdmin  = profile && profile.is_admin;
+
   const [registering, setRegistering] = React.useState(false);
-  const [step, setStep] = React.useState(0);
+  const [step, setStep]       = React.useState(0);
   const [partner, setPartner] = React.useState('');
-  const [guest, setGuest] = React.useState(false);
-  const [random, setRandom] = React.useState(false);
-  const [done, setDone] = React.useState(false);
+  const [guest, setGuest]     = React.useState(false);
+  const [random, setRandom]   = React.useState(false);
+  const [done, setDone]       = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
-  const [actionErr, setActionErr] = React.useState('');
+  const [actionErr, setActionErr]   = React.useState('');
   const [inviteOpen, setInviteOpen] = React.useState(false);
-  const [editOpen, setEditOpen]   = React.useState(false);
+  const [editOpen, setEditOpen]     = React.useState(false);
+
+  // 2-hour auto-close for live events
+  const isLive = event && event.status === 'live';
+  const startsAtMs = event ? new Date(event.startsAt).getTime() : 0;
+  const twoHoursMs = 2 * 60 * 60 * 1000;
+  const [nowMs, setNowMs] = React.useState(Date.now());
+
+  React.useEffect(() => {
+    if (!isLive) return;
+    const t = setInterval(() => setNowMs(Date.now()), 30000); // refresh every 30s
+    return () => clearInterval(t);
+  }, [isLive]);
+
+  const elapsedMs   = nowMs - startsAtMs;
+  const isExpired   = isLive && elapsedMs >= twoHoursMs;
+  const elapsedMins = Math.max(0, Math.floor(elapsedMs / 60000));
+  const elapsedLabel = elapsedMins >= 60
+    ? `${Math.floor(elapsedMins / 60)}h ${elapsedMins % 60}m`
+    : `${elapsedMins}m`;
+
+  // Auto-close once the 2h window passes
+  React.useEffect(() => {
+    if (isExpired && event) { closeEvent(event.id).catch(() => {}); }
+  }, [isExpired, event]);
 
   async function onCancel() {
     if (!confirm('Cancel your registration for this event?')) return;
@@ -247,7 +272,6 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
     setCancelling(false);
   }
 
-  // Loading state
   if (eventLoading) {
     return (
       <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', fontSize: 14, opacity: 0.6 }}>
@@ -256,7 +280,6 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
     );
   }
 
-  // Event not found (link to deleted/invalid event)
   if (!event) {
     return (
       <div style={{ background: 'var(--canvas)', minHeight: '100%', padding: '80px 24px', textAlign: 'center', color: 'var(--forest)' }}>
@@ -281,8 +304,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
           width: 40, height: 40, borderRadius: 999,
           background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(10px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--cream)',
-          border: '1px solid rgba(234,226,206,0.2)',
+          color: 'var(--cream)', border: '1px solid rgba(234,226,206,0.2)',
         }}>
           <Icon.ArrowLeft size={16}/>
         </button>
@@ -292,8 +314,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
             width: 40, height: 40, borderRadius: 999,
             background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(10px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--cream)',
-            border: '1px solid rgba(234,226,206,0.2)',
+            color: 'var(--cream)', border: '1px solid rgba(234,226,206,0.2)',
             fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
           }}>Edit</button>
         )}
@@ -302,14 +323,21 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
           width: 40, height: 40, borderRadius: 999,
           background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(10px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--cream)',
-          border: '1px solid rgba(234,226,206,0.2)',
+          color: 'var(--cream)', border: '1px solid rgba(234,226,206,0.2)',
         }}>
           <Icon.Share size={16}/>
         </button>
 
         <div style={{ position: 'absolute', bottom: 22, left: 20, right: 20 }}>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {isLive && (
+              <div style={{
+                padding: '5px 12px', borderRadius: 999,
+                background: 'var(--forest)', color: 'var(--cream)',
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}><LiveDot/> LIVE NOW</div>
+            )}
             {event.isMajor && (
               <div style={{
                 padding: '5px 10px', borderRadius: 999,
@@ -334,6 +362,84 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         </div>
       </div>
 
+      {/* ── LIVE scoreboard section ── */}
+      {isLive && (
+        <div style={{ margin: '16px 16px 0' }}>
+          <div style={{
+            background: 'var(--forest)', color: 'var(--cream)',
+            borderRadius: 20, padding: '18px 20px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <LiveDot/>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  Live now
+                </span>
+              </div>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.06em' }}>
+                {elapsedLabel} in · {Math.max(0, Math.round((twoHoursMs - elapsedMs) / 60000))}m left
+              </span>
+            </div>
+
+            {/* Field progress */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ height: 4, borderRadius: 999, background: 'rgba(234,226,206,0.15)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, (event.filled / event.field) * 100)}%`, height: '100%', background: 'var(--cream)', borderRadius: 999 }}/>
+              </div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, marginTop: 6, letterSpacing: '0.06em' }}>
+                {event.filled} / {event.field} ON THE COURSE
+              </div>
+            </div>
+
+            {/* Player pairs */}
+            {!liveRegsLoading && liveRegs.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>
+                  Field
+                </div>
+                {liveRegs.map((r, i) => {
+                  const nameOf = (p) => p ? (p.handle ? `@${String(p.handle).replace(/^@/, '')}` : p.first_name || '?') : '?';
+                  const isYou  = r.userId === (profile && profile.id);
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 10px', borderRadius: 12,
+                      background: isYou ? 'rgba(234,226,206,0.14)' : 'rgba(234,226,206,0.06)',
+                    }}>
+                      <AvatarBy url={r.user && r.user.avatar_url} name={r.user ? [r.user.first_name, r.user.last_name].filter(Boolean).join(' ') : '?'} size={28}/>
+                      <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>
+                        {nameOf(r.user)}
+                        {r.partner && <span style={{ opacity: 0.7, fontWeight: 400 }}> + {nameOf(r.partner)}</span>}
+                        {r.isGuest && <span style={{ opacity: 0.55, fontWeight: 400 }}> + guest</span>}
+                      </span>
+                      {isYou && (
+                        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7 }}>YOU</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {isAdmin && (
+              <button onClick={async () => {
+                if (!confirm('End this event now? It will be marked as closed.')) return;
+                try { await closeEvent(event.id); reloadEvent && reloadEvent(); go({ screen: 'events' }); } catch (_) {}
+              }} style={{
+                marginTop: 16, width: '100%',
+                padding: '10px', borderRadius: 12,
+                background: 'rgba(234,226,206,0.12)',
+                color: 'var(--cream)', border: '1px solid rgba(234,226,206,0.2)',
+                fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+              }}>
+                End event
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Details block */}
       <div style={{ padding: '16px' }}>
         <div className="card" style={{ padding: '4px 18px' }}>
@@ -350,71 +456,93 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
           <DetailRow label="Duration" value="~1 hour"/>
         </div>
 
-        {/* Description */}
-        <div style={{ padding: '16px 4px 8px' }}>
-          <p style={{ fontFamily: 'var(--font-serif)', fontSize: 17, lineHeight: 1.4, color: 'var(--ink)', margin: 0, fontStyle: 'italic' }}>
-            "{event.description}"
-          </p>
-        </div>
-
-        {/* Pricing */}
-        <div className="card" style={{ padding: 16, marginTop: 10 }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Entry</div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-            <PriceTile
-              primary={isMember}
-              label={isMember ? 'You' : 'Member'}
-              price={isMember ? 'Included' : `$${event.priceMember}`}
-              sub={isMember ? `via your ${tier === 'plus' ? 'Plus' : 'League'} plan` : 'League members'}
-            />
-            <PriceTile
-              primary={!isMember}
-              label="Walk-up"
-              price={`$${event.priceWalkup}`}
-              sub="Single entry"
-            />
+        {event.description && (
+          <div style={{ padding: '16px 4px 8px' }}>
+            <p style={{ fontFamily: 'var(--font-serif)', fontSize: 17, lineHeight: 1.4, color: 'var(--ink)', margin: 0, fontStyle: 'italic' }}>
+              "{event.description}"
+            </p>
           </div>
-          {!isMember && (
-            <button onClick={() => go({ screen: 'membership' })} style={{
-              marginTop: 14, width: '100%',
-              padding: '12px 14px', borderRadius: 12,
-              background: 'var(--forest)',
-              color: 'var(--cream)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              fontSize: 12, fontWeight: 700,
-              boxShadow: 'var(--shadow-sm)',
-            }}>
-              Go member — save ${event.priceWalkup - event.priceMember}
-              <Icon.ArrowRight size={12}/>
-            </button>
-          )}
-        </div>
+        )}
 
-        {/* What's included */}
-        <div style={{ padding: '20px 4px 0' }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Included</div>
-          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {['Custom turf mats', 'Live match tracking', 'Highlight reel', 'Sandbox Rating update', 'Prize pool', 'Coffee/agua'].map(x => (
-              <div key={x} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink)' }}>
-                <span style={{ width: 16, height: 16, borderRadius: 999, background: 'var(--forest)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon.Check size={10} color="var(--cream)"/>
-                </span>
-                {x}
+        {!isLive && (
+          <>
+            <div className="card" style={{ padding: 16, marginTop: 10 }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Entry</div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <PriceTile
+                  primary={isMember}
+                  label={isMember ? 'You' : 'Member'}
+                  price={isMember ? 'Included' : `$${event.priceMember}`}
+                  sub={isMember ? `via your ${tier === 'plus' ? 'Plus' : 'League'} plan` : 'League members'}
+                />
+                <PriceTile
+                  primary={!isMember}
+                  label="Walk-up"
+                  price={`$${event.priceWalkup}`}
+                  sub="Single entry"
+                />
               </div>
-            ))}
-          </div>
-        </div>
+              {!isMember && (
+                <button onClick={() => go({ screen: 'membership' })} style={{
+                  marginTop: 14, width: '100%',
+                  padding: '12px 14px', borderRadius: 12,
+                  background: 'var(--forest)', color: 'var(--cream)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  fontSize: 12, fontWeight: 700, boxShadow: 'var(--shadow-sm)',
+                }}>
+                  Go member — save ${event.priceWalkup - event.priceMember}
+                  <Icon.ArrowRight size={12}/>
+                </button>
+              )}
+            </div>
+
+            <div style={{ padding: '20px 4px 0' }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Included</div>
+              <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {['Custom turf mats', 'Live match tracking', 'Highlight reel', 'Sandbox Rating update', 'Prize pool', 'Coffee/agua'].map(x => (
+                  <div key={x} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink)' }}>
+                    <span style={{ width: 16, height: 16, borderRadius: 999, background: 'var(--forest)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon.Check size={10} color="var(--cream)"/>
+                    </span>
+                    {x}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* CTA — inline at the bottom of content (was absolutely positioned
-          and floating over content mid-scroll). */}
-      <div style={{ padding: '24px 16px 0' }}>
+      {/* CTA */}
+      <div style={{ padding: '8px 16px 0' }}>
         {actionErr && (
           <div style={{ background: 'rgba(155,58,46,0.12)', color: 'var(--loss)', fontSize: 12, padding: '8px 12px', borderRadius: 10, marginBottom: 8, textAlign: 'center' }}>
             {actionErr}
           </div>
         )}
-        {isRegistered === null ? (
+
+        {isLive ? (
+          /* Live CTA: registered = "You're on the course", else "Underway" */
+          isRegistered ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              background: 'var(--forest)', color: 'var(--cream)',
+              padding: '16px 20px', borderRadius: 18,
+              fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+            }}>
+              <LiveDot/> You're on the course
+            </div>
+          ) : (
+            <div style={{
+              background: 'var(--paper)', border: 'var(--hairline)',
+              padding: '16px 20px', borderRadius: 18, textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--forest)' }}>This event is underway</div>
+              <div style={{ fontSize: 12, opacity: 0.6, color: 'var(--forest)', marginTop: 4 }}>Registration closed at tee time.</div>
+            </div>
+          )
+        ) : isRegistered === null ? (
           <Button variant="forest" size="lg" full disabled>Loading…</Button>
         ) : isRegistered ? (
           <div>
@@ -450,7 +578,6 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         )}
       </div>
 
-      {/* Register bottom-sheet */}
       {registering && (
         <RegisterSheet
           event={event}
@@ -470,7 +597,6 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         />
       )}
 
-      {/* Invite-a-friend bottom-sheet */}
       {inviteOpen && event && (
         <InviteToEventSheet
           event={event}
@@ -479,12 +605,12 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         />
       )}
 
-      {/* Edit event sheet (admin only) */}
       {editOpen && event && (
         <CreateEventSheet
           editEvent={event}
           onClose={() => setEditOpen(false)}
           onCreated={() => { setEditOpen(false); reloadEvent && reloadEvent(); }}
+          onCancelled={() => { setEditOpen(false); go({ screen: 'events' }); }}
         />
       )}
     </div>
@@ -890,7 +1016,7 @@ function InviteToEventSheet({ event, profile, onClose }) {
 }
 
 // ─── Admin: create / edit event bottom-sheet ─────────────────────────
-function CreateEventSheet({ onClose, onCreated, editEvent }) {
+function CreateEventSheet({ onClose, onCreated, onCancelled, editEvent }) {
   const today = new Date().toISOString().slice(0, 10);
 
   const toLocalDate = (iso) => {
@@ -1067,6 +1193,28 @@ function CreateEventSheet({ onClose, onCreated, editEvent }) {
           {saving ? (editEvent ? 'Saving…' : 'Creating…') : (editEvent ? 'Save changes' : 'Create event')}
           {!saving && <Icon.ArrowRight size={14}/>}
         </Button>
+
+        {editEvent && (
+          <button onClick={async () => {
+            if (!confirm('Cancel this event? All registrants will lose their spot. This cannot be undone.')) return;
+            setSaving(true);
+            try {
+              await cancelEvent(editEvent.id);
+              onCancelled && onCancelled();
+            } catch (e) {
+              setErr(e.message || 'Could not cancel event.');
+              setSaving(false);
+            }
+          }} disabled={saving} style={{
+            marginTop: 12, width: '100%',
+            padding: '13px', borderRadius: 14,
+            background: 'rgba(155,58,46,0.08)',
+            color: 'var(--loss)', border: '1px solid rgba(155,58,46,0.2)',
+            fontSize: 13, fontWeight: 700, letterSpacing: '0.01em',
+          }}>
+            Cancel this event
+          </button>
+        )}
       </div>
     </div>
   );

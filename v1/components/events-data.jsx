@@ -91,11 +91,12 @@ function useEvents() {
 
 // ─── Upcoming events (future, not closed/cancelled) ──────────────────
 // Returns the next N events the user could potentially see.
+// Live events stay visible up to 2h after start regardless of time filter.
 function useUpcomingEvents(limit = 5) {
   const [events, loading, error, reload] = useEvents();
   const now = Date.now();
   const upcoming = events
-    .filter(e => new Date(e.startsAt).getTime() >= now - 60 * 60 * 1000) // 1h grace
+    .filter(e => e.status === 'live' || new Date(e.startsAt).getTime() >= now - 2 * 60 * 60 * 1000)
     .filter(e => e.status !== 'closed' && e.status !== 'cancelled')
     .slice(0, limit);
   return [upcoming, loading, error, reload];
@@ -435,6 +436,58 @@ async function declineEventInvite({ invite, userId }) {
   }
 }
 
+// ─── Hook: all registrations for one event (for live scoreboard) ─────
+// Returns [registrations, loading]. Each entry: { userId, partnerId, isGuest, user, partner }
+// where user/partner are profile objects { id, handle, first_name, last_name, avatar_url }.
+function useEventRegistrations(eventId) {
+  const [regs, setRegs]       = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!eventId) { setRegs([]); setLoading(false); return; }
+    const { data } = await sbx
+      .from('event_registrations')
+      .select('user_id, partner_id, is_guest')
+      .eq('event_id', eventId);
+    if (!data || data.length === 0) { setRegs([]); setLoading(false); return; }
+
+    const ids = [...new Set([
+      ...data.map(r => r.user_id),
+      ...data.map(r => r.partner_id).filter(Boolean),
+    ])];
+    const { data: profiles } = await sbx
+      .from('profiles')
+      .select('id, handle, first_name, last_name, avatar_url')
+      .in('id', ids);
+    const byId = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+
+    setRegs(data.map(r => ({
+      userId:    r.user_id,
+      partnerId: r.partner_id,
+      isGuest:   r.is_guest,
+      user:      byId[r.user_id]    || null,
+      partner:   r.partner_id ? (byId[r.partner_id] || null) : null,
+    })));
+    setLoading(false);
+  }, [eventId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const chName = React.useRef(`event-regs-live-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!eventId) return;
+    const ch = sbx
+      .channel(chName)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'event_registrations', filter: `event_id=eq.${eventId}` },
+        () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [eventId, chName, load]);
+
+  return [regs, loading];
+}
+
 // ─── Admin: update an existing event ─────────────────────────────────
 async function updateEvent(eventId, fields) {
   const isMajor = fields.type === 'major';
@@ -451,6 +504,18 @@ async function updateEvent(eventId, fields) {
     price_walkup:  Number(fields.priceWalkup) || 0,
     price_member:  Number(fields.priceMember) || 0,
   }).eq('id', eventId);
+  if (error) throw error;
+}
+
+// Cancel an event entirely (admin action shown in edit sheet).
+async function cancelEvent(eventId) {
+  const { error } = await sbx.from('events').update({ status: 'cancelled' }).eq('id', eventId);
+  if (error) throw error;
+}
+
+// Mark a live event as closed (called automatically after 2h or when all holes are done).
+async function closeEvent(eventId) {
+  const { error } = await sbx.from('events').update({ status: 'closed' }).eq('id', eventId);
   if (error) throw error;
 }
 
@@ -481,9 +546,9 @@ async function createEvent(fields) {
 Object.assign(window, {
   useEvents, useUpcomingEvents, useLiveEvent, useNextMajor,
   useUserRegistrations, useNextEventForUser,
-  useEvent, useIsRegistered,
+  useEvent, useIsRegistered, useEventRegistrations,
   registerForEvent, cancelRegistration,
   useMyPendingEventInvites,
   sendEventInvite, acceptEventInvite, declineEventInvite,
-  createEvent, updateEvent,
+  createEvent, updateEvent, cancelEvent, closeEvent,
 });
