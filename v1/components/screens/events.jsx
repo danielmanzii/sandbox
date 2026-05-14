@@ -229,6 +229,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
   const [step, setStep] = React.useState(0);
   const [partner, setPartner] = React.useState('');
   const [guest, setGuest] = React.useState(false);
+  const [random, setRandom] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
   const [actionErr, setActionErr] = React.useState('');
@@ -461,9 +462,11 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
           setPartner={setPartner}
           guest={guest}
           setGuest={setGuest}
+          random={random}
+          setRandom={setRandom}
           done={done}
           setDone={setDone}
-          onClose={() => { setRegistering(false); setStep(0); setDone(false); }}
+          onClose={() => { setRegistering(false); setStep(0); setDone(false); setRandom(false); }}
         />
       )}
 
@@ -518,7 +521,7 @@ function PriceTile({ label, price, sub, primary }) {
   );
 }
 
-function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPartner, guest, setGuest, done, setDone, onClose }) {
+function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPartner, guest, setGuest, random, setRandom, done, setDone, onClose }) {
   const [submitting, setSubmitting] = React.useState(false);
   const [submitErr, setSubmitErr]   = React.useState('');
 
@@ -527,10 +530,11 @@ function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPa
     setSubmitting(true); setSubmitErr('');
     try {
       await registerForEvent({
-        eventId:       event.id,
-        userId:        profile.id,
-        partnerHandle: guest ? null : partner,
-        isGuest:       guest,
+        eventId:        event.id,
+        userId:         profile.id,
+        partnerHandle:  (guest || random) ? null : partner,
+        isGuest:        guest,
+        wantsRandomPair: random,
       });
       // If a named partner was picked, send them a partner invite +
       // auto-register them. Errors here are swallowed — registration
@@ -572,8 +576,8 @@ function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPa
 
         {done ? <DoneState event={event} onClose={onClose}/> :
          step === 0 ? <Step0 event={event} isMember={isMember} onNext={() => setStep(1)}/> :
-         step === 1 ? <Step1 partner={partner} setPartner={setPartner} guest={guest} setGuest={setGuest} onNext={() => setStep(2)}/> :
-         <Step2 event={event} isMember={isMember} partner={partner} guest={guest} submitting={submitting} submitErr={submitErr} onConfirm={submitRegistration}/>
+         step === 1 ? <Step1 partner={partner} setPartner={setPartner} guest={guest} setGuest={setGuest} random={random} setRandom={setRandom} onNext={() => setStep(2)}/> :
+         <Step2 event={event} isMember={isMember} partner={partner} guest={guest} random={random} submitting={submitting} submitErr={submitErr} onConfirm={submitRegistration}/>
         }
       </div>
     </div>
@@ -603,23 +607,42 @@ function Step0({ event, isMember, onNext }) {
   );
 }
 
-function Step1({ partner, setPartner, guest, setGuest, onNext }) {
-  const [query, setQuery]       = React.useState('');
-  const [results, searching]    = useUserSearch(query, 8);
+function Step1({ partner, setPartner, guest, setGuest, random, setRandom, onNext }) {
+  const [query, setQuery]    = React.useState('');
+  const [results, searching] = useUserSearch(query, 8);
 
-  const selectedName = partner ? partner.replace(/^@/, '') : '';
+  function pickPartner(handle) { setPartner(handle); setGuest(false); setRandom(false); setQuery(''); }
+  function pickGuest()         { setGuest(true);  setRandom(false); setPartner(''); setQuery(''); }
+  function pickRandom()        { setRandom(true); setGuest(false);  setPartner(''); setQuery(''); }
+
+  const canAdvance = !!partner || guest || random;
+
+  const optionCard = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: 12, borderRadius: 14, marginTop: 8,
+    background: active ? 'var(--forest)' : 'var(--paper)',
+    color: active ? 'var(--cream)' : 'var(--forest)',
+    border: active ? 'none' : '1px solid rgba(14,28,19,0.12)',
+    width: '100%', textAlign: 'left',
+    boxShadow: active ? 'var(--shadow-sm)' : 'none',
+  });
+  const iconCircle = (active) => ({
+    width: 36, height: 36, borderRadius: 999, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: active ? 'rgba(234,226,206,0.18)' : 'rgba(14,28,19,0.06)',
+  });
 
   return (
     <div>
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Step 2 of 3</div>
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, margin: '10px 0 6px', lineHeight: 0.95, color: 'var(--forest)', letterSpacing: '-0.02em' }}>
-        Who's your ride-or-die?
+        Who's your partner?
       </h2>
       <p className="caption-serif" style={{ fontSize: 15, opacity: 0.7, marginTop: 0, color: 'var(--ink)' }}>
-        Search the roster or use a guest pass.
+        Search the roster, bring a guest, or let us pair you up.
       </p>
 
-      {/* Search input */}
+      {/* Search the roster */}
       <div style={{ position: 'relative', marginTop: 14 }}>
         <span style={{
           position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
@@ -627,12 +650,12 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
         }}>@</span>
         <input
           value={query}
-          onChange={e => { setQuery(e.target.value); setGuest(false); }}
-          placeholder="search by name or handle"
+          onChange={e => { setQuery(e.target.value); setGuest(false); setRandom(false); }}
+          placeholder="search the roster by name or handle"
           style={{
             width: '100%', padding: '11px 12px 11px 26px',
             borderRadius: 12, background: 'var(--paper)',
-            border: '1px solid rgba(14,28,19,0.12)',
+            border: partner ? '1.5px solid var(--forest)' : '1px solid rgba(14,28,19,0.12)',
             fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--forest)',
             boxSizing: 'border-box',
           }}
@@ -642,19 +665,19 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
         )}
       </div>
 
-      {/* Results */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 220, overflowY: 'auto' }}>
+      {/* Search results */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 180, overflowY: 'auto' }}>
         {results.length === 0 && query.trim().length > 0 && !searching && (
-          <div style={{ fontSize: 13, color: 'var(--forest)', opacity: 0.5, padding: '10px 4px', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--forest)', opacity: 0.5, padding: '8px 4px', textAlign: 'center' }}>
             No players found for "{query}"
           </div>
         )}
         {results.map(r => {
           const handle  = r.handle ? `@${String(r.handle).replace(/^@/, '')}` : '';
           const display = [r.first_name, r.last_name].filter(Boolean).join(' ') || handle;
-          const selected = partner === handle && !guest;
+          const selected = partner === handle;
           return (
-            <button key={r.id} onClick={() => { setPartner(handle); setGuest(false); setQuery(''); }} style={{
+            <button key={r.id} onClick={() => pickPartner(handle)} style={{
               display: 'flex', alignItems: 'center', gap: 12,
               padding: 10, borderRadius: 14,
               background: selected ? 'var(--forest)' : 'var(--paper)',
@@ -674,9 +697,9 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
       </div>
 
       {/* Selected partner chip */}
-      {partner && !guest && (
+      {partner && (
         <div style={{
-          marginTop: 10, padding: '8px 14px', borderRadius: 10,
+          marginTop: 8, padding: '8px 14px', borderRadius: 10,
           background: 'var(--forest)', color: 'var(--cream)',
           fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8,
         }}>
@@ -686,33 +709,42 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
         </div>
       )}
 
-      {/* Guest pass option */}
-      <button onClick={() => { setGuest(true); setPartner(''); setQuery(''); }} style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: 10, borderRadius: 14, marginTop: 8,
-        background: guest ? 'var(--clay)' : 'transparent',
-        color: guest ? 'var(--forest-deep)' : 'var(--forest)',
-        border: '1px dashed rgba(14,28,19,0.2)',
-        width: '100%', textAlign: 'left',
-      }}>
-        <div style={{ width: 36, height: 36, borderRadius: 999, border: '1.5px dashed currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Icon.Plus size={16}/>
+      {/* Guest pass */}
+      <button onClick={pickGuest} style={optionCard(guest)}>
+        <div style={iconCircle(guest)}>
+          <Icon.Plus size={16} color={guest ? 'var(--cream)' : 'var(--forest)'}/>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Use a guest pass</div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>2 left this month · they tee free</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>Bring a non-member · they tee free</div>
         </div>
+        {guest && <Icon.Check size={14} color="var(--cream)"/>}
       </button>
 
-      <Button variant="forest" full size="lg" onClick={onNext} disabled={!partner && !guest} style={{ marginTop: 18 }}>
+      {/* Pair me up */}
+      <button onClick={pickRandom} style={optionCard(random)}>
+        <div style={iconCircle(random)}>
+          <span style={{ fontSize: 16, lineHeight: 1, color: random ? 'var(--cream)' : 'var(--forest)' }}>⇄</span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Pair me with someone</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>We'll match you with another solo registrant</div>
+        </div>
+        {random && <Icon.Check size={14} color="var(--cream)"/>}
+      </button>
+
+      <Button variant="forest" full size="lg" onClick={onNext} disabled={!canAdvance} style={{ marginTop: 18 }}>
         Lock it in <Icon.ArrowRight size={14}/>
       </Button>
     </div>
   );
 }
 
-function Step2({ event, isMember, partner, guest, submitting, submitErr, onConfirm }) {
+function Step2({ event, isMember, partner, guest, random, submitting, submitErr, onConfirm }) {
   const price = isMember ? 0 : event.priceMember;
+  const partnerLabel = guest ? 'Guest pass · they tee free'
+    : random ? 'Pair me up · matched before tee time'
+    : partner;
   return (
     <div>
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Step 3 of 3</div>
@@ -723,7 +755,7 @@ function Step2({ event, isMember, partner, guest, submitting, submitErr, onConfi
       <div style={{ background: 'var(--paper)', borderRadius: 14, padding: 14, marginTop: 14, border: '1px solid rgba(14,28,19,0.08)' }}>
         <DetailRow label="Event" value={`${event.courseShort} · ${event.date}`}/>
         <div className="hairline"/>
-        <DetailRow label="Partner" value={guest ? 'Guest pass' : partner}/>
+        <DetailRow label="Partner" value={partnerLabel}/>
         <div className="hairline"/>
         <DetailRow label="Total" value={price === 0 ? 'Free · included' : `$${price}.00`}/>
       </div>
