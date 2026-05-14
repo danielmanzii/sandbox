@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -33,6 +33,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const isFollowing = useIsFollowing(viewerId, targetId);
   const [followBusy, setFollowBusy] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
+  const [followListOpen, setFollowListOpen] = React.useState(null); // null | 'followers' | 'following'
 
   async function toggleFollow() {
     if (!viewerId || !targetId || viewerId === targetId || followBusy) return;
@@ -135,13 +136,13 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
           )}
           {/* Follow stats — works for self + others */}
           <div style={{ display: 'flex', gap: 18, marginTop: 12, alignItems: 'baseline' }}>
-            <FollowStat label="Followers" value={counts.followers}/>
-            <FollowStat label="Following" value={counts.following}/>
+            <FollowStat label="Followers" value={counts.followers} onClick={() => setFollowListOpen('followers')}/>
+            <FollowStat label="Following" value={counts.following} onClick={() => setFollowListOpen('following')}/>
           </div>
           <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
             <Mini label="Home" value={isSelf ? user.homeCourse : 'Melreese'}/>
             <Mini label="Joined" value={isSelf ? user.joined : 'Jan 2026'}/>
-            <Mini label="Events" value={isSelf ? user.eventsPlayed : '14'}/>
+            <Mini label="Events attended" value={isSelf ? user.eventsPlayed : '—'}/>
           </div>
         </div>
       </div>
@@ -205,6 +206,16 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         <EditProfileSheet
           profile={signedInProfile}
           onClose={() => setEditing(false)}
+        />
+      )}
+
+      {followListOpen && (
+        <FollowListSheet
+          userId={targetId}
+          mode={followListOpen}
+          viewerId={viewerId}
+          go={go}
+          onClose={() => setFollowListOpen(null)}
         />
       )}
     </div>
@@ -309,7 +320,7 @@ function PublicStatsBlock({ user, viewerIsMember, go }) {
           }}>{user.sbx?.toFixed(3) ?? '—'}</div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Mini2 label="Record" value="9–5–1"/>
-            <Mini2 label="Events" value="14"/>
+            <Mini2 label="Events attended" value={user.eventsPlayed || 0}/>
           </div>
         </div>
         <div style={{ fontSize: 11, opacity: 0.65, marginTop: 6 }}>
@@ -660,14 +671,69 @@ function AvatarCropper({ file, busy, onCancel, onConfirm }) {
 }
 
 // ─── Follower / Following stat (compact display) ──────────────────────
-function FollowStat({ label, value }) {
+function FollowStat({ label, value, onClick }) {
   return (
-    <div>
+    <button onClick={onClick} style={{ padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>
         {value}
       </div>
       <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 4 }}>
         {label}
+      </div>
+    </button>
+  );
+}
+
+function FollowListSheet({ userId, mode, viewerId, go, onClose }) {
+  const [followerList, followerLoading] = useFollowers(mode === 'followers' ? userId : null);
+  const [followingList, followingLoading] = useFollowing(mode === 'following' ? userId : null);
+  const list = mode === 'followers' ? followerList : followingList;
+  const loading = mode === 'followers' ? followerLoading : followingLoading;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }}/>
+      <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', maxHeight: '75vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Handle */}
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 0' }}/>
+        <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(14,28,19,0.07)' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1 }}>
+            {mode === 'followers' ? 'Followers' : 'Following'}
+          </div>
+          <button onClick={onClose} style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(14,28,19,0.07)', border: 'none', fontSize: 12, fontWeight: 700, color: 'var(--forest)', cursor: 'pointer' }}>Done</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loading ? (
+            <div style={{ padding: 32, textAlign: 'center', opacity: 0.4, fontSize: 13 }}>Loading…</div>
+          ) : list.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginBottom: 6 }}>
+                {mode === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
+              </div>
+            </div>
+          ) : (
+            list.map((p, i) => {
+              const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.handle || '—';
+              return (
+                <button key={p.id} onClick={() => { onClose(); go({ screen: 'profile', viewingHandle: p.handle }); }} style={{
+                  width: '100%', textAlign: 'left', padding: '12px 20px',
+                  borderBottom: i < list.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <AvatarBy url={p.avatar_url} name={name} size={40}/>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)' }}>{name}</div>
+                    <div style={{ fontSize: 11, opacity: 0.55, fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                      {p.handle ? `@${p.handle.replace(/^@/, '')}` : ''}
+                      {p.sbx ? ` · SBX ${Number(p.sbx).toFixed(3)}` : ''}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );

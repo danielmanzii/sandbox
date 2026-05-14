@@ -43,7 +43,33 @@ const MOCK_LIVE = { currentHole: 0, yourMatch: null, matches: [] };
 
 const MOCK_YOUR_CARD = null;
 
-const MOCK_BADGES = [];
+const MOCK_BADGES = [
+  // ─── Match Play ───────────────────────────────────────────────────────
+  { id: 'b_first',    name: 'First Blood',      sub: 'Win your very first match',           rarity: 'common',    color: 'var(--forest)',    icon: 'flag',   locked: true },
+  { id: 'b_closer',   name: 'Closer',           sub: 'Win a match 5&4 or better',           rarity: 'uncommon',  color: 'var(--forest)',    icon: 'flag',   locked: true },
+  { id: 'b_comeback', name: 'The Comeback',     sub: 'Win after being 2 down with 3 to play', rarity: 'uncommon', color: 'var(--forest)',   icon: 'bolt',   locked: true },
+  { id: 'b_dormie',   name: 'Dormie Dealer',    sub: 'Clinch the match on hole 7 or earlier', rarity: 'legendary', color: 'var(--clay-deep)', icon: 'flag',  locked: true },
+  { id: 'b_perfect',  name: 'Perfect Game',     sub: 'Win all 9 holes in a match',          rarity: 'legendary', color: 'var(--clay-deep)', icon: 'trophy', locked: true },
+  { id: 'b_calm',     name: 'Dead Calm',        sub: 'Never trail at any point in a match', rarity: 'rare',      color: 'var(--clay)',      icon: 'bolt',   locked: true },
+  { id: 'b_hawk',     name: 'Hole Hawk',        sub: 'Win 7 or more holes in a match',      rarity: 'rare',      color: 'var(--clay)',      icon: 'flag',   locked: true },
+  // ─── Streaks ──────────────────────────────────────────────────────────
+  { id: 'b_streak3',  name: 'Unbeaten · 3',     sub: '3 matches without a loss',            rarity: 'uncommon',  color: 'var(--clay)',      icon: 'fire',   locked: true },
+  { id: 'b_streak5',  name: 'Unbeaten · 5',     sub: '5 matches without a loss',            rarity: 'rare',      color: 'var(--clay)',      icon: 'fire',   locked: true },
+  { id: 'b_streak10', name: 'On Fire',          sub: '10 matches without a loss',           rarity: 'legendary', color: 'var(--clay-deep)', icon: 'fire',   locked: true },
+  { id: 'b_hat',      name: 'Hat Trick',        sub: 'Win 3 consecutive weekly events',     rarity: 'rare',      color: 'var(--clay)',      icon: 'trophy', locked: true },
+  // ─── Participation ────────────────────────────────────────────────────
+  { id: 'b_founding', name: 'Founding Member',  sub: 'Week 1 believer',                     rarity: 'rare',      color: 'var(--clay-deep)', icon: 'trophy', locked: true },
+  { id: 'b_show5',    name: 'Show Up',          sub: 'Attend 5 events',                     rarity: 'common',    color: 'var(--forest)',    icon: 'ball',   locked: true },
+  { id: 'b_regular',  name: 'True Regular',     sub: 'Attend 10 events',                    rarity: 'uncommon',  color: 'var(--forest)',    icon: 'ball',   locked: true },
+  { id: 'b_sunrise',  name: 'Sunrise Crew',     sub: 'Take a first-tee spot 3 times',       rarity: 'uncommon',  color: 'var(--forest)',    icon: 'bolt',   locked: true },
+  { id: 'b_season',   name: 'Season Soldier',   sub: 'Attend every event in a full season', rarity: 'legendary', color: 'var(--clay-deep)', icon: 'trophy', locked: true },
+  // ─── Rating / Achievement ─────────────────────────────────────────────
+  { id: 'b_danger',   name: 'Rated Danger',     sub: 'Reach SBX 6.000 or higher',           rarity: 'rare',      color: 'var(--clay)',      icon: 'bolt',   locked: true },
+  { id: 'b_top10',    name: 'Top 10',           sub: 'Reach top 10 on the season board',    rarity: 'rare',      color: 'var(--clay)',      icon: 'trophy', locked: true },
+  // ─── Social / Partner ─────────────────────────────────────────────────
+  { id: 'b_rideordie', name: 'Ride or Die',     sub: 'Play 5 matches with the same partner', rarity: 'uncommon', color: 'var(--clay)',      icon: 'fire',   locked: true },
+  { id: 'b_major',    name: 'Major Mover',      sub: 'Reach the quarter-finals of a Major', rarity: 'rare',      color: 'var(--clay)',      icon: 'trophy', locked: true },
+];
 
 const MOCK_ROUND_HISTORY = [];
 

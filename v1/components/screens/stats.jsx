@@ -554,9 +554,13 @@ function StatsH2H() {
 }
 
 function StatsBadges() {
+  const earned = MOCK.BADGES.filter(b => !b.locked).length;
+  const total  = MOCK.BADGES.length;
   return (
     <div style={{ padding: '16px' }}>
-      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Collected · 4 of 22</div>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+        Collected · {earned} of {total}
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
         {MOCK.BADGES.map(b => <BadgeCard key={b.id} b={b}/>)}
       </div>
