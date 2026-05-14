@@ -2,7 +2,7 @@
 // Stats dashboard + handicap + badges (deep, member-gated)
 
 function StatsScreen({ go, tier }) {
-  const isMember = tier === 'league' || tier === 'leaguePlus' || tier === 'stats';
+  const isMember = tier === 'league' || tier === 'plus' || tier === 'stats';
   const [tab, setTab] = React.useState('you');
 
   return (
@@ -46,30 +46,24 @@ function StatsScreen({ go, tier }) {
 function StatsLocked({ go }) {
   return (
     <div style={{ padding: '20px 16px' }}>
-      {/* Blurred preview behind lock */}
-      <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', minHeight: 460 }}>
-        <div style={{ filter: 'blur(8px)', opacity: 0.5, pointerEvents: 'none' }}>
-          <StatsYou/>
+      {/* Lock message at the top */}
+      <div style={{ textAlign: 'center', padding: '28px 24px 24px', background: 'var(--paper)', borderRadius: 20, border: 'var(--hairline)', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ width: 52, height: 52, borderRadius: 999, background: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--cream)', margin: '0 auto 16px' }}>
+          <Icon.Lock size={20} color="var(--cream)"/>
         </div>
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(234,226,206,0.5), rgba(234,226,206,0.98) 60%)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          padding: '0 24px', textAlign: 'center',
-        }}>
-          <div style={{ width: 52, height: 52, borderRadius: 999, background: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--cream)' }}>
-            <Icon.Lock size={20} color="var(--cream)"/>
-          </div>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--forest)', margin: '18px 0 6px', lineHeight: 1 }}>
-            Your stats are ready.
-          </h3>
-          <p className="caption-serif" style={{ fontSize: 15, color: 'var(--ink)', opacity: 0.75, margin: '0 0 20px', maxWidth: 280 }}>
-            Members only. Stats Membership is $15/mo — less than your last cortadito order, probably.
-          </p>
-          <Button variant="forest" onClick={() => go({ screen: 'membership' })}>
-            See plans <Icon.ArrowRight size={14}/>
-          </Button>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)', lineHeight: 1, marginBottom: 8 }}>
+          Your stats are ready.
         </div>
+        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--ink)', opacity: 0.7, marginBottom: 20, maxWidth: 280, display: 'inline-block' }}>
+          Add the Stats Add On for $10/mo — less than your last cortadito order, probably.
+        </div>
+        <Button variant="forest" onClick={() => go({ screen: 'membership' })}>
+          See plans <Icon.ArrowRight size={14}/>
+        </Button>
+      </div>
+      {/* Blurred preview below as teaser */}
+      <div style={{ filter: 'blur(7px)', opacity: 0.35, pointerEvents: 'none', marginTop: 16, borderRadius: 18, overflow: 'hidden' }}>
+        <StatsYou/>
       </div>
     </div>
   );

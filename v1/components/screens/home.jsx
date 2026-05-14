@@ -6,7 +6,7 @@
 // preview when nothing real is live in the DB.
 
 function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
-  const isMember = tier === 'league' || tier === 'leaguePlus';
+  const isMember = tier === 'league' || tier === 'plus';
   const greetingName = (profile && profile.first_name) || MOCK.USER.name.split(' ')[0];
 
   // Real data

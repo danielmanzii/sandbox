@@ -12,7 +12,7 @@ function MembershipScreen({ go, tier, setTier }) {
       perks: ['Sandbox Rating™', 'Full match history', 'Shareable result cards'],
       missing: ['Season league', 'Member pricing', 'Guest passes'] },
     { id: 'league', name: 'Sandbox League', price: '$89 / mo', tag: 'Most popular', highlight: true,
-      perks: ['Weekly league slot', '$10 off all events', '2 guest passes / mo', 'Stats Add On included', 'Partner pairings', 'Members lounge'],
+      perks: ['Stats Add On included', 'Weekly league slot', '$10 off all events', '2 guest passes / mo', 'Partner pairings', 'Members lounge'],
       missing: ['Plus perks'] },
     { id: 'plus', name: 'Sandbox Plus', price: '$189 / mo', tag: 'Inner circle',
       perks: ['Everything in League', 'Unlimited guest passes', 'Free coaching monthly', 'Priority event booking', 'Season championship'],

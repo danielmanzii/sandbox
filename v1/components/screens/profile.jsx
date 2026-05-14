@@ -35,6 +35,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const [editing, setEditing] = React.useState(false);
   const [followListOpen, setFollowListOpen] = React.useState(null); // null | 'followers' | 'following'
   const [guestPassesOpen, setGuestPassesOpen] = React.useState(false);
+  const [matchHistoryOpen, setMatchHistoryOpen] = React.useState(false);
 
   async function toggleFollow() {
     if (!viewerId || !targetId || viewerId === targetId || followBusy) return;
@@ -46,7 +47,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
     setFollowBusy(false);
   }
 
-  const [youAreMember] = [tier === 'league' || tier === 'leaguePlus' || tier === 'stats'];
+  const [youAreMember] = [tier === 'league' || tier === 'plus' || tier === 'stats'];
 
   if (!isSelf && targetLoading && !mockTarget) {
     return (
@@ -157,37 +158,56 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         )}
       </div>
 
-      {/* Recent matches (public) */}
+      {/* Match history */}
       <div style={{ padding: '20px 16px 0' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Recent matches</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
         <div className="card" style={{ overflow: 'hidden' }}>
-          {MOCK.HISTORY.slice(0, 4).map((r, i) => {
-            const isW = r.result === 'W', isL = r.result === 'L';
-            const badgeStyle = isW
-              ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
-              : isL
-              ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
-              : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
-            const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
-            const marginOpacity = isL ? 0.55 : 1;
-            return (
-              <div key={r.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '13px 14px',
-                borderBottom: i < 3 ? '1px solid rgba(14,28,19,0.05)' : 'none',
-              }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
-                <div style={{
-                  width: 24, height: 24, borderRadius: 6,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'var(--font-display)', fontSize: 13,
-                  ...badgeStyle,
-                }}>{r.result}</div>
-                <div style={{ flex: 1, fontSize: 12 }}>vs {r.opp}</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{r.margin}</div>
-              </div>
-            );
-          })}
+          {MOCK.HISTORY.length === 0 ? (
+            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
+              <div style={{ fontSize: 14 }}>No matches yet.</div>
+            </div>
+          ) : (
+            <>
+              {MOCK.HISTORY.slice(0, 4).map((r, i) => {
+                const isW = r.result === 'W', isL = r.result === 'L';
+                const badgeStyle = isW
+                  ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
+                  : isL
+                  ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
+                  : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
+                const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
+                const marginOpacity = isL ? 0.55 : 1;
+                return (
+                  <div key={r.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '13px 14px',
+                    borderBottom: '1px solid rgba(14,28,19,0.05)',
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'var(--font-display)', fontSize: 13,
+                      ...badgeStyle,
+                    }}>{r.result}</div>
+                    <div style={{ flex: 1, fontSize: 12 }}>vs {r.opp}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{r.margin}</div>
+                  </div>
+                );
+              })}
+              {MOCK.HISTORY.length > 4 && (
+                <button onClick={() => setMatchHistoryOpen(true)} style={{
+                  width: '100%', padding: '13px 14px',
+                  background: 'transparent', border: 'none',
+                  color: 'var(--forest)', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', textAlign: 'center',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}>
+                  View all {MOCK.HISTORY.length} matches <Icon.ArrowRight size={12}/>
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -195,8 +215,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         <div style={{ padding: '22px 16px 0' }}>
           <div className="card" style={{ padding: 4 }}>
             <MenuRow label="Manage my membership" onClick={() => go({ screen: 'membership' })}/>
-            <MenuRow label="View my guest passes" onClick={() => setGuestPassesOpen(true)}/>
-            <MenuRow label="Shareable cards"/>
+            <MenuRow label="Guest Passes" onClick={() => setGuestPassesOpen(true)}/>
             <MenuRow label="Sign out" last/>
           </div>
         </div>
@@ -224,6 +243,13 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
           tier={tier}
           go={go}
           onClose={() => setGuestPassesOpen(false)}
+        />
+      )}
+
+      {matchHistoryOpen && (
+        <MatchHistorySheet
+          history={MOCK.HISTORY}
+          onClose={() => setMatchHistoryOpen(false)}
         />
       )}
     </div>
@@ -694,56 +720,78 @@ function FollowStat({ label, value, onClick }) {
 
 // ─── Guest Passes Sheet ──────────────────────────────────────────────
 function GuestPassesSheet({ tier, go, onClose }) {
-  const totalPasses = tier === 'plus' ? 4 : tier === 'league' ? 2 : 0;
+  const isPlus = tier === 'plus';
+  const isLeague = tier === 'league';
+  const totalPasses = isLeague ? 2 : 0; // plus = unlimited, tracked differently
 
-  // Monthly state: { used: number, month: 'YYYY-MM' }
-  const [passState, setPassState] = React.useState(() => {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    try {
-      const stored = JSON.parse(localStorage.getItem('spp_guest_passes') || 'null');
-      if (stored && stored.month === currentMonth) return stored;
-    } catch {}
-    return { used: 0, month: currentMonth };
-  });
-
-  const [pickingTicket, setPickingTicket] = React.useState(null); // index of ticket being used
-  const [upcoming] = useUpcomingEvents(6);
-
-  // Next 1st of month for display
   const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const nextFirst = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const resetStr = nextFirst.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 
-  function usePass(ticketIdx, event) {
-    const next = { ...passState, used: passState.used + 1 };
-    setPassState(next);
-    localStorage.setItem('spp_guest_passes', JSON.stringify(next));
-    setPickingTicket(null);
-    go({ screen: 'eventDetail', eventId: event.id });
-    onClose();
+  // Invites: [{ id, contact, eventId, eventName, status: 'pending'|'used', sentAt, month }]
+  const [invites, setInvites] = React.useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('spp_guest_invites') || '[]');
+      return stored.filter(inv => inv.month === currentMonth);
+    } catch { return []; }
+  });
+
+  const [sendStep, setSendStep] = React.useState(null); // null | 'event' | 'contact'
+  const [selectedEvent, setSelectedEvent] = React.useState(null);
+  const [contactInput, setContactInput] = React.useState('');
+  const [upcoming] = useUpcomingEvents(6);
+
+  function saveInvites(newInvites) {
+    try {
+      const all = JSON.parse(localStorage.getItem('spp_guest_invites') || '[]');
+      const otherMonths = all.filter(inv => inv.month !== currentMonth);
+      localStorage.setItem('spp_guest_invites', JSON.stringify([...otherMonths, ...newInvites]));
+    } catch {}
+    setInvites(newInvites);
   }
+
+  function sendInvite() {
+    if (!selectedEvent || !contactInput.trim()) return;
+    const newInvite = {
+      id: Date.now().toString(),
+      contact: contactInput.trim(),
+      eventId: selectedEvent.id,
+      eventName: `${selectedEvent.courseShort || selectedEvent.title} · ${selectedEvent.date}`,
+      status: 'pending',
+      sentAt: now.toISOString().slice(0, 10),
+      month: currentMonth,
+    };
+    saveInvites([...invites, newInvite]);
+    setContactInput('');
+    setSelectedEvent(null);
+    setSendStep(null);
+  }
+
+  function cancelInvite(id) {
+    saveInvites(invites.filter(inv => inv.id !== id));
+  }
+
+  const canSendMore = isPlus || (isLeague && invites.length < totalPasses);
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }}/>
       <div style={{ position: 'relative', background: 'var(--forest-dark)', borderRadius: '24px 24px 0 0', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-        {/* Handle */}
         <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(234,226,206,0.2)', margin: '14px auto 0', position: 'relative' }}/>
-        {/* Header */}
         <div style={{ padding: '16px 22px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', borderBottom: '1px solid rgba(234,226,206,0.1)' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--cream)', lineHeight: 1, letterSpacing: '-0.01em' }}>Guest Passes</div>
             <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--cream)', opacity: 0.5, marginTop: 4, letterSpacing: '0.1em' }}>
-              RESETS {resetStr.toUpperCase()}
+              {isPlus ? 'UNLIMITED · 1 PER EVENT' : isLeague ? `${invites.length} OF ${totalPasses} USED · RESETS ${resetStr.toUpperCase()}` : ''}
             </div>
           </div>
           <img src="assets/mascot-full-cream.svg" alt="" style={{ width: 64, opacity: 0.25, marginRight: -8 }}/>
         </div>
 
         <div style={{ overflowY: 'auto', flex: 1, padding: '20px 16px 32px', position: 'relative' }}>
-          {totalPasses === 0 ? (
+          {!isPlus && !isLeague ? (
             <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--cream)', opacity: 0.55 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 8 }}>No guest passes on your plan.</div>
               <div style={{ fontSize: 13 }}>Upgrade to League or Plus to bring a friend.</div>
@@ -755,79 +803,207 @@ function GuestPassesSheet({ tier, go, onClose }) {
             </div>
           ) : (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {Array.from({ length: totalPasses }).map((_, i) => {
-                  const used = i < passState.used;
-                  return (
-                    <button key={i} onClick={() => { if (!used) setPickingTicket(i); }} disabled={used} style={{
-                      width: '100%', textAlign: 'left', border: 'none', cursor: used ? 'default' : 'pointer', padding: 0,
+              {/* Send new pass button */}
+              {canSendMore && sendStep === null && (
+                <button onClick={() => setSendStep('event')} style={{
+                  width: '100%', padding: '18px 20px', borderRadius: 18,
+                  background: 'rgba(234,226,206,0.12)', border: '1.5px solid rgba(234,226,206,0.28)',
+                  color: 'var(--cream)', cursor: 'pointer', marginBottom: 14,
+                  display: 'flex', alignItems: 'center', gap: 14,
+                }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 999, background: 'rgba(234,226,206,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 24, lineHeight: 1 }}>+</div>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1, marginBottom: 4 }}>
+                      {isPlus ? 'Send a guest pass' : `Send a guest pass · ${totalPasses - invites.length} left`}
+                    </div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.08em' }}>
+                      INVITE VIA EMAIL OR PHONE
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {/* Existing invites */}
+              {invites.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+                  {invites.map(invite => (
+                    <div key={invite.id} style={{
                       borderRadius: 18, overflow: 'hidden',
+                      border: invite.status === 'used' ? '1px solid rgba(234,226,206,0.1)' : '1px solid rgba(234,226,206,0.28)',
+                      opacity: invite.status === 'used' ? 0.5 : 1,
                     }}>
                       <div style={{
                         display: 'flex', alignItems: 'stretch',
-                        background: used ? 'rgba(234,226,206,0.06)' : 'rgba(234,226,206,0.12)',
-                        border: used ? '1px solid rgba(234,226,206,0.1)' : '1px solid rgba(234,226,206,0.28)',
-                        borderRadius: 18,
-                        opacity: used ? 0.5 : 1,
+                        background: invite.status === 'used' ? 'rgba(234,226,206,0.06)' : 'rgba(234,226,206,0.12)',
                       }}>
-                        {/* Left: pass info */}
-                        <div style={{ flex: 1, padding: '18px 0 18px 20px' }}>
+                        <div style={{ flex: 1, padding: '16px 0 16px 18px' }}>
                           <div style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--cream)', opacity: 0.5, letterSpacing: '0.2em' }}>SANDBOX PITCH + PUTT</div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--cream)', lineHeight: 0.95, marginTop: 6, letterSpacing: '-0.01em' }}>
-                            {used ? 'Used' : 'Guest Pass'}
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--cream)', lineHeight: 0.95, marginTop: 6, letterSpacing: '-0.01em' }}>
+                            {invite.status === 'used' ? 'Used' : 'Pending invite'}
                           </div>
-                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--cream)', opacity: 0.5, marginTop: 8, letterSpacing: '0.08em' }}>
-                            {used ? `Resets ${resetStr}` : 'TAP TO USE'}
+                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--cream)', opacity: 0.65, marginTop: 6, letterSpacing: '0.04em' }}>
+                            {invite.contact}
                           </div>
+                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--cream)', opacity: 0.4, marginTop: 3, letterSpacing: '0.04em' }}>
+                            {invite.eventName}
+                          </div>
+                          {invite.status === 'pending' && (
+                            <button onClick={() => cancelInvite(invite.id)} style={{
+                              marginTop: 8, padding: '4px 10px', borderRadius: 999,
+                              background: 'rgba(234,226,206,0.1)', border: '1px solid rgba(234,226,206,0.2)',
+                              color: 'var(--cream)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                              cursor: 'pointer', textTransform: 'uppercase',
+                            }}>Cancel invite</button>
+                          )}
                         </div>
-                        {/* Tear line */}
-                        <div style={{ width: 0, borderLeft: '1.5px dashed rgba(234,226,206,0.2)', margin: '16px 0' }}/>
-                        {/* Right: bird */}
-                        <div style={{ width: 90, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <img src="assets/mascot-full-cream.svg" alt="" style={{ width: 56, opacity: used ? 0.15 : 0.6 }}/>
+                        <div style={{ width: 0, borderLeft: '1.5px dashed rgba(234,226,206,0.2)', margin: '14px 0' }}/>
+                        <div style={{ width: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img src="assets/mascot-full-cream.svg" alt="" style={{ width: 48, opacity: invite.status === 'used' ? 0.15 : 0.55 }}/>
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ marginTop: 20, fontSize: 11, color: 'var(--cream)', opacity: 0.4, textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
-                {passState.used} of {totalPasses} used · Resets {resetStr}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {invites.length === 0 && (
+                <div style={{ textAlign: 'center', color: 'var(--cream)', opacity: 0.3, fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', marginTop: 4 }}>
+                  {isPlus ? `UNLIMITED · 1 PER EVENT · RESETS ${resetStr.toUpperCase()}` : `${totalPasses} PASSES THIS MONTH · RESETS ${resetStr.toUpperCase()}`}
+                </div>
+              )}
+
+              {!canSendMore && invites.length > 0 && (
+                <div style={{ textAlign: 'center', color: 'var(--cream)', opacity: 0.35, fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', marginTop: 8 }}>
+                  ALL PASSES USED · RESETS {resetStr.toUpperCase()}
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
 
       {/* Event picker sub-sheet */}
-      {pickingTicket !== null && (
+      {sendStep === 'event' && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-          <div onClick={() => setPickingTicket(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}/>
+          <div onClick={() => setSendStep(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}/>
           <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', maxHeight: '65vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 0' }}/>
             <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(14,28,19,0.07)' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)' }}>Pick an event</div>
-              <div style={{ fontSize: 11, color: 'var(--ink)', opacity: 0.55, marginTop: 3 }}>Your guest joins you at the selected event.</div>
+              <div style={{ fontSize: 11, color: 'var(--ink)', opacity: 0.55, marginTop: 3 }}>Your guest will get an invite for this event.</div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {upcoming.length === 0 ? (
                 <div style={{ padding: 32, textAlign: 'center', opacity: 0.4, fontSize: 13 }}>No upcoming events.</div>
-              ) : upcoming.map((ev, i) => (
-                <button key={ev.id} onClick={() => usePass(pickingTicket, ev)} style={{
-                  width: '100%', textAlign: 'left', padding: '14px 20px',
-                  borderBottom: i < upcoming.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)' }}>{ev.courseShort}</div>
-                  <div style={{ fontSize: 11, opacity: 0.55, fontFamily: 'var(--font-mono)', marginTop: 3, letterSpacing: '0.03em' }}>
-                    {ev.date} · {ev.time}
-                  </div>
-                </button>
-              ))}
+              ) : upcoming.map((ev, i) => {
+                const alreadySent = isPlus && invites.some(inv => inv.eventId === ev.id);
+                return (
+                  <button key={ev.id} onClick={() => { if (!alreadySent) { setSelectedEvent(ev); setSendStep('contact'); } }} style={{
+                    width: '100%', textAlign: 'left', padding: '14px 20px',
+                    borderBottom: i < upcoming.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
+                    background: 'transparent', border: 'none', cursor: alreadySent ? 'not-allowed' : 'pointer',
+                    opacity: alreadySent ? 0.4 : 1,
+                  }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)' }}>{ev.courseShort || ev.title}</div>
+                    <div style={{ fontSize: 11, opacity: 0.55, fontFamily: 'var(--font-mono)', marginTop: 3, letterSpacing: '0.03em' }}>
+                      {ev.date} · {ev.time}{alreadySent ? ' · Pass already sent' : ''}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
+
+      {/* Contact input sub-sheet */}
+      {sendStep === 'contact' && selectedEvent && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <div onClick={() => setSendStep('event')} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}/>
+          <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', padding: '0 20px 36px', overflow: 'hidden' }}>
+            <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 16px' }}/>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', marginBottom: 6 }}>Who's your guest?</div>
+            <div style={{ fontSize: 12, color: 'var(--ink)', opacity: 0.55, marginBottom: 18, lineHeight: 1.5 }}>
+              Enter their email or phone. They'll receive an invite for {selectedEvent.courseShort || selectedEvent.title} on {selectedEvent.date}. The pass shows as pending until they sign up using the same contact.
+            </div>
+            <input
+              type="text"
+              placeholder="email@example.com or (305) 555-0100"
+              value={contactInput}
+              onChange={e => setContactInput(e.target.value)}
+              autoFocus
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '14px 16px', borderRadius: 14,
+                border: '1.5px solid rgba(14,28,19,0.15)', background: 'var(--canvas)',
+                fontSize: 15, color: 'var(--ink)', fontFamily: 'inherit',
+                outline: 'none', marginBottom: 12,
+              }}
+            />
+            <Button variant="forest" full onClick={sendInvite} disabled={!contactInput.trim()}>
+              Send invite <Icon.ArrowRight size={14}/>
+            </Button>
+            <button onClick={() => setSendStep('event')} style={{
+              width: '100%', marginTop: 8, padding: '12px 0',
+              background: 'transparent', border: 'none',
+              color: 'var(--forest)', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: 0.6,
+            }}>Back</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Match History Sheet ─────────────────────────────────────────────
+function MatchHistorySheet({ history, onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }}/>
+      <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 0' }}/>
+        <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(14,28,19,0.07)' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1 }}>Match history</div>
+          <button onClick={onClose} style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(14,28,19,0.07)', border: 'none', fontSize: 12, fontWeight: 700, color: 'var(--forest)', cursor: 'pointer' }}>Done</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px' }}>
+          {history.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', opacity: 0.4 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginBottom: 6 }}>No matches yet.</div>
+            </div>
+          ) : (
+            <div className="card" style={{ overflow: 'hidden' }}>
+              {history.map((r, i) => {
+                const isW = r.result === 'W', isL = r.result === 'L';
+                const badgeStyle = isW
+                  ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
+                  : isL
+                  ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
+                  : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
+                const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
+                const marginOpacity = isL ? 0.55 : 1;
+                return (
+                  <div key={r.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '13px 14px',
+                    borderBottom: i < history.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'var(--font-display)', fontSize: 13,
+                      ...badgeStyle,
+                    }}>{r.result}</div>
+                    <div style={{ flex: 1, fontSize: 12 }}>vs {r.opp}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{r.margin}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
