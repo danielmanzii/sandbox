@@ -124,4 +124,59 @@ function useActiveMatchForUser(userId) {
   return [match, loading];
 }
 
-Object.assign(window, { useActiveMatchForUser });
+// ─── Hook: fetch a completed match's detail + hole results ──────────
+// Used by the match history scorecard sheet. Returns [detail, loading].
+// detail shape: { id, teamA, teamB, youSide, holes: [{hole_number, result}], final_margin, result, course_name }
+function useCompletedMatchDetail(matchId) {
+  const [detail, setDetail] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setDetail(null); setLoading(true);
+    if (!matchId) { setLoading(false); return; }
+    (async () => {
+      const { data: m } = await sbx
+        .from('matches')
+        .select('id, result, final_margin, course_name, total_holes, player_a, player_a2, player_b, player_b2')
+        .eq('id', matchId)
+        .maybeSingle();
+      if (!m || cancelled) { setLoading(false); return; }
+
+      const playerIds = [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean);
+      const [{ data: profiles }, { data: holesData }] = await Promise.all([
+        sbx.from('profiles').select('id, handle, first_name').in('id', playerIds),
+        sbx.from('match_holes').select('hole_number, result').eq('match_id', matchId).order('hole_number'),
+      ]);
+
+      if (cancelled) return;
+
+      const handleFor = (id) => {
+        if (!id) return null;
+        const p = (profiles || []).find(x => x.id === id);
+        if (!p) return null;
+        return p.handle ? `@${String(p.handle).replace(/^@/, '')}` : p.first_name;
+      };
+
+      const teamA = [handleFor(m.player_a), handleFor(m.player_a2)].filter(Boolean).join(' + ') || 'Team A';
+      const teamB = [handleFor(m.player_b), handleFor(m.player_b2)].filter(Boolean).join(' + ') || 'Team B';
+
+      setDetail({
+        id:         m.id,
+        result:     m.result,
+        finalMargin: m.final_margin,
+        courseName: m.course_name,
+        totalHoles: m.total_holes || 9,
+        player_a:   m.player_a,
+        teamA, teamB,
+        holes: holesData || [],
+      });
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [matchId]);
+
+  return [detail, loading];
+}
+
+Object.assign(window, { useActiveMatchForUser, useCompletedMatchDetail });

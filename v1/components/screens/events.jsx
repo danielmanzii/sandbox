@@ -37,11 +37,14 @@ function EventsScreen({ go, tier, profile }) {
   const isAdmin = profile && profile.is_admin;
 
   const filtered = allEvents.filter(e => {
-    if (e.status === 'live') return false;
     if (filter === 'all')    return true;
     if (filter === 'weekly') return e.type === 'weekly';
     if (filter === 'majors') return e.isMajor;
     return true;
+  }).sort((a, b) => {
+    if (a.status === 'live' && b.status !== 'live') return -1;
+    if (b.status === 'live' && a.status !== 'live') return 1;
+    return 0;
   });
 
   const filteredIds = React.useMemo(() => filtered.map(e => e.id), [filtered]);
@@ -116,7 +119,8 @@ function EventsScreen({ go, tier, profile }) {
 }
 
 function FullEventCard({ event, go, tier, friendsHere }) {
-  const isMember = tier === 'league' || tier === 'leaguePlus';
+  const isMember = tier === 'league' || tier === 'plus';
+  const isLive = event.status === 'live';
   const pct = event.filled / event.field;
   const nearFull = pct > 0.85;
   return (
@@ -136,27 +140,33 @@ function FullEventCard({ event, go, tier, friendsHere }) {
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {isLive && (
+            <div style={{
+              padding: '4px 10px', borderRadius: 999,
+              background: 'var(--forest)', color: 'var(--cream)',
+              fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}><LiveDot/> LIVE NOW</div>
+          )}
           {event.isMajor && (
             <div style={{
               padding: '4px 10px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.22)',
+              background: 'var(--forest)', color: 'var(--cream)',
               fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
             }}>⛳ Major</div>
           )}
           {event.status === 'member-only' && (
             <div style={{
               padding: '4px 10px', borderRadius: 999,
-              background: 'rgba(14,28,19,0.7)', backdropFilter: 'blur(10px)',
+              background: 'var(--forest)', color: 'var(--cream)',
               fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase',
               display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}><Icon.Lock size={10} color="currentColor"/> Member</div>
+            }}><Icon.Lock size={10} color="var(--cream)"/> Member</div>
           )}
-          {!event.isMajor && event.status === 'open' && (
+          {!event.isMajor && !isLive && event.status === 'open' && event.tagline && (
             <div style={{
               padding: '4px 10px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.22)',
+              background: 'var(--forest)', color: 'var(--cream)',
               fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>{event.tagline}</div>
           )}
@@ -213,7 +223,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
   const [event, eventLoading, reloadEvent] = useEvent(eventId);
   const isRegistered = useIsRegistered(eventId, profile && profile.id);
 
-  const isMember = tier === 'league' || tier === 'leaguePlus';
+  const isMember = tier === 'league' || tier === 'plus';
   const isAdmin  = profile && profile.is_admin;
   const [registering, setRegistering] = React.useState(false);
   const [step, setStep] = React.useState(0);
@@ -302,17 +312,17 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
             {event.isMajor && (
               <div style={{
                 padding: '5px 10px', borderRadius: 999,
-                background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.22)',
+                background: 'var(--forest)', color: 'var(--cream)',
                 fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
               }}>⛳ Major</div>
             )}
-            <div style={{
-              padding: '5px 10px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.22)',
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-            }}>{event.tagline}</div>
+            {event.tagline && (
+              <div style={{
+                padding: '5px 10px', borderRadius: 999,
+                background: 'var(--forest)', color: 'var(--cream)',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              }}>{event.tagline}</div>
+            )}
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 42, lineHeight: 0.9, letterSpacing: '-0.02em' }}>
             {event.courseShort}
@@ -354,7 +364,7 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
               primary={isMember}
               label={isMember ? 'You' : 'Member'}
               price={isMember ? 'Included' : `$${event.priceMember}`}
-              sub={isMember ? `via your ${tier === 'leaguePlus' ? 'Plus' : 'League'} plan` : 'League members'}
+              sub={isMember ? `via your ${tier === 'plus' ? 'Plus' : 'League'} plan` : 'League members'}
             />
             <PriceTile
               primary={!isMember}
@@ -872,10 +882,13 @@ function CreateEventSheet({ onClose, onCreated, editEvent }) {
     imgUrl:       editEvent.img                 || '',
     priceWalkup:  String(editEvent.priceWalkup  || 20),
     priceMember:  String(editEvent.priceMember  || 0),
+    recurring:    false,
+    repeatWeeks:  '8',
   } : {
     courseShort: '', courseName: '', date: today, time: '18:00',
     field: '24', type: 'weekly', tagline: '', description: '',
     imgUrl: '', priceWalkup: '20', priceMember: '0',
+    recurring: false, repeatWeeks: '8',
   });
 
   const [saving, setSaving] = React.useState(false);
@@ -891,11 +904,15 @@ function CreateEventSheet({ onClose, onCreated, editEvent }) {
     if (wu <= mem) { setErr('Walk-up price must be greater than member price.'); return; }
     setSaving(true); setErr('');
     try {
-      const startsAt = new Date(`${form.date}T${form.time}:00`).toISOString();
+      const baseDate = new Date(`${form.date}T${form.time}:00`);
       if (editEvent) {
-        await updateEvent(editEvent.id, { ...form, startsAt, priceWalkup: wu, priceMember: mem });
+        await updateEvent(editEvent.id, { ...form, startsAt: baseDate.toISOString(), priceWalkup: wu, priceMember: mem });
       } else {
-        await createEvent({ ...form, startsAt, priceWalkup: wu, priceMember: mem });
+        const weeksToCreate = form.recurring ? Math.max(1, Math.min(52, Number(form.repeatWeeks) || 8)) : 1;
+        for (let i = 0; i < weeksToCreate; i++) {
+          const d = new Date(baseDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+          await createEvent({ ...form, startsAt: d.toISOString(), priceWalkup: wu, priceMember: mem });
+        }
       }
       onCreated();
     } catch (e) {
@@ -989,6 +1006,24 @@ function CreateEventSheet({ onClose, onCreated, editEvent }) {
 
         <label style={labelStyle}>Hero image URL (optional)</label>
         <input style={inputStyle} placeholder="https://images.unsplash.com/..." value={form.imgUrl} onChange={e => set('imgUrl', e.target.value)}/>
+
+        {!editEvent && (
+          <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(14,28,19,0.04)', borderRadius: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.recurring} onChange={e => set('recurring', e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--forest)' }}/>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)' }}>Recurring weekly series</span>
+            </label>
+            {form.recurring && (
+              <div style={{ marginTop: 10 }}>
+                <label style={labelStyle}>Number of weeks to create</label>
+                <input type="number" min="2" max="52" style={inputStyle} value={form.repeatWeeks} onChange={e => set('repeatWeeks', e.target.value)}/>
+                <div style={{ fontSize: 11, color: 'var(--forest)', opacity: 0.55, marginTop: 6, fontFamily: 'var(--font-mono)' }}>
+                  Creates {form.repeatWeeks} events starting {form.date}, spaced 7 days apart.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {err && (
           <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.1)', padding: '10px 14px', borderRadius: 12 }}>

@@ -36,7 +36,7 @@ function SocialScreen({ go, tier }) {
       </div>
 
       {tab === 'live' && <LiveLeaderboard go={go} liveEvent={liveEvent} nextEvent={nextEvent}/>}
-      {tab === 'season' && <SeasonLeaderboard/>}
+      {tab === 'season' && <SeasonLeaderboard go={go}/>}
       {tab === 'alltime' && <AllTimeLeaderboard/>}
     </div>
   );
@@ -251,28 +251,29 @@ function MatchBoardRow({ m, last }) {
   );
 }
 
-function SeasonLeaderboard() {
-  // Match-play ladder: record primary, holes-won tiebreak (as per user's answer).
-  // The signed-in user's row uses MOCK.USER (real handle + real record) so the
-  // leaderboard shows them in their actual slot.
+function SeasonLeaderboard({ go }) {
   const u = MOCK.USER;
+  const [selectedPlayer, setSelectedPlayer] = React.useState(null);
+
   const userRow = {
     name: u.handle,
     W: u.matchesW, L: u.matchesL, H: u.matchesH,
     holesW: u.holesWonTotal || 0,
     events: u.eventsPlayed || u.matchesTotal || 0,
+    sbx: u.sbx,
     isYou: true,
   };
   const rows = [
-    { name: '@dukes', W: 9, L: 2, H: 0, holesW: 58, events: 11 },
-    { name: '@bigleo', W: 8, L: 2, H: 1, holesW: 55, events: 11 },
-    { name: '@jaybird', W: 7, L: 2, H: 1, holesW: 51, events: 10 },
-    { name: '@riv', W: 7, L: 4, H: 0, holesW: 48, events: 11 },
+    { name: '@dukes',    W: 9, L: 2, H: 0, holesW: 58, events: 11, sbx: 6.712 },
+    { name: '@bigleo',   W: 8, L: 2, H: 1, holesW: 55, events: 11, sbx: 6.201 },
+    { name: '@jaybird',  W: 7, L: 2, H: 1, holesW: 51, events: 10, sbx: 5.988 },
+    { name: '@riv',      W: 7, L: 4, H: 0, holesW: 48, events: 11, sbx: 5.544 },
     userRow,
-    { name: '@theo.m', W: 5, L: 4, H: 1, holesW: 38, events: 10 },
-    { name: '@maria.cg', W: 4, L: 4, H: 1, holesW: 34, events: 9 },
-    { name: '@camicu', W: 3, L: 6, H: 1, holesW: 31, events: 10 },
+    { name: '@theo.m',   W: 5, L: 4, H: 1, holesW: 38, events: 10, sbx: 4.821 },
+    { name: '@maria.cg', W: 4, L: 4, H: 1, holesW: 34, events:  9, sbx: 4.503 },
+    { name: '@camicu',   W: 3, L: 6, H: 1, holesW: 31, events: 10, sbx: 4.012 },
   ];
+
   return (
     <div style={{ padding: '18px 16px' }}>
       <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 12, padding: '0 4px', lineHeight: 1.45, fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
@@ -281,18 +282,19 @@ function SeasonLeaderboard() {
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', padding: '10px 14px', fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.5, borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
           <span style={{ width: 26, textAlign: 'center' }}>#</span>
-          <span style={{ flex: 1, paddingLeft: 36 }}>Player</span>
+          <span style={{ flex: 1, paddingLeft: 8 }}>Player</span>
           <span style={{ width: 64, textAlign: 'right' }}>W–L–H</span>
           <span style={{ width: 44, textAlign: 'right' }}>Holes</span>
         </div>
         {rows.map((r, i) => {
           const pts = r.W + r.H * 0.5;
           return (
-            <div key={r.name} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '12px 14px',
+            <button key={r.name} onClick={() => setSelectedPlayer(r)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              padding: '12px 14px', textAlign: 'left',
               borderBottom: i < rows.length - 1 ? '1px dashed rgba(14,28,19,0.08)' : 'none',
               background: r.isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
+              cursor: 'pointer', border: 'none',
             }}>
               <div style={{
                 width: 26, textAlign: 'center',
@@ -300,9 +302,9 @@ function SeasonLeaderboard() {
                 color: 'var(--forest)', opacity: i < 3 ? 1 : 0.4,
                 fontWeight: i < 3 ? 700 : 400,
               }}>{i + 1}</div>
-              <AvatarBy handle={r.name} size={28}/>
+              <AvatarBy name={r.name} size={30}/>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{r.name}{r.isYou && ' · you'}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{r.name}{r.isYou && ' · you'}</div>
                 <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{pts} pts · {r.events} events</div>
               </div>
               <div style={{ width: 64, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 15, color: 'var(--forest)' }}>
@@ -311,9 +313,120 @@ function SeasonLeaderboard() {
               <div style={{ width: 44, textAlign: 'right', fontSize: 12, opacity: 0.65, fontWeight: 700 }}>
                 {r.holesW}
               </div>
-            </div>
+            </button>
           );
         })}
+      </div>
+
+      {selectedPlayer && (
+        <PlayerStatsSheet
+          player={selectedPlayer}
+          go={go}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function PlayerStatsSheet({ player, go, onClose }) {
+  const isYou = player.isYou;
+  const pts = player.W + player.H * 0.5;
+  const history = isYou ? (MOCK.HISTORY || []) : [];
+  const badges = isYou ? (MOCK.BADGES || []).filter(b => !b.locked) : [];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }}/>
+      <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 0' }}/>
+        <div style={{ padding: '14px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(14,28,19,0.07)' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1 }}>{player.name}</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {!isYou && (
+              <button onClick={() => { onClose(); go({ screen: 'profile', viewingHandle: player.name }); }} style={{
+                padding: '6px 12px', borderRadius: 999, background: 'var(--forest)', border: 'none',
+                color: 'var(--cream)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}>View profile</button>
+            )}
+            <button onClick={onClose} style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(14,28,19,0.07)', border: 'none', fontSize: 12, fontWeight: 700, color: 'var(--forest)', cursor: 'pointer' }}>Done</button>
+          </div>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, padding: '20px 16px 32px' }}>
+          {/* SBX Rating */}
+          <div style={{
+            background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
+            color: 'var(--cream)', borderRadius: 18, padding: '18px 20px',
+            marginBottom: 16, position: 'relative', overflow: 'hidden',
+          }}>
+            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 8, position: 'relative' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.85, letterSpacing: '-0.03em' }}>
+                {player.sbx ? Number(player.sbx).toFixed(3) : '—'}
+              </div>
+              <div style={{ textAlign: 'right', opacity: 0.75 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1 }}>{player.W}–{player.L}–{player.H}</div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', marginTop: 4, letterSpacing: '0.04em' }}>{pts} pts · {player.events} events</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent matches */}
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+            Recent matches
+          </div>
+          <div className="card" style={{ overflow: 'hidden', marginBottom: 16 }}>
+            {history.length === 0 ? (
+              <div style={{ padding: '16px 14px', textAlign: 'center', opacity: 0.4, fontSize: 13 }}>
+                {isYou ? 'No matches yet.' : 'Match history is private.'}
+              </div>
+            ) : history.slice(0, 4).map((r, i) => {
+              const isW = r.result === 'W', isL = r.result === 'L';
+              const badgeStyle = isW
+                ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
+                : isL
+                ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
+                : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
+              return (
+                <div key={r.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
+                  borderBottom: i < Math.min(history.length, 4) - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
+                }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
+                  <div style={{ width: 24, height: 24, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, ...badgeStyle }}>{r.result}</div>
+                  <div style={{ flex: 1, fontSize: 12 }}>vs {r.opp}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: 'var(--forest)', opacity: isL ? 0.55 : 1 }}>{r.margin}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Badges */}
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+            Badges earned
+          </div>
+          {badges.length === 0 ? (
+            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', opacity: 0.4, fontSize: 13 }}>
+              {isYou ? 'No badges earned yet.' : 'Badges are private.'}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {badges.map(b => (
+                <div key={b.id} className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 999, background: b.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon.Trophy size={14} color="var(--cream)"/>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--forest)', lineHeight: 1.2 }}>{b.name}</div>
+                    <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{b.rarity}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
