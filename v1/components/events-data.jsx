@@ -434,6 +434,30 @@ async function declineEventInvite({ invite, userId }) {
   }
 }
 
+// ─── Admin: create a new event ───────────────────────────────────────
+// Inserts into public.events. RLS blocks non-admins server-side.
+// Fields: courseShort, courseName, startsAt (ISO string), field (int),
+//         type, tagline, description, imgUrl, priceWalkup, priceMember.
+async function createEvent(fields) {
+  const isMajor = fields.type === 'major';
+  const { data, error } = await sbx.from('events').insert({
+    course_short:  fields.courseShort.trim(),
+    course_name:   fields.courseName.trim(),
+    starts_at:     fields.startsAt,
+    field:         Number(fields.field),
+    type:          fields.type,
+    is_major:      isMajor,
+    tagline:       fields.tagline  ? fields.tagline.trim()  : null,
+    description:   fields.description ? fields.description.trim() : null,
+    img_url:       fields.imgUrl   ? fields.imgUrl.trim()   : null,
+    price_walkup:  Number(fields.priceWalkup) || 0,
+    price_member:  Number(fields.priceMember) || 0,
+    status:        'open',
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
 Object.assign(window, {
   useEvents, useUpcomingEvents, useLiveEvent, useNextMajor,
   useUserRegistrations, useNextEventForUser,
@@ -441,4 +465,5 @@ Object.assign(window, {
   registerForEvent, cancelRegistration,
   useMyPendingEventInvites,
   sendEventInvite, acceptEventInvite, declineEventInvite,
+  createEvent,
 });

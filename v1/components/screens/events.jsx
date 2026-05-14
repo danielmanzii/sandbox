@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent */
 // Events list + detail + register
 
 // ─── Calendar download ────────────────────────────────────────────────
@@ -31,8 +31,11 @@ function downloadCalendar(event) {
 }
 
 function EventsScreen({ go, tier, profile }) {
-  const [filter, setFilter] = React.useState('all');
-  const [allEvents, loading] = useUpcomingEvents(50); // big enough cap for the foreseeable future
+  const [filter, setFilter]   = React.useState('all');
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [allEvents, loading, , reloadEvents] = useUpcomingEvents(50);
+  const isAdmin = profile && profile.is_admin;
+
   const filtered = allEvents.filter(e => {
     if (e.status === 'live') return false;
     if (filter === 'all')    return true;
@@ -46,15 +49,35 @@ function EventsScreen({ go, tier, profile }) {
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <div style={{ padding: '58px 20px 20px', background: 'var(--canvas)', color: 'var(--forest)' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>The Schedule</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.9, marginTop: 8, letterSpacing: '-0.02em' }}>
-          Play.
+      <div style={{ padding: '58px 20px 20px', background: 'var(--canvas)', color: 'var(--forest)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>The Schedule</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.9, marginTop: 8, letterSpacing: '-0.02em' }}>
+            Play.
+          </div>
+          <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 6 }}>
+            9 holes. 1 hour. Miami.
+          </div>
         </div>
-        <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 6 }}>
-          9 holes. 1 hour. Miami.
-        </div>
+        {isAdmin && (
+          <button onClick={() => setCreateOpen(true)} style={{
+            marginTop: 8,
+            width: 42, height: 42, borderRadius: 999,
+            background: 'var(--forest)', color: 'var(--cream)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'var(--shadow-sm)', flexShrink: 0,
+          }}>
+            <Icon.Plus size={18}/>
+          </button>
+        )}
       </div>
+
+      {createOpen && (
+        <CreateEventSheet
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => { setCreateOpen(false); reloadEvents && reloadEvents(); }}
+        />
+      )}
 
       <div style={{ display: 'flex', gap: 8, padding: '4px 16px 0', overflowX: 'auto' }} className="scroll-hide">
         {[['all', 'All'], ['weekly', 'Weekly'], ['majors', 'Majors']].map(([k, l]) => (
@@ -743,6 +766,137 @@ function InviteToEventSheet({ event, profile, onClose }) {
             </Button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Admin: create event bottom-sheet ────────────────────────────────
+function CreateEventSheet({ onClose, onCreated }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = React.useState({
+    courseShort: '', courseName: '', date: today, time: '18:00',
+    field: '24', type: 'weekly', tagline: '', description: '',
+    imgUrl: '', priceWalkup: '20', priceMember: '0',
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr]       = React.useState('');
+
+  function set(key, val) { setForm(f => ({ ...f, [key]: val })); }
+
+  async function submit() {
+    if (!form.courseShort.trim() || !form.courseName.trim() || !form.date || !form.time || !form.field) {
+      setErr('Course name, date, time, and field size are required.'); return;
+    }
+    const wu = Number(form.priceWalkup), mem = Number(form.priceMember);
+    if (wu <= mem) { setErr('Walk-up price must be greater than member price.'); return; }
+    setSaving(true); setErr('');
+    try {
+      const startsAt = new Date(`${form.date}T${form.time}:00`).toISOString();
+      await createEvent({ ...form, startsAt, priceWalkup: wu, priceMember: mem });
+      onCreated();
+    } catch (e) {
+      setErr(e.message || 'Could not create event.');
+    }
+    setSaving(false);
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '12px 14px', borderRadius: 12,
+    background: 'var(--paper)', border: '1px solid rgba(14,28,19,0.12)',
+    fontSize: 15, fontFamily: 'inherit', color: 'var(--forest)',
+    boxSizing: 'border-box',
+  };
+  const labelStyle = {
+    fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)',
+    opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase',
+    display: 'block', marginBottom: 6, marginTop: 16,
+  };
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 100,
+      background: 'rgba(14,28,19,0.5)',
+      display: 'flex', alignItems: 'flex-end',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', maxHeight: '92%', overflowY: 'auto',
+        background: 'var(--cream)',
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        padding: '18px 20px 36px',
+        animation: 'sheet-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+      }}>
+        <style>{`@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        <div style={{ width: 36, height: 4, borderRadius: 3, background: 'rgba(14,28,19,0.2)', margin: '0 auto 18px' }}/>
+
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Admin</div>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 30, margin: '8px 0 4px', lineHeight: 0.95, color: 'var(--forest)', letterSpacing: '-0.02em' }}>
+          New Event.
+        </h2>
+
+        <label style={labelStyle}>Course short name</label>
+        <input style={inputStyle} placeholder="Melreese" value={form.courseShort} onChange={e => set('courseShort', e.target.value)}/>
+
+        <label style={labelStyle}>Course full name</label>
+        <input style={inputStyle} placeholder="International Links Melreese" value={form.courseName} onChange={e => set('courseName', e.target.value)}/>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Date</label>
+            <input type="date" style={inputStyle} value={form.date} onChange={e => set('date', e.target.value)}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Tee time</label>
+            <input type="time" style={inputStyle} value={form.time} onChange={e => set('time', e.target.value)}/>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Field size</label>
+            <input type="number" min="2" style={inputStyle} value={form.field} onChange={e => set('field', e.target.value)}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Type</label>
+            <select style={inputStyle} value={form.type} onChange={e => set('type', e.target.value)}>
+              <option value="weekly">Weekly</option>
+              <option value="major">Major</option>
+              <option value="social">Social</option>
+              <option value="member-only">Member-only</option>
+            </select>
+          </div>
+        </div>
+
+        <label style={labelStyle}>Tagline</label>
+        <input style={inputStyle} placeholder="Weekly Match Night" value={form.tagline} onChange={e => set('tagline', e.target.value)}/>
+
+        <label style={labelStyle}>Description</label>
+        <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }} placeholder="Short editorial blurb shown on the event detail." value={form.description} onChange={e => set('description', e.target.value)}/>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Walk-up price ($)</label>
+            <input type="number" min="0" style={inputStyle} value={form.priceWalkup} onChange={e => set('priceWalkup', e.target.value)}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Member price ($)</label>
+            <input type="number" min="0" style={inputStyle} value={form.priceMember} onChange={e => set('priceMember', e.target.value)}/>
+          </div>
+        </div>
+
+        <label style={labelStyle}>Hero image URL (optional)</label>
+        <input style={inputStyle} placeholder="https://images.unsplash.com/..." value={form.imgUrl} onChange={e => set('imgUrl', e.target.value)}/>
+
+        {err && (
+          <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.1)', padding: '10px 14px', borderRadius: 12 }}>
+            {err}
+          </div>
+        )}
+
+        <Button variant="forest" full size="lg" onClick={submit} disabled={saving} style={{ marginTop: 20 }}>
+          {saving ? 'Creating…' : 'Create event'}
+          {!saving && <Icon.ArrowRight size={14}/>}
+        </Button>
       </div>
     </div>
   );
