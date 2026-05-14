@@ -129,6 +129,15 @@ function LiveScorecardScreen({ go }) {
   const card = MOCK.YOUR_CARD;
   const [showSheet, setShowSheet] = React.useState(false);
 
+  if (!card) {
+    return (
+      <div style={{ padding: '60px 24px', textAlign: 'center', opacity: 0.45 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>No live match</div>
+        <div style={{ fontSize: 14 }}>Your scorecard will appear here during a live event.</div>
+      </div>
+    );
+  }
+
   // Compute match state from hole results (W/H/L)
   const played = card.holes.filter(h => h.result);
   const state = played.reduce((s, h) => s + (h.result === 'W' ? 1 : h.result === 'L' ? -1 : 0), 0);

@@ -11,7 +11,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
 
   // Real data
   const [liveEvent]            = useLiveEvent();
-  const [myNextEvent, nextLoading] = useNextEventForUser(profile && profile.id);
+  const [myNextEvent, nextLoading, myNextIsRegistered] = useNextEventForUser(profile && profile.id);
   const [major]                = useNextMajor();
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
@@ -53,6 +53,8 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       nextEvent = MOCK.EVENTS.find(e => e.status === 'live') || null;
     }
   }
+  // True only when the displayed event is one the user already signed up for.
+  const nextEventIsRegistered = !activeMatch && !liveEvent && myNextIsRegistered;
 
   // Upcoming-teaser strip: skip whatever's already shown as Up Next.
   const upcomingForTeaser = upcoming
@@ -116,7 +118,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       {/* Next-up card */}
       <div style={{ padding: '16px 16px 0' }}>
         {nextEvent ? (
-          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch}/>
+          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={nextEventIsRegistered}/>
         ) : nextLoading ? (
           <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>
         ) : (
@@ -284,7 +286,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   );
 }
 
-function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot, activeMatch }) {
+function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot, activeMatch, isRegistered }) {
   if (!event) return null;
   const live = event.status === 'live';
   // When this card is in "live" mode and we have a real active match,
@@ -368,10 +370,18 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot, activeMa
                 )}
               </div>
             </div>
-            <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); go({ screen: 'eventDetail', eventId: event.id }); }}>
-              {isMember ? 'Grab spot' : 'Register'}
-              <Icon.ArrowRight size={14}/>
-            </Button>
+            {isRegistered ? (
+              <div style={{
+                padding: '8px 14px', borderRadius: 999,
+                background: 'var(--forest)', color: 'var(--cream)',
+                fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}>Coming Up ✓</div>
+            ) : (
+              <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); go({ screen: 'eventDetail', eventId: event.id }); }}>
+                {isMember ? 'Grab spot' : 'Register'}
+                <Icon.ArrowRight size={14}/>
+              </Button>
+            )}
           </div>
         )}
       </div>

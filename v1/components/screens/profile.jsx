@@ -422,7 +422,39 @@ function AvatarCircle({ url, initial, isSelf, userId }) {
     </div>
   );
 
-  if (!isSelf) return circle;
+  if (!isSelf) {
+    const [zoomed, setZoomed] = React.useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setZoomed(true)} style={{ padding: 0, background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          {circle}
+        </button>
+        {zoomed && (
+          <div
+            onClick={() => setZoomed(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.85)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 16,
+            }}
+          >
+            <div style={{
+              width: 220, height: 220, borderRadius: 999,
+              background: '#5A7B4A',
+              border: '4px solid rgba(255,255,255,0.25)',
+              overflow: 'hidden',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 80,
+            }}>
+              {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/> : initial}
+            </div>
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>TAP TO CLOSE</div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>

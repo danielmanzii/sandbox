@@ -177,12 +177,13 @@ function useNextEventForUser(userId) {
   );
 
   // Prefer the user's registered event if they have one upcoming.
-  if (myUpcoming.length > 0) return [myUpcoming[0], false];
+  // 3rd return value = isRegistered (whether the user is already signed up for this event).
+  if (myUpcoming.length > 0) return [myUpcoming[0], false, true];
 
   // Otherwise show the next open event (skip member-only unless they're
   // a member — for now we just show open events to everyone).
   const nextOpen = upcoming.find(e => e.status === 'open') || upcoming[0] || null;
-  return [nextOpen, false];
+  return [nextOpen, false, false];
 }
 
 // ─── Single event by id (for EventDetailScreen) ──────────────────────

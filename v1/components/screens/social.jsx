@@ -157,6 +157,14 @@ function SearchResultRow({ row, viewerId, last, onOpen }) {
 
 function LiveLeaderboard({ go }) {
   const ym = MOCK.LIVE.yourMatch;
+  if (!ym && MOCK.LIVE.matches.length === 0) {
+    return (
+      <div style={{ padding: '40px 16px', textAlign: 'center', opacity: 0.45 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 8 }}>No live matches</div>
+        <div style={{ fontSize: 13 }}>Check back when an event is in progress.</div>
+      </div>
+    );
+  }
   return (
     <div style={{ padding: '18px 16px' }}>
       <button onClick={() => go({ screen: 'live' })} style={{
@@ -177,6 +185,7 @@ function LiveLeaderboard({ go }) {
       </button>
 
       {/* Your match hero */}
+      {ym && (
       <div style={{
         background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
         color: 'var(--cream)',
@@ -198,6 +207,7 @@ function LiveLeaderboard({ go }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Match board */}
       <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 4px 10px' }}>All matches · week 11</div>
