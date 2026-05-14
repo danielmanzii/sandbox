@@ -1,21 +1,30 @@
 /* global React, MOCK, Icon, Wordmark, Button, Chip, Eyebrow, Dashed, LiveDot, Divider, AvatarBy */
 
 // ─── Membership tiers ─────────────────────────────────
-function MembershipScreen({ go, tier }) {
+function MembershipScreen({ go, tier, setTier }) {
+  const [confirmed, setConfirmed] = React.useState(null); // id of just-selected tier
+
   const tiers = [
     { id: 'walkup', name: 'Walk-up', price: 'Free', tag: 'No card needed',
       perks: ['Book any open event', 'Mats + balls included', 'Order from the bar'],
       missing: ['Sandbox Rating™', 'Match history', 'Member-only events'] },
-    { id: 'stats', name: 'Stats', price: '$0 / mo', tag: 'Open beta',
+    { id: 'stats', name: 'Stats Add On', price: '$10 / mo', tag: 'Data only',
       perks: ['Sandbox Rating™', 'Full match history', 'Shareable result cards'],
       missing: ['Season league', 'Member pricing', 'Guest passes'] },
     { id: 'league', name: 'Sandbox League', price: '$89 / mo', tag: 'Most popular', highlight: true,
-      perks: ['Weekly league slot', '$10 off all events', '2 guest passes / mo', 'Partner pairings', 'Members lounge'],
+      perks: ['Weekly league slot', '$10 off all events', '2 guest passes / mo', 'Stats Add On included', 'Partner pairings', 'Members lounge'],
       missing: ['Plus perks'] },
     { id: 'plus', name: 'Sandbox Plus', price: '$189 / mo', tag: 'Inner circle',
       perks: ['Everything in League', 'Unlimited guest passes', 'Free coaching monthly', 'Priority event booking', 'Season championship'],
       missing: [] },
   ];
+
+  function chooseTier(id) {
+    setTier(id);
+    localStorage.setItem('spp_tier_explicit', '1');
+    setConfirmed(id);
+    setTimeout(() => { setConfirmed(null); go({ screen: 'profile' }); }, 900);
+  }
 
   return (
     <div style={{
@@ -33,7 +42,7 @@ function MembershipScreen({ go, tier }) {
         }}>
           <Icon.Close size={14}/>
         </button>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Membership</div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Manage Membership</div>
         <div style={{ width: 40 }}/>
       </div>
 
@@ -47,78 +56,91 @@ function MembershipScreen({ go, tier }) {
       </div>
 
       <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12, position: 'relative' }}>
-        {tiers.map(t => (
-          <div key={t.id} style={{
-            background: t.highlight ? 'var(--cream)' : 'rgba(234,226,206,0.06)',
-            color: t.highlight ? 'var(--ink)' : 'var(--cream)',
-            borderRadius: 'var(--radius-card-lg)', padding: 22,
-            border: t.highlight ? 'none' : '1px solid rgba(234,226,206,0.14)',
-            position: 'relative',
-            boxShadow: t.highlight ? 'var(--shadow-hero)' : 'none',
-            backdropFilter: t.highlight ? 'none' : 'blur(8px)',
-            WebkitBackdropFilter: t.highlight ? 'none' : 'blur(8px)',
-          }}>
-            {t.highlight && (
-              <div style={{
-                position: 'absolute', top: -12, left: 22,
-                background: 'var(--forest)', color: 'var(--cream)',
-                padding: '5px 12px', borderRadius: 999,
-                fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
-                boxShadow: 'var(--shadow-sm)',
-              }}>
-                {t.tag}
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 0.95, letterSpacing: '-0.01em', color: t.highlight ? 'var(--forest)' : 'var(--cream)' }}>{t.name}</div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, marginTop: 6, letterSpacing: '0.04em' }}>{t.tag}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="display-num" style={{ fontSize: 28, color: t.highlight ? 'var(--forest)' : 'var(--cream)' }}>
-                  {t.price}
+        {tiers.map(t => {
+          const isCurrent = tier === t.id;
+          const isConfirmed = confirmed === t.id;
+          return (
+            <div key={t.id} style={{
+              background: t.highlight ? 'var(--cream)' : 'rgba(234,226,206,0.06)',
+              color: t.highlight ? 'var(--ink)' : 'var(--cream)',
+              borderRadius: 'var(--radius-card-lg)', padding: 22,
+              border: isCurrent && !t.highlight ? '1.5px solid rgba(234,226,206,0.5)' : t.highlight ? 'none' : '1px solid rgba(234,226,206,0.14)',
+              position: 'relative',
+              boxShadow: t.highlight ? 'var(--shadow-hero)' : 'none',
+              backdropFilter: t.highlight ? 'none' : 'blur(8px)',
+              WebkitBackdropFilter: t.highlight ? 'none' : 'blur(8px)',
+            }}>
+              {t.highlight && (
+                <div style={{
+                  position: 'absolute', top: -12, left: 22,
+                  background: 'var(--forest)', color: 'var(--cream)',
+                  padding: '5px 12px', borderRadius: 999,
+                  fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+                  boxShadow: 'var(--shadow-sm)',
+                }}>
+                  {t.tag}
+                </div>
+              )}
+              {isCurrent && !t.highlight && (
+                <div style={{
+                  position: 'absolute', top: -10, right: 18,
+                  background: 'rgba(234,226,206,0.18)', color: 'var(--cream)',
+                  padding: '4px 10px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+                  border: '1px solid rgba(234,226,206,0.3)',
+                }}>Active</div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 0.95, letterSpacing: '-0.01em', color: t.highlight ? 'var(--forest)' : 'var(--cream)' }}>{t.name}</div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, marginTop: 6, letterSpacing: '0.04em' }}>{t.tag}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="display-num" style={{ fontSize: 28, color: t.highlight ? 'var(--forest)' : 'var(--cream)' }}>
+                    {t.price}
+                  </div>
                 </div>
               </div>
+              <div style={{ height: 1, background: t.highlight ? 'rgba(14,28,19,0.1)' : 'rgba(234,226,206,0.14)', margin: '16px 0' }}/>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {t.perks.map(p => (
+                  <div key={p} style={{ display: 'flex', gap: 10, fontSize: 13, alignItems: 'center' }}>
+                    <span style={{
+                      width: 18, height: 18, borderRadius: 999,
+                      background: t.highlight ? 'var(--forest)' : 'rgba(234,226,206,0.18)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <Icon.Check size={11} color="var(--cream)"/>
+                    </span>
+                    <span>{p}</span>
+                  </div>
+                ))}
+                {t.missing.map(p => (
+                  <div key={p} style={{ display: 'flex', gap: 10, fontSize: 13, opacity: 0.35, alignItems: 'center' }}>
+                    <span style={{
+                      width: 18, height: 18, borderRadius: 999,
+                      background: 'transparent', border: '1px solid currentColor',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <Icon.Close size={9} color="currentColor"/>
+                    </span>
+                    <span style={{ textDecoration: 'line-through' }}>{p}</span>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant={t.highlight ? 'forest' : 'outlineCream'}
+                size="md" full style={{ marginTop: 18 }}
+                onClick={() => { if (!isCurrent) chooseTier(t.id); }}
+                disabled={isCurrent || isConfirmed}
+              >
+                {isConfirmed ? '✓ Plan updated' : isCurrent ? 'Current plan' : t.id === 'walkup' ? 'Switch to walk-up' : `Choose ${t.name}`}
+              </Button>
             </div>
-            <div style={{ height: 1, background: t.highlight ? 'rgba(14,28,19,0.1)' : 'rgba(234,226,206,0.14)', margin: '16px 0' }}/>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {t.perks.map(p => (
-                <div key={p} style={{ display: 'flex', gap: 10, fontSize: 13, alignItems: 'center' }}>
-                  <span style={{
-                    width: 18, height: 18, borderRadius: 999,
-                    background: t.highlight ? 'var(--forest)' : 'rgba(234,226,206,0.18)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <Icon.Check size={11} color={t.highlight ? 'var(--cream)' : 'var(--cream)'}/>
-                  </span>
-                  <span>{p}</span>
-                </div>
-              ))}
-              {t.missing.map(p => (
-                <div key={p} style={{ display: 'flex', gap: 10, fontSize: 13, opacity: 0.35, alignItems: 'center' }}>
-                  <span style={{
-                    width: 18, height: 18, borderRadius: 999,
-                    background: 'transparent', border: '1px solid currentColor',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <Icon.Close size={9} color="currentColor"/>
-                  </span>
-                  <span style={{ textDecoration: 'line-through' }}>{p}</span>
-                </div>
-              ))}
-            </div>
-            <Button
-              variant={t.highlight ? 'forest' : 'outlineCream'}
-              size="md" full style={{ marginTop: 18 }}
-              onClick={() => go({ screen: 'profile' })}
-              disabled={tier === t.id}
-            >
-              {tier === t.id ? 'Current plan' : t.id === 'walkup' ? 'Stay walk-up' : `Choose ${t.name}`}
-            </Button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

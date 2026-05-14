@@ -64,7 +64,7 @@
 /* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "tier": "league",
+  "tier": "walkup",
   "mascot": "full",
   "liveMode": false,
   "brandLoud": "full",
@@ -131,6 +131,12 @@ function App({ profile }) {
 
   React.useEffect(() => { localStorage.setItem('spp_route', JSON.stringify(route)); }, [route]);
   React.useEffect(() => { localStorage.setItem('spp_tier', tier); }, [tier]);
+  // Admins auto-elevate to Plus on first load (if they've never explicitly chosen a tier).
+  React.useEffect(() => {
+    if (profile && profile.is_admin && !localStorage.getItem('spp_tier_explicit')) {
+      setTier('plus');
+    }
+  }, [profile]);
   React.useEffect(() => { localStorage.setItem('spp_mascot', mascot); }, [mascot]);
   React.useEffect(() => { localStorage.setItem('spp_live', String(liveMode)); }, [liveMode]);
   React.useEffect(() => { localStorage.setItem('spp_brand', brandLoud); }, [brandLoud]);
