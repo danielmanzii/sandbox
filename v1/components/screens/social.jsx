@@ -1,8 +1,12 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useUserSearch, useIsFollowing, followUser, unfollowUser */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useNextMajor, useUpcomingEvents */
 // Social: people search + leaderboards + member directory-lite
 
 function SocialScreen({ go, tier }) {
   const [tab, setTab] = React.useState('live');
+  const [liveEvent]   = useLiveEvent();
+  const [nextMajor]   = useNextMajor();
+  const [upcoming]    = useUpcomingEvents(1);
+  const nextEvent     = nextMajor || (upcoming && upcoming[0]) || null;
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
       <div style={{ padding: '58px 20px 20px', background: 'var(--canvas)', color: 'var(--forest)' }}>
@@ -31,7 +35,7 @@ function SocialScreen({ go, tier }) {
         ))}
       </div>
 
-      {tab === 'live' && <LiveLeaderboard go={go}/>}
+      {tab === 'live' && <LiveLeaderboard go={go} liveEvent={liveEvent} nextEvent={nextEvent}/>}
       {tab === 'season' && <SeasonLeaderboard/>}
       {tab === 'alltime' && <AllTimeLeaderboard/>}
     </div>
@@ -155,16 +159,35 @@ function SearchResultRow({ row, viewerId, last, onOpen }) {
   );
 }
 
-function LiveLeaderboard({ go }) {
-  const ym = MOCK.LIVE.yourMatch;
-  if (!ym && MOCK.LIVE.matches.length === 0) {
+function LiveLeaderboard({ go, liveEvent, nextEvent }) {
+  if (!liveEvent) {
     return (
-      <div style={{ padding: '40px 16px', textAlign: 'center', opacity: 0.45 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 8 }}>No live matches</div>
-        <div style={{ fontSize: 13 }}>Check back when an event is in progress.</div>
+      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1, marginBottom: 6 }}>
+          No live leaderboard available.
+        </div>
+        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--ink)', opacity: 0.6, marginBottom: 24 }}>
+          Check back when a match is in progress.
+        </div>
+        {nextEvent ? (
+          <div className="card" style={{ padding: '18px 20px', textAlign: 'left' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
+              Next match
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>
+              {nextEvent.courseShort}
+            </div>
+            <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, marginTop: 6, letterSpacing: '0.04em' }}>
+              {(nextEvent.dateFull || '').toUpperCase()} · {nextEvent.time}
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--ink)', opacity: 0.4 }}>No upcoming events scheduled.</div>
+        )}
       </div>
     );
   }
+
   return (
     <div style={{ padding: '18px 16px' }}>
       <button onClick={() => go({ screen: 'live' })} style={{
@@ -178,43 +201,15 @@ function LiveLeaderboard({ go }) {
       }}>
         <LiveDot/>
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1, letterSpacing: '-0.01em' }}>Week 11 · Melreese</div>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, marginTop: 5, letterSpacing: '0.06em' }}>{MOCK.LIVE.matches.length} MATCHES · THRU HOLE {MOCK.LIVE.currentHole}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1, letterSpacing: '-0.01em' }}>{liveEvent.courseShort}</div>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, marginTop: 5, letterSpacing: '0.06em' }}>
+            {(liveEvent.dateFull || '').toUpperCase()} · LIVE NOW
+          </div>
         </div>
         <Icon.ArrowRight size={14} color="var(--cream)"/>
       </button>
-
-      {/* Your match hero */}
-      {ym && (
-      <div style={{
-        background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
-        color: 'var(--cream)',
-        borderRadius: 'var(--radius-card-lg)', padding: 20, marginBottom: 14, position: 'relative', overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)',
-      }}>
-        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Your match</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, position: 'relative' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{ym.teamA.name} <span style={{ opacity: 0.55 }}>(you)</span></div>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 4, letterSpacing: '0.04em' }}>VS {ym.teamB.name}</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: ym.state > 0 ? 'var(--cream)' : ym.state < 0 ? '#E7B8A7' : 'var(--cream)', lineHeight: 0.9, letterSpacing: '-0.02em' }}>
-              {ym.state > 0 ? `${ym.state} UP` : ym.state < 0 ? `${-ym.state} DN` : 'AS'}
-            </div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, marginTop: 4, letterSpacing: '0.06em' }}>THRU {ym.thru} · {ym.remaining} LEFT</div>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* Match board */}
-      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 4px 10px' }}>All matches · week 11</div>
-      <div className="card" style={{ overflow: 'hidden' }}>
-        {MOCK.LIVE.matches.map((m, i) => (
-          <MatchBoardRow key={m.id} m={m} last={i === MOCK.LIVE.matches.length - 1}/>
-        ))}
+      <div style={{ padding: '20px', textAlign: 'center', opacity: 0.45 }}>
+        <div style={{ fontSize: 13 }}>Live match board coming soon.</div>
       </div>
     </div>
   );

@@ -19,7 +19,16 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [pendingEventInvites]  = useMyPendingEventInvites(profile && profile.id);
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
   const [newFollowers]         = useNewFollowers(profile && profile.id);
-  const notificationCount      = (pendingInvites || []).length + (newFollowers || []).length + (pendingEventInvites || []).length;
+  // Only count items the user hasn't seen yet (seen IDs written by NotificationsScreen)
+  const seenNotifIds = React.useMemo(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('spp_seen_notifs') || '[]')); }
+    catch { return new Set(); }
+  }, []);
+  const notificationCount = [
+    ...(pendingInvites      || []).map(i => `inv-${i.id}`),
+    ...(newFollowers        || []).map(f => `fol-${f.follower_id}-${f.created_at}`),
+    ...(pendingEventInvites || []).map(e => `ei-${e.id}`),
+  ].filter(id => !seenNotifIds.has(id)).length;
 
   // Friends-here pills on the Up Next teaser cards.
   const upcomingIds = React.useMemo(

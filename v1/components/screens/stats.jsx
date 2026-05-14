@@ -77,6 +77,17 @@ function StatsLocked({ go }) {
 
 function StatsYou() {
   const u = MOCK.USER;
+  const hasHistory = MOCK.HISTORY.length > 0;
+  const hasMatches = u.matchesTotal > 0;
+
+  const totalHoles   = u.holesWonTotal + u.holesLostTotal + u.holesHalvedTotal;
+  const holeWinPct   = totalHoles > 0 ? Math.round(u.holesWonTotal / totalHoles * 100) + '%' : '—';
+  const holeWinSub   = totalHoles > 0 ? `${u.holesWonTotal} of ${totalHoles}` : 'no matches yet';
+
+  const bestMatch    = MOCK.HISTORY.find(r => r.best) || null;
+  const bestWinVal   = bestMatch ? bestMatch.margin : '—';
+  const bestWinSub   = bestMatch ? `${bestMatch.week} · vs ${bestMatch.opp}` : 'no matches yet';
+
   return (
     <div style={{ padding: '16px' }}>
       {/* SBX Rating hero */}
@@ -85,70 +96,49 @@ function StatsYou() {
       {/* Summary tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
         <StatTile label="Record" value={`${u.matchesW}–${u.matchesL}–${u.matchesH}`} sub={`${u.matchesTotal} matches`}/>
-        <StatTile label="Hole win %" value="54%" sub="38 of 70" highlight/>
-        <StatTile label="Best win" value="5&4" sub="W8 · vs María+Nats"/>
+        <StatTile label="Hole win %" value={holeWinPct} sub={holeWinSub} highlight/>
+        <StatTile label="Best win" value={bestWinVal} sub={bestWinSub}/>
         <StatTile label="Unbeaten" value={`${u.streak}`} sub="matches · 🔥" accent/>
       </div>
 
       {/* Scramble Intelligence — the shot-level truth */}
       <ScrambleIntel u={u}/>
 
-      {/* How SBX works explainer */}
-      <div className="card" style={{ marginTop: 16, padding: 16 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>How it moves</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          {[
-            { label: 'Last match', delta: '+0.043', detail: 'W 2 UP vs Riv+Theo · they\'re 5.547' },
-            { label: 'If you win next', delta: '+0.08', detail: 'Dukes+Leo are 6.351 · upside match' },
-            { label: 'If you lose', delta: '–0.11', detail: 'Rating-weighted — a loss here stings' },
-          ].map((r, i) => (
-            <div key={i} style={{
-              flex: 1, padding: 10, borderRadius: 12,
-              background: i === 0 ? 'rgba(62,138,87,0.1)' : 'transparent',
-              border: i === 0 ? '1px solid rgba(62,138,87,0.25)' : '1px dashed rgba(14,28,19,0.1)',
-            }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6 }}>{r.label}</div>
-              <div style={{
-                fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1, marginTop: 5,
-                color: r.delta.startsWith('+') ? 'var(--forest)' : 'var(--clay-deep)',
-              }}>{r.delta}</div>
-              <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, lineHeight: 1.3 }}>{r.detail}</div>
-            </div>
-          ))}
+      {/* How it moves — only shown once the user has match history */}
+      {hasHistory && (
+        <div className="card" style={{ marginTop: 16, padding: 16 }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>How it moves</div>
+          <div style={{ padding: '20px 0', textAlign: 'center', opacity: 0.4 }}>
+            <div style={{ fontSize: 13 }}>SBX delta breakdown coming soon.</div>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Win rate by opponent rating */}
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Your win rate vs rating</div>
-        <div className="card" style={{ padding: 16 }}>
-          {[
-            { label: 'vs 3.5–4.5', W: 4, L: 0, H: 0, pct: 100 },
-            { label: 'vs 4.5–5.5', W: 4, L: 3, H: 1, pct: 56 },
-            { label: 'vs 5.5–6.5', W: 2, L: 3, H: 1, pct: 42 },
-            { label: 'vs 6.5+', W: 1, L: 1, H: 0, pct: 50 },
-          ].map((r, i) => (
-            <div key={i} style={{ padding: '8px 0', borderBottom: i < 3 ? '1px solid rgba(14,28,19,0.06)' : 'none' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>{r.label}</span>
-                <span style={{ fontSize: 11, opacity: 0.7 }}>{r.W}–{r.L}–{r.H} · {r.pct}%</span>
-              </div>
-              <div style={{ height: 5, background: 'rgba(14,28,19,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ width: `${r.pct}%`, height: '100%', background: r.pct > 50 ? 'var(--forest)' : 'var(--clay)' }}/>
-              </div>
-            </div>
-          ))}
+      {/* Win rate by opponent rating — only shown once the user has match history */}
+      {hasHistory && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Your win rate vs rating</div>
+          <div className="card" style={{ padding: '20px', textAlign: 'center', opacity: 0.4 }}>
+            <div style={{ fontSize: 13 }}>Win rate breakdown coming soon.</div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Match history */}
       <div style={{ marginTop: 20 }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {MOCK.HISTORY.slice(0, 6).map((r, i) => (
-            <MatchRow key={r.id} r={r} last={i === 5}/>
-          ))}
-        </div>
+        {hasHistory ? (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {MOCK.HISTORY.slice(0, 6).map((r, i) => (
+              <MatchRow key={r.id} r={r} last={i === 5}/>
+            ))}
+          </div>
+        ) : (
+          <div className="card" style={{ padding: '24px 20px', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', lineHeight: 1, marginBottom: 6 }}>No matches yet.</div>
+            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.6 }}>Your match history will show up here after your first game.</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -500,57 +490,65 @@ function StatTile({ label, value, sub, highlight, accent }) {
 }
 
 function StatsH2H() {
+  const bestPartner = MOCK.H2H.find(h => h.kind === 'Partner') || null;
   return (
     <div style={{ padding: '16px' }}>
-      <div style={{ background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`, color: 'var(--cream)', borderRadius: 'var(--radius-card-lg)', padding: 20, position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
-        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Best Pairing</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
-          <div style={{ position: 'relative' }}>
-            <AvatarBy handle="@jaybird" size={56}/>
-            <div style={{ position: 'absolute', bottom: -4, right: -4, width: 22, height: 22, borderRadius: 999, background: 'var(--clay)', color: 'var(--forest-deep)', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--forest)' }}>1</div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1 }}>You + @jaybird</div>
-            <div className="caption-serif" style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>Chemistry 88 · 5W 3L 1H</div>
-          </div>
-        </div>
-        <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '16px 0 14px', position: 'relative' }}/>
-        <div style={{ fontSize: 13, opacity: 0.85, fontStyle: 'italic', fontFamily: 'var(--font-serif)', lineHeight: 1.45, position: 'relative' }}>
-          "You two cover each other's weak distances. Jay kills it inside 80, you take anything longer."
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>All records</div>
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {MOCK.H2H.map((h, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '12px 14px',
-              borderBottom: i < MOCK.H2H.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
-            }}>
-              <AvatarBy handle={h.vs} size={36}/>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {h.vs}
-                  <Chip variant={h.kind === 'Partner' ? 'forest' : 'ghostDark'} style={{ fontSize: 9, padding: '2px 7px' }}>{h.kind}</Chip>
-                </div>
-                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 3, letterSpacing: '0.06em' }}>
-                  {h.kind === 'Partner' ? `Chem ${h.chemistry} · last: ${h.lastMargin}` : `Last: ${h.lastMargin}`}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-display)' }}>
-                <span style={{ color: 'var(--forest)', fontSize: 18 }}>{h.wins}</span>
-                <span style={{ color: 'rgba(14,28,19,0.3)', fontSize: 12 }}>–</span>
-                <span style={{ color: 'var(--clay-deep)', fontSize: 18 }}>{h.losses}</span>
-                <span style={{ color: 'rgba(14,28,19,0.3)', fontSize: 12 }}>–</span>
-                <span style={{ color: '#8A6A4A', fontSize: 16 }}>{h.halved}</span>
+      {bestPartner ? (
+        <div style={{ background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`, color: 'var(--cream)', borderRadius: 'var(--radius-card-lg)', padding: 20, position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
+          <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Best Pairing</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
+            <div style={{ position: 'relative' }}>
+              <AvatarBy handle={bestPartner.vs} size={56}/>
+              <div style={{ position: 'absolute', bottom: -4, right: -4, width: 22, height: 22, borderRadius: 999, background: 'var(--clay)', color: 'var(--forest-deep)', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--forest)' }}>1</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1 }}>You + {bestPartner.vs}</div>
+              <div className="caption-serif" style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+                {bestPartner.chemistry != null ? `Chemistry ${bestPartner.chemistry} · ` : ''}{bestPartner.wins}W {bestPartner.losses}L {bestPartner.halved}H
               </div>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="card" style={{ padding: '28px 20px', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1, marginBottom: 6 }}>No pairings yet.</div>
+          <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.6 }}>Play matches to build your head-to-head record.</div>
+        </div>
+      )}
+
+      {MOCK.H2H.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>All records</div>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {MOCK.H2H.map((h, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '12px 14px',
+                borderBottom: i < MOCK.H2H.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
+              }}>
+                <AvatarBy handle={h.vs} size={36}/>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {h.vs}
+                    <Chip variant={h.kind === 'Partner' ? 'forest' : 'ghostDark'} style={{ fontSize: 9, padding: '2px 7px' }}>{h.kind}</Chip>
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.55, marginTop: 3, letterSpacing: '0.06em' }}>
+                    {h.kind === 'Partner' ? `Chem ${h.chemistry} · last: ${h.lastMargin}` : `Last: ${h.lastMargin}`}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-display)' }}>
+                  <span style={{ color: 'var(--forest)', fontSize: 18 }}>{h.wins}</span>
+                  <span style={{ color: 'rgba(14,28,19,0.3)', fontSize: 12 }}>–</span>
+                  <span style={{ color: 'var(--clay-deep)', fontSize: 18 }}>{h.losses}</span>
+                  <span style={{ color: 'rgba(14,28,19,0.3)', fontSize: 12 }}>–</span>
+                  <span style={{ color: '#8A6A4A', fontSize: 16 }}>{h.halved}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
