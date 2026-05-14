@@ -5,11 +5,19 @@
 //   - Pending match invites (Accept / Decline)
 //   - New followers (Follow back)
 
+const SEEN_KEY = 'spp_seen_notifs';
+
 function NotificationsScreen({ profile, go }) {
   const [invites, invitesLoading]         = useMyPendingInvites(profile && profile.id);
   const [eventInvites, eventInvLoading]   = useMyPendingEventInvites(profile && profile.id);
   const [followers, followersLoading]     = useNewFollowers(profile && profile.id);
   const loading = invitesLoading || eventInvLoading || followersLoading;
+
+  // Load which IDs were already seen on a prior visit (read from localStorage once on mount).
+  const [seenIds] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+    catch { return new Set(); }
+  });
 
   // Merge all notification types, sorted by time desc.
   const items = React.useMemo(() => {
@@ -24,6 +32,25 @@ function NotificationsScreen({ profile, go }) {
     }));
     return [...a, ...b, ...c].sort((x, y) => new Date(y.ts) - new Date(x.ts));
   }, [invites, followers, eventInvites]);
+
+  // After items load, mark all as seen for the NEXT visit (don't update seenIds state
+  // so items stay in their correct New/Old section for the duration of this visit).
+  React.useEffect(() => {
+    if (loading || items.length === 0) return;
+    try {
+      const union = [...new Set([...seenIds, ...items.map(i => i.id)])];
+      localStorage.setItem(SEEN_KEY, JSON.stringify(union));
+    } catch {}
+  }, [loading, items]);
+
+  const newItems = items.filter(i => !seenIds.has(i.id));
+  const oldItems = items.filter(i =>  seenIds.has(i.id));
+
+  function renderCard(it) {
+    if (it.kind === 'event-invite') return <EventInviteCard   key={it.id} invite={it.payload} profile={profile} go={go}/>;
+    if (it.kind === 'invite')       return <NotificationCard  key={it.id} invite={it.payload} profile={profile} go={go}/>;
+    return                                 <FollowerCard       key={it.id} row={it.payload}    viewerId={profile && profile.id} go={go}/>;
+  }
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120, position: 'relative' }}>
@@ -69,25 +96,39 @@ function NotificationsScreen({ profile, go }) {
           <div style={{ padding: '20px 4px', fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>
             Loading…
           </div>
-        ) : items.length === 0 ? (
-          <div className="card" style={{ padding: 28, textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>
-              All caught up.
-            </div>
-            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.7, marginTop: 8 }}>
-              No notifications right now. Match invites and new followers will land here.
-            </div>
-          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {items.map(it => (
-              it.kind === 'event-invite'
-                ? <EventInviteCard key={it.id} invite={it.payload} profile={profile} go={go}/>
-                : it.kind === 'invite'
-                  ? <NotificationCard key={it.id} invite={it.payload} profile={profile} go={go}/>
-                  : <FollowerCard key={it.id} row={it.payload} viewerId={profile && profile.id} go={go}/>
-            ))}
-          </div>
+          <>
+            {/* ── New ── */}
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.5, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+              New
+            </div>
+            {newItems.length === 0 ? (
+              <div className="card" style={{ padding: 22, textAlign: 'center', marginBottom: 24 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1 }}>
+                  No pending notifications.
+                </div>
+                <div className="caption-serif" style={{ fontSize: 13, color: 'var(--ink)', opacity: 0.7, marginTop: 6 }}>
+                  Match invites, event invites, and new followers land here.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+                {newItems.map(renderCard)}
+              </div>
+            )}
+
+            {/* ── Old News ── */}
+            {oldItems.length > 0 && (
+              <>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.5, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+                  Old News
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: 0.65 }}>
+                  {oldItems.map(renderCard)}
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>

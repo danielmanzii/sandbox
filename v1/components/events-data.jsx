@@ -434,6 +434,25 @@ async function declineEventInvite({ invite, userId }) {
   }
 }
 
+// ─── Admin: update an existing event ─────────────────────────────────
+async function updateEvent(eventId, fields) {
+  const isMajor = fields.type === 'major';
+  const { error } = await sbx.from('events').update({
+    course_short:  fields.courseShort.trim(),
+    course_name:   fields.courseName.trim(),
+    starts_at:     fields.startsAt,
+    field:         Number(fields.field),
+    type:          fields.type,
+    is_major:      isMajor,
+    tagline:       fields.tagline     ? fields.tagline.trim()     : null,
+    description:   fields.description ? fields.description.trim() : null,
+    img_url:       fields.imgUrl      ? fields.imgUrl.trim()      : null,
+    price_walkup:  Number(fields.priceWalkup) || 0,
+    price_member:  Number(fields.priceMember) || 0,
+  }).eq('id', eventId);
+  if (error) throw error;
+}
+
 // ─── Admin: create a new event ───────────────────────────────────────
 // Inserts into public.events. RLS blocks non-admins server-side.
 // Fields: courseShort, courseName, startsAt (ISO string), field (int),
@@ -465,5 +484,5 @@ Object.assign(window, {
   registerForEvent, cancelRegistration,
   useMyPendingEventInvites,
   sendEventInvite, acceptEventInvite, declineEventInvite,
-  createEvent,
+  createEvent, updateEvent,
 });

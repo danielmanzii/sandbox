@@ -645,14 +645,63 @@ function MiniEventCard({ event, go, friendsHere }) {
   );
 }
 
-function AvatarBy({ handle, size = 36 }) {
-  const f = MOCK.FRIENDS.find(x => x.handle === handle);
-  if (!f) return <div style={{ width: size, height: size, borderRadius: 999, background: 'var(--sand)' }}/>;
+function AvatarBy({ handle, url: urlProp, name: nameProp, size = 36, zoomable = false }) {
+  const [zoomed, setZoomed] = React.useState(false);
+  const f    = MOCK.FRIENDS.find(x => x.handle === handle);
+  const url  = urlProp  || (f && f.avatar)  || null;
+  const name = nameProp || (f && f.name)     || (handle ? String(handle).replace(/^@/, '') : '?');
+  const initial = String(name).charAt(0).toUpperCase();
+
+  const imgStyle = { width: '100%', height: '100%', objectFit: 'cover' };
+  const initials = (sz) => (
+    <div style={{
+      width: '100%', height: '100%',
+      background: '#5A7B4A', color: 'var(--cream)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontSize: sz * 0.42, lineHeight: 1,
+    }}>{initial}</div>
+  );
+
   return (
-    <img src={f.avatar} alt={f.name} style={{
-      width: size, height: size, borderRadius: 999, objectFit: 'cover',
-      border: '2px solid var(--cream)',
-    }}/>
+    <>
+      <div
+        onClick={zoomable ? (e) => { e.stopPropagation(); setZoomed(true); } : undefined}
+        style={{
+          width: size, height: size, borderRadius: 999, overflow: 'hidden',
+          border: '2px solid var(--cream)', flexShrink: 0,
+          cursor: zoomable ? 'pointer' : 'default',
+        }}
+      >
+        {url ? <img src={url} alt={name} style={imgStyle}/> : initials(size)}
+      </div>
+
+      {zoomed && (
+        <div
+          onClick={() => setZoomed(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(14,28,19,0.88)', backdropFilter: 'blur(14px)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 20,
+          }}
+        >
+          <div style={{
+            width: 220, height: 220, borderRadius: 999, overflow: 'hidden',
+            border: '3px solid var(--cream)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+          }}>
+            {url ? <img src={url} alt={name} style={imgStyle}/> : initials(220)}
+          </div>
+          <div style={{
+            color: 'var(--cream)', fontFamily: 'var(--font-display)',
+            fontSize: 22, letterSpacing: '-0.01em',
+          }}>{name}</div>
+          <div style={{
+            fontSize: 11, color: 'rgba(234,226,206,0.55)',
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',
+          }}>TAP TO CLOSE</div>
+        </div>
+      )}
+    </>
   );
 }
 

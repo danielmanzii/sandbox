@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, registerForEvent, cancelRegistration, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent, updateEvent, useUserSearch */
 // Events list + detail + register
 
 // ─── Calendar download ────────────────────────────────────────────────
@@ -210,18 +210,20 @@ function FullEventCard({ event, go, tier, friendsHere }) {
 
 function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
   // Real event + registration data
-  const [event, eventLoading] = useEvent(eventId);
+  const [event, eventLoading, reloadEvent] = useEvent(eventId);
   const isRegistered = useIsRegistered(eventId, profile && profile.id);
 
   const isMember = tier === 'league' || tier === 'leaguePlus';
+  const isAdmin  = profile && profile.is_admin;
   const [registering, setRegistering] = React.useState(false);
   const [step, setStep] = React.useState(0);
-  const [partner, setPartner] = React.useState('@jaybird');
+  const [partner, setPartner] = React.useState('');
   const [guest, setGuest] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
   const [actionErr, setActionErr] = React.useState('');
   const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [editOpen, setEditOpen]   = React.useState(false);
 
   async function onCancel() {
     if (!confirm('Cancel your registration for this event?')) return;
@@ -273,6 +275,17 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
         }}>
           <Icon.ArrowLeft size={16}/>
         </button>
+        {isAdmin && (
+          <button onClick={() => setEditOpen(true)} style={{
+            position: 'absolute', top: 58, right: 64,
+            width: 40, height: 40, borderRadius: 999,
+            background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(10px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--cream)',
+            border: '1px solid rgba(234,226,206,0.2)',
+            fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+          }}>Edit</button>
+        )}
         <button style={{
           position: 'absolute', top: 58, right: 16,
           width: 40, height: 40, borderRadius: 999,
@@ -452,6 +465,15 @@ function EventDetailScreen({ go, eventId, tier, setScreenState, profile }) {
           onClose={() => setInviteOpen(false)}
         />
       )}
+
+      {/* Edit event sheet (admin only) */}
+      {editOpen && event && (
+        <CreateEventSheet
+          editEvent={event}
+          onClose={() => setEditOpen(false)}
+          onCreated={() => { setEditOpen(false); reloadEvent && reloadEvent(); }}
+        />
+      )}
     </div>
   );
 }
@@ -572,6 +594,11 @@ function Step0({ event, isMember, onNext }) {
 }
 
 function Step1({ partner, setPartner, guest, setGuest, onNext }) {
+  const [query, setQuery]       = React.useState('');
+  const [results, searching]    = useUserSearch(query, 8);
+
+  const selectedName = partner ? partner.replace(/^@/, '') : '';
+
   return (
     <div>
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Step 2 of 3</div>
@@ -579,46 +606,95 @@ function Step1({ partner, setPartner, guest, setGuest, onNext }) {
         Who's your ride-or-die?
       </h2>
       <p className="caption-serif" style={{ fontSize: 15, opacity: 0.7, marginTop: 0, color: 'var(--ink)' }}>
-        Scramble partner. Pick from the roster or use a guest pass.
+        Search the roster or use a guest pass.
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
-        {MOCK.FRIENDS.slice(0, 4).map(f => (
-          <button key={f.id} onClick={() => { setPartner(f.handle); setGuest(false); }} style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: 10, borderRadius: 14,
-            background: partner === f.handle && !guest ? 'var(--forest)' : 'var(--paper)',
-            color: partner === f.handle && !guest ? 'var(--cream)' : 'var(--ink)',
-            border: '1px solid rgba(14,28,19,0.08)',
-            width: '100%', textAlign: 'left',
-          }}>
-            <AvatarBy handle={f.handle} size={36}/>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{formatHandle(f.handle)}</div>
-              <div style={{ fontSize: 11, opacity: 0.7 }}>{f.name} · SBX {f.sbx?.toFixed(3) ?? '—'}</div>
-            </div>
-            {partner === f.handle && !guest && <Icon.Chevron dir="right" size={14} color="var(--cream)"/>}
-          </button>
-        ))}
-        <button onClick={() => { setGuest(true); }} style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: 10, borderRadius: 14,
-          background: guest ? 'var(--clay)' : 'transparent',
-          color: guest ? 'var(--forest-deep)' : 'var(--forest)',
-          border: '1px dashed rgba(14,28,19,0.2)',
-          width: '100%', textAlign: 'left',
-        }}>
-          <div style={{ width: 36, height: 36, borderRadius: 999, border: '1.5px dashed currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon.Plus size={16}/>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Use a guest pass</div>
-            <div style={{ fontSize: 11, opacity: 0.7 }}>2 left this month · they tee free</div>
-          </div>
-        </button>
+      {/* Search input */}
+      <div style={{ position: 'relative', marginTop: 14 }}>
+        <span style={{
+          position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+          fontSize: 14, color: 'var(--forest)', opacity: 0.4, pointerEvents: 'none',
+        }}>@</span>
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setGuest(false); }}
+          placeholder="search by name or handle"
+          style={{
+            width: '100%', padding: '11px 12px 11px 26px',
+            borderRadius: 12, background: 'var(--paper)',
+            border: '1px solid rgba(14,28,19,0.12)',
+            fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--forest)',
+            boxSizing: 'border-box',
+          }}
+        />
+        {searching && (
+          <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--forest)', opacity: 0.4 }}>…</span>
+        )}
       </div>
 
-      <Button variant="forest" full size="lg" onClick={onNext} style={{ marginTop: 22 }}>
+      {/* Results */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 220, overflowY: 'auto' }}>
+        {results.length === 0 && query.trim().length > 0 && !searching && (
+          <div style={{ fontSize: 13, color: 'var(--forest)', opacity: 0.5, padding: '10px 4px', textAlign: 'center' }}>
+            No players found for "{query}"
+          </div>
+        )}
+        {results.map(r => {
+          const handle  = r.handle ? `@${String(r.handle).replace(/^@/, '')}` : '';
+          const display = [r.first_name, r.last_name].filter(Boolean).join(' ') || handle;
+          const selected = partner === handle && !guest;
+          return (
+            <button key={r.id} onClick={() => { setPartner(handle); setGuest(false); setQuery(''); }} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: 10, borderRadius: 14,
+              background: selected ? 'var(--forest)' : 'var(--paper)',
+              color: selected ? 'var(--cream)' : 'var(--ink)',
+              border: '1px solid rgba(14,28,19,0.08)',
+              width: '100%', textAlign: 'left',
+            }}>
+              <AvatarBy url={r.avatar_url} name={display} size={36} zoomable/>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{display}</div>
+                <div style={{ fontSize: 11, opacity: 0.7 }}>{handle}</div>
+              </div>
+              {selected && <Icon.Check size={14} color="var(--cream)"/>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected partner chip */}
+      {partner && !guest && (
+        <div style={{
+          marginTop: 10, padding: '8px 14px', borderRadius: 10,
+          background: 'var(--forest)', color: 'var(--cream)',
+          fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8,
+        }}>
+          <Icon.Check size={12} color="var(--cream)"/>
+          {partner} selected
+          <button onClick={() => setPartner('')} style={{ background: 'none', border: 'none', color: 'var(--cream)', opacity: 0.7, cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+
+      {/* Guest pass option */}
+      <button onClick={() => { setGuest(true); setPartner(''); setQuery(''); }} style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: 10, borderRadius: 14, marginTop: 8,
+        background: guest ? 'var(--clay)' : 'transparent',
+        color: guest ? 'var(--forest-deep)' : 'var(--forest)',
+        border: '1px dashed rgba(14,28,19,0.2)',
+        width: '100%', textAlign: 'left',
+      }}>
+        <div style={{ width: 36, height: 36, borderRadius: 999, border: '1.5px dashed currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon.Plus size={16}/>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Use a guest pass</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>2 left this month · they tee free</div>
+        </div>
+      </button>
+
+      <Button variant="forest" full size="lg" onClick={onNext} disabled={!partner && !guest} style={{ marginTop: 18 }}>
         Lock it in <Icon.ArrowRight size={14}/>
       </Button>
     </div>
@@ -771,14 +847,37 @@ function InviteToEventSheet({ event, profile, onClose }) {
   );
 }
 
-// ─── Admin: create event bottom-sheet ────────────────────────────────
-function CreateEventSheet({ onClose, onCreated }) {
+// ─── Admin: create / edit event bottom-sheet ─────────────────────────
+function CreateEventSheet({ onClose, onCreated, editEvent }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = React.useState({
+
+  const toLocalDate = (iso) => {
+    const d = new Date(iso), pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  };
+  const toLocalTime = (iso) => {
+    const d = new Date(iso), pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const [form, setForm] = React.useState(() => editEvent ? {
+    courseShort:  editEvent.courseShort || '',
+    courseName:   editEvent.courseName  || '',
+    date:         editEvent.startsAt ? toLocalDate(editEvent.startsAt) : today,
+    time:         editEvent.startsAt ? toLocalTime(editEvent.startsAt) : '18:00',
+    field:        String(editEvent.field        || 24),
+    type:         editEvent.type                || 'weekly',
+    tagline:      editEvent.tagline             || '',
+    description:  editEvent.description         || '',
+    imgUrl:       editEvent.img                 || '',
+    priceWalkup:  String(editEvent.priceWalkup  || 20),
+    priceMember:  String(editEvent.priceMember  || 0),
+  } : {
     courseShort: '', courseName: '', date: today, time: '18:00',
     field: '24', type: 'weekly', tagline: '', description: '',
     imgUrl: '', priceWalkup: '20', priceMember: '0',
   });
+
   const [saving, setSaving] = React.useState(false);
   const [err, setErr]       = React.useState('');
 
@@ -793,10 +892,14 @@ function CreateEventSheet({ onClose, onCreated }) {
     setSaving(true); setErr('');
     try {
       const startsAt = new Date(`${form.date}T${form.time}:00`).toISOString();
-      await createEvent({ ...form, startsAt, priceWalkup: wu, priceMember: mem });
+      if (editEvent) {
+        await updateEvent(editEvent.id, { ...form, startsAt, priceWalkup: wu, priceMember: mem });
+      } else {
+        await createEvent({ ...form, startsAt, priceWalkup: wu, priceMember: mem });
+      }
       onCreated();
     } catch (e) {
-      setErr(e.message || 'Could not create event.');
+      setErr(e.message || (editEvent ? 'Could not save changes.' : 'Could not create event.'));
     }
     setSaving(false);
   }
@@ -831,7 +934,7 @@ function CreateEventSheet({ onClose, onCreated }) {
 
         <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Admin</div>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 30, margin: '8px 0 4px', lineHeight: 0.95, color: 'var(--forest)', letterSpacing: '-0.02em' }}>
-          New Event.
+          {editEvent ? 'Edit Event.' : 'New Event.'}
         </h2>
 
         <label style={labelStyle}>Course short name</label>
@@ -894,7 +997,7 @@ function CreateEventSheet({ onClose, onCreated }) {
         )}
 
         <Button variant="forest" full size="lg" onClick={submit} disabled={saving} style={{ marginTop: 20 }}>
-          {saving ? 'Creating…' : 'Create event'}
+          {saving ? (editEvent ? 'Saving…' : 'Creating…') : (editEvent ? 'Save changes' : 'Create event')}
           {!saving && <Icon.ArrowRight size={14}/>}
         </Button>
       </div>
