@@ -211,7 +211,7 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
       const handle = email.replace(/^@/, '').toLowerCase();
       const { data: foundEmail, error: lookupErr } = await sbx.rpc('email_for_handle', { handle_input: handle });
       if (lookupErr || !foundEmail) {
-        setErr('No account found for that username.');
+        setErr('No account found for that username. Try signing in with your email instead.');
         setBusy(false);
         return;
       }
