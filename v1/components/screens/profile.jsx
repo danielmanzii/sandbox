@@ -1422,4 +1422,4 @@ function EditProfileSheet({ profile, onClose }) {
   );
 }
 
-Object.assign(window, { ProfileScreen });
+Object.assign(window, { ProfileScreen, RealSbxCard, sbxTier });
