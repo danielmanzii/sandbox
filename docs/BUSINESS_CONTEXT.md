@@ -4,20 +4,36 @@
 
 ---
 
+> ## ⚠️ Model evolution — June 2026 (read first)
+> The business has sharpened from "a league we run" into a **B2B2C network platform**. The pitch below reflects the current model; some operational detail further down still describes the original league framing and is kept for reference — where they conflict, **this section wins.**
+
 ## 1. Elevator pitch (what this business is)
 
-**Sandbox Pitch & Putt** is a membership-based competitive golf league and event company operating on real golf courses. We rent underutilized tee-time slots at existing golf courses, lay down artificial turf tee mats at 50–120 yard distances from the actual holes, and run short, fast, fun 9-hole **2-man scramble** pitch-and-putt events. Events run in roughly **1 hour**. We package these events into a **weekly cadence** so that members can attend regularly.
+**Sandbox Pitch & Putt** is a **B2B2C platform that turns unused twilight tee times at existing golf courses into 9-hole pitch-and-putt experiences.** Partner courses lay down our branded artificial-turf tee boxes within ~100 yards of each pin — activating inventory that would otherwise sit empty after the regular field clears out. Golfers book through the Sandbox app, check in, grab a bag, and play a fast, competitive **2-man scramble** round in under an hour.
 
-We monetize through:
-1. **Event ticket sales** (walk-up / single entry)
-2. **Monthly memberships** (recurring revenue; the core business)
-3. **A standalone stats subscription** (tracking, leaderboards, handicap — the data product)
-4. **Corporate / private buyouts** (B2B team-building events)
-5. **Sponsorships and content monetization** (as we grow the audience)
+**Two sides, two pains we solve:**
+- **Golfers:** *"I wish I had more time to golf."* → sub-hour, affordable, competitive rounds near them.
+- **Courses:** *"I wish we had more revenue."* → monetize twilight tee times they can't currently sell.
 
-We capture content at every event to grow an audience, build a brand, and fuel sponsor revenue. The long-term vision is a national network of local competitive pitch-and-putt leagues with a data platform on top.
+**Why it's defensible (the 4 moats):**
+1. Standardized **2-man scramble match-play** format
+2. Play competitively at **any** Sandbox course — a network effect
+3. Proprietary **SBX Rating** built for match play — the bid to be the "match-play GHIN"
+4. **Sub-hour rounds** — the operational unlock: because rounds finish in <1hr, courses can keep sending players out *later into the day* than 9/18-hole twilight rounds allow (which must stop early to finish before dark)
 
-**Starting market:** Miami-Dade County, South Florida.
+**Three software surfaces:**
+1. **Golfer app** (current build) — profile, book at network courses, matchmaking, live scoring, SBX, social, loyalty.
+2. **Course portal** (future) — courses log in to manage tee-slot inventory + pricing and see KPIs (bookings, results, revenue).
+3. **Sandbox admin** (future) — we create Majors / one-off tournaments.
+
+We monetize through (see §3):
+1. **Per-booking rev-share** from courses (the wedge) + a **golfer booking fee** — both sides of each booking
+2. **Memberships (Sandbox+)** + a **loyalty points** program
+3. **Course SaaS / analytics tier** (later), **sponsorships**, content
+
+The long-term vision is a national network of partner courses with the definitive match-play rating + data platform on top.
+
+**Starting market:** Miami-Dade County, South Florida. **First network course:** Killian Greens GC.
 
 ---
 
@@ -45,7 +61,21 @@ We capture content at every event to grow an audience, build a brand, and fuel s
 
 ## 3. Business model & revenue streams
 
-### Revenue streams
+### Revenue streams (network model, June 2026)
+**Primary — dual-sided, every booking:**
+1. **Per-booking rev-share** — courses set their own match price (we *suggest* one); Sandbox takes a ~15% cut (`courses.sandbox_take_pct`), course keeps the majority. Zero-cost course acquisition ("you only pay when you earn"), scales with GMV. This is the wedge.
+2. **Golfer booking fee** — a small per-reservation service fee on top of the course price (waived for Sandbox+ members).
+
+**Expansion:**
+3. **Memberships (Sandbox+)** — perks that cost courses nothing: waived booking fee, priority booking window, 2× loyalty points, premium stats + the AI "whose ball" caddie, members-only Majors. The "free/discounted match" perk is funded by Sandbox or offered on course-opted discounted twilight inventory (yield management) — never a forced course discount.
+4. **Loyalty points program** — earn points per confirmed match (+bonus for logging detailed shot data); redeem for prizes/merch/rentals. Engagement flywheel; low cost.
+5. **Course SaaS / analytics tier** (later) — paid "Pro" portal (analytics, promotion, dynamic pricing), optionally trading lower take-rate for a monthly retainer. A land-then-expand upsell, not the opening offer.
+6. **Majors / event tickets**, **corporate buyouts**, **sponsorships**, **merch**, **content** (as the audience grows).
+
+**Payments (future):** Stripe **Connect** marketplace — golfer pays Sandbox in-app, platform fee retained, remainder auto-routed to the course. Reserve-only today (no charge yet).
+
+### Legacy league revenue (original model — retained for reference)
+The earlier framing below (walk-up tickets, League/League Plus/Stats memberships as the core) predates the network pivot. The membership + loyalty layer still applies; the "we run the league" framing is superseded by the platform model above.
 1. **Walk-up event tickets** — single-event entry, no commitment
 2. **League Memberships** — monthly recurring; includes a set number of events + stats + perks
 3. **League Plus Memberships** — premium tier; unlimited or enhanced access

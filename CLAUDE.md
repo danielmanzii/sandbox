@@ -6,16 +6,28 @@
 
 ## What this project is
 
-A web-first responsive consumer app for **Sandbox Pitch & Putt** — a membership-based competitive 2-man scramble match-play pitch-and-putt league in Miami-Dade. The webapp is both the customer-facing product and the operational backbone.
+A web-first responsive consumer app for **Sandbox Pitch & Putt** — a **B2B2C platform** that turns unused twilight tee times at existing golf courses into 9-hole, sub-hour, competitive **2-man scramble** pitch-and-putt. Partner courses join the network and set their pricing; golfers book in the app, get matched, play, and build a proprietary **SBX** match-play rating. (Evolved June 2026 from the original "league we run" framing — see [docs/BUSINESS_CONTEXT.md](docs/BUSINESS_CONTEXT.md) §1.)
+
+**Three surfaces:** (1) **golfer app** — the current build; (2) **course portal** — future, courses manage slots/pricing + see KPIs; (3) **Sandbox admin** — future, creates Majors/tournaments. Design every data model so the course portal can read the *same* tables (bookings/tee_slots/matches roll up to per-course revenue + results).
 
 ## Current state
 
-**Two surfaces:**
+**Two code surfaces:**
 
-- **`v1/`** — The live app. All screens built (Home, Play, Live Scorecard, Stats, Profile, Social, Membership, Match Hub, Match Live). React via CDN + Babel-in-browser, **Supabase-backed** for auth + matches + per-hole stats, no build step. This is what users see in production today.
-- **`web/`** — Production Next.js 16 app (TypeScript, Tailwind v4, App Router). Home screen ported as scaffold. Will become the long-term codebase as features port over from `v1/`.
+- **`v1/`** — The live app. React via CDN + Babel-in-browser, **Supabase-backed**, no build step. This is production.
+- **`web/`** — Next.js 16 scaffold; long-term rewrite target. Features ship in `v1/` first.
 
-The root `index.html` redirects straight to `v1/`. When in doubt: shipping new features goes in `v1/`; the long-game production rewrite goes in `web/`.
+The root `index.html` redirects straight to `v1/`. New features go in `v1/`.
+
+**The golfer-app build (as of June 2026) — the full booking→rating loop is live:**
+- **Book** a round at a network course: date-first availability, near-you geo, course detail w/ Sandbox-9 scorecard + tee-slot booking (`courses.jsx`, `courses-data.jsx`).
+- **Matchmaking:** 2v2 "do you have a partner?" → invite (consent) or auto-pair solos (SBX-banded, instant + 2h-cutoff sweep w/ revenue-salvage + refund); foursome formation balanced by effective team strength (`matchmaking.sql`, `foursome.sql`).
+- **Matchup reveal** (scout all 4 + SBX), **partner DM + foursome group chat** (`chat.jsx`), **check in → live scorecard**.
+- **SBX rating engine** — DUPR-faithful **windowed recompute**, 2v2 headline + 1v1 secondary, placement calibration (unrated <3 matches), verification weighting (ranked vs casual), reliability (`sbx.sql`). Gated by **dual result confirmation** (`confirm.sql`).
+- **Ball-selection + shot capture** (one-tap whose-ball/who-holed + optional zone) → **loyalty points** (bonus for detailed tracking) → **AI "whose ball" caddie** (Sandbox+ perk, priors→learned) (`shots.sql`, `loyalty.sql`, `caddie-data.jsx`).
+- Real Stats + Profile (real SBX/record/history; no mock numbers).
+
+Legacy **events** (league nights / Majors via `events.jsx`) still exist in parallel; consolidating events into the unified courses/tee_slots/bookings model is a planned later pass.
 
 ## Production
 
@@ -28,7 +40,8 @@ The root `index.html` redirects straight to `v1/`. When in doubt: shipping new f
 
 - **Project URL:** `https://rklxjcchgtwgxbeatsoc.supabase.co` — wired in [v1/components/supabase-client.jsx](v1/components/supabase-client.jsx).
 - **Anon key is committed intentionally.** Supabase `anon` is designed for the browser; Row-Level Security (defined in [v1/sql/setup.sql](v1/sql/setup.sql)) is what guards every table. **Never paste the `service_role` key anywhere near the client.**
-- **Schema** lives in `v1/sql/setup.sql`. Re-run after any schema change — it uses `if not exists` / `drop policy if exists` so it's safe to apply multiple times.
+- **Schema** is split across ordered, idempotent files in `v1/sql/` — apply in this order: `setup.sql` (profiles/matches/match_holes/events) → `social.sql` (follows/avatars) → `courses.sql` (courses/course_holes/tee_slots/bookings + Killian seed) → `matchmaking.sql` (notifications + solo pairing + partner-invite RPCs + refund cron) → `foursome.sql` (match formation) → `play.sql` (course_id + check-in/start) → `confirm.sql` (dual confirmation) → `sbx.sql` (windowed rating engine) → `shots.sql` (ball/holed/zone capture) → `loyalty.sql` (points ledger + award). All use `if not exists`/`drop policy if exists`, safe to re-run.
+- **pg_cron** is enabled. Two jobs: `resolve-pairings` (2h-cutoff salvage/refund) and `recompute-sbx` (15-min rating refresh). Reserved-keyword gotcha: don't name plpgsql vars `both` (use `both_done`).
 - **Realtime** is enabled on `matches` and `match_holes` so opposing players see each other's scoring live.
 - **Auth URLs** in Supabase → Authentication → URL Configuration must list:
   - Site URL: `https://sbx.golf/`
@@ -42,7 +55,11 @@ The root `index.html` redirects straight to `v1/`. When in doubt: shipping new f
 4. **Majors are a separate event type** — different pricing, different capacity.
 5. **Corporate events never appear in public listings.**
 6. **Match play scoring is hole-by-hole (W/H/L)**, not stroke totals. Match status shown as "2 UP", "1 DN", "AS", "DORMIE", or final "W 3&2".
-7. **Sandbox Rating™ (SBX)** is a match-play-native, Elo/Glicko-style rating on a 2.000–8.000 scale. Higher = better. Updates after every match. Not USGA/GHIN handicap.
+7. **Sandbox Rating™ (SBX)** is a match-play-native rating, 2.000–8.000 (higher = better), modeled closely on **DUPR**: two numbers (**2v2 headline** + **1v1 secondary**), **windowed recompute** (re-solved from each player's last N confirmed matches, not incremental), **placement calibration** (unrated until 3 confirmed matches; provisional <10), **verification weighting** (ranked/booked full, casual ½), and a **reliability** score from volume + opponent variety. Casual play *does* move it (weighted down) — don't exclude it.
+8. **Only confirmed matches feed SBX + loyalty points.** A finished match needs **dual confirmation** (one per side) before it counts — the integrity gate. Don't award rating/points off an unconfirmed match.
+9. **No one ever plays 2-on-1.** A 2v2 match locks only at a full foursome; leftover solos get auto-paired (revenue-salvage at the 2h cutoff) or refunded — never thrown into a 2v1.
+10. **Member perks must never force a course discount** — fund them from Sandbox margin (e.g. waived booking fee) or course-opted yield-management inventory.
+11. **Reserve-only for now** — bookings take no payment yet; `price_charged`/`booking_fee` are snapshot columns reserved for Stripe Connect.
 
 See [docs/BUSINESS_CONTEXT.md](docs/BUSINESS_CONTEXT.md) for the full set of rules, personas, pricing principles, and product context.
 
@@ -51,6 +68,7 @@ See [docs/BUSINESS_CONTEXT.md](docs/BUSINESS_CONTEXT.md) for the full set of rul
 - **Palette:** Forest `#1C492A` + Cream `#EAE2CE` as accents on a **white canvas**. No orange.
 - **Type:** Bagel Fat One (display), Archivo (body), Instrument Serif italic (editorial), JetBrains Mono (eyebrows/data).
 - **Result states:** Shape, not color. W = filled forest, L = filled cream, H = white outlined — applied consistently across match card pills, match history badges, hole-result cards, and summary legends.
+- **Imagery:** soft **3D clay renders** (matte, rounded, subtle drop shadows — golfer, clubhouse, course-hole diorama, tee mat) over forest gradients. Use only the transparent-background renders in `v1/assets/clay-*.png`. New renders are generated externally (the agent can't make them) — author flat SVG/brand art in code instead. NOTE: clay PNGs are currently large (4–6MB) and need compression before scale.
 
 The design tokens live in [v1/styles.css](v1/styles.css) (`:root` block at the top). Don't edit those without checking how they cascade — they touch everything.
 
@@ -89,8 +107,19 @@ npm run dev
 - `v1/components/screens/match-live.jsx` — Live 1v1 + 2v2 scoring with realtime sync, per-hole stat capture, cancel
 - `v1/components/screens/stats.jsx` — Stats dashboard (SBX, scramble intel, match history)
 - `v1/components/screens/profile.jsx` — Self + public view (member-gated stats)
-- `v1/components/screens/social.jsx` — Live / Season / All-time leaderboards
+- `v1/components/screens/social.jsx` — People search + leaderboards
 - `v1/components/screens/membership-live-share.jsx` — Membership tiers + (legacy) Live scorecard + Result share
+
+**Network / golfer-app layer (June 2026):**
+- `v1/components/screens/courses.jsx` — Book / Course detail (+ Sandbox-9 scorecard) / Booking sheet / My Rounds / Matchup reveal
+- `v1/components/courses-data.jsx` — courses, availability (geo "near you"), bookings, matchup hooks + `startBookedMatch`
+- `v1/components/notifications-data.jsx` — generic notifications + partner invite/accept/decline RPC wrappers
+- `v1/components/screens/chat.jsx` + `v1/components/chat-data.jsx` — partner DM + foursome group chat
+- `v1/components/loyalty-data.jsx` — loyalty points balance/ledger
+- `v1/components/caddie-data.jsx` — "whose ball" make-probability model (priors → learned)
+- `v1/components/social-data.jsx` — follows, avatars, friend feed, profile editing, real SBX fields
+- `v1/components/screens/match-live.jsx` — live scoring + ball-selection capture + AI caddie tip + dual result confirmation
+- `v1/assets/clay-*.png` — clay 3D renders (golfer/clubhouse/course-hole/tee-mat); `lockup-full-*.svg` / `monogram-*.svg` / `mark-*.svg` — official June-2026 logo set
 
 **Root:**
 - `index.html` — One-line redirect to `v1/`
