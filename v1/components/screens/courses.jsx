@@ -244,6 +244,8 @@ function CourseDetailScreen({ go, courseId, profile }) {
             PLAYS OVER {course.name.toUpperCase()} · REAL COURSE PAR {course.realPar} · {course.realYardage?.toLocaleString()} YDS
           </div>
         )}
+
+        {holes.length > 0 && <Scorecard holes={holes}/>}
       </div>
 
       {/* Booking */}
@@ -287,6 +289,41 @@ function CourseDetailScreen({ go, courseId, profile }) {
   );
 }
 
+// Per-hole Sandbox scorecard (yardages set by course / Sandbox admins).
+function Scorecard({ holes }) {
+  const totYards = holes.reduce((s, h) => s + (h.sandbox_yards || 0), 0);
+  const totPar   = holes.reduce((s, h) => s + (h.par || 0), 0);
+  const cell = { padding: '8px 6px', textAlign: 'center', fontSize: 12, minWidth: 30 };
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
+        Sandbox 9 · scorecard
+      </div>
+      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 360 }}>
+          <tbody>
+            <tr style={{ background: 'var(--forest)', color: 'var(--cream)' }}>
+              <td style={{ ...cell, textAlign: 'left', paddingLeft: 12, fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.85 }}>Hole</td>
+              {holes.map(h => <td key={h.hole_number} style={{ ...cell, fontFamily: 'var(--font-display)', fontSize: 14 }}>{h.hole_number}</td>)}
+              <td style={{ ...cell, fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.06em', opacity: 0.85 }}>TOT</td>
+            </tr>
+            <tr style={{ borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
+              <td style={{ ...cell, textAlign: 'left', paddingLeft: 12, fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.6 }}>Yards</td>
+              {holes.map(h => <td key={h.hole_number} style={{ ...cell, fontWeight: 700, color: 'var(--ink)' }}>{h.sandbox_yards ?? '—'}</td>)}
+              <td style={{ ...cell, fontWeight: 800, color: 'var(--forest)' }}>{totYards || '—'}</td>
+            </tr>
+            <tr>
+              <td style={{ ...cell, textAlign: 'left', paddingLeft: 12, fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.6 }}>Par</td>
+              {holes.map(h => <td key={h.hole_number} style={{ ...cell, color: 'var(--ink)', opacity: 0.75 }}>{h.par}</td>)}
+              <td style={{ ...cell, fontWeight: 800, color: 'var(--forest)' }}>{totPar}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, value }) {
   return (
     <div style={{ flex: 1, textAlign: 'center' }}>
@@ -300,11 +337,17 @@ function Divider() { return <div style={{ width: 1, background: 'rgba(14,28,19,0
 // ─── Booking sheet ────────────────────────────────────────────────────
 function BookingSheet({ slot, course, profile, onClose, onBooked }) {
   const [matchType, setMatchType] = React.useState('1v1');
+  const [hasPartner, setHasPartner] = React.useState(null); // null | true | false (2v2 only)
   const [partner, setPartner] = React.useState(null); // profile row
   const [q, setQ] = React.useState('');
   const [results] = useUserSearch(q, 6);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
+
+  function pickFormat(k) {
+    setMatchType(k);
+    setHasPartner(null); setPartner(null); setQ(''); setErr('');
+  }
 
   React.useEffect(() => {
     const prev = document.body.style.overflow;
@@ -313,12 +356,16 @@ function BookingSheet({ slot, course, profile, onClose, onBooked }) {
   }, []);
 
   async function reserve() {
-    if (matchType === '2v2' && !partner) { setErr('Pick a partner for a 2v2, or switch to 1v1.'); return; }
+    if (matchType === '2v2') {
+      if (hasPartner === null) { setErr('Do you have a partner? Pick Yes or No.'); return; }
+      if (hasPartner === true && !partner) { setErr('Search and pick your partner, or choose No.'); return; }
+    }
     setErr(''); setBusy(true);
     try {
       await createBooking({
         slotId: slot.id, userId: profile.id,
-        partnerId: matchType === '2v2' && partner ? partner.id : null,
+        partnerId: matchType === '2v2' && hasPartner && partner ? partner.id : null,
+        needsPartner: matchType === '2v2' && hasPartner === false,
         matchType, price: slot.price,
       });
       onBooked();
@@ -345,7 +392,7 @@ function BookingSheet({ slot, course, profile, onClose, onBooked }) {
           {/* Format toggle */}
           <div style={{ display: 'flex', gap: 8, marginTop: 18, background: 'rgba(14,28,19,0.05)', borderRadius: 12, padding: 4 }}>
             {[['1v1', 'Head-to-head'], ['2v2', '2v2 Scramble']].map(([k, l]) => (
-              <button key={k} onClick={() => setMatchType(k)} style={{
+              <button key={k} onClick={() => pickFormat(k)} style={{
                 flex: 1, padding: '10px', borderRadius: 9,
                 background: matchType === k ? 'var(--forest)' : 'transparent',
                 color: matchType === k ? 'var(--cream)' : 'var(--forest)',
@@ -354,9 +401,33 @@ function BookingSheet({ slot, course, profile, onClose, onBooked }) {
             ))}
           </div>
 
-          {/* Partner picker for 2v2 */}
+          {/* 2v2: do you have a partner? */}
           {matchType === '2v2' && (
             <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Do you have a partner?</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: hasPartner !== null ? 14 : 0 }}>
+                {[['yes', 'Yes — invite them', true], ['no', "No — pair me up", false]].map(([k, l, v]) => (
+                  <button key={k} onClick={() => { setHasPartner(v); setPartner(null); setQ(''); setErr(''); }} style={{
+                    flex: 1, padding: '12px 10px', borderRadius: 12,
+                    background: hasPartner === v ? 'var(--forest)' : 'var(--paper)',
+                    color: hasPartner === v ? 'var(--cream)' : 'var(--forest)',
+                    border: hasPartner === v ? 'none' : 'var(--hairline)',
+                    fontWeight: 700, fontSize: 13,
+                  }}>{l}</button>
+                ))}
+              </div>
+
+              {hasPartner === false && (
+                <div style={{ background: 'rgba(28,73,42,0.06)', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: 'var(--ink)', opacity: 0.85, lineHeight: 1.4 }}>
+                  We'll pair you with another solo at this tee time. Your match locks only once a full foursome is set — you'll never be left in a 2-on-1.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Partner picker — only when "Yes" */}
+          {matchType === '2v2' && hasPartner === true && (
+            <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Your partner</div>
               {partner ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper)', borderRadius: 12, padding: '10px 12px', border: 'var(--hairline)' }}>
@@ -481,6 +552,7 @@ function RoundCard({ b, onCancel, busy, past, go }) {
   const slot = b.slot || {};
   const course = slot.course || {};
   const when = slot.starts_at ? new Date(slot.starts_at) : null;
+  const within24h = when && (when.getTime() - Date.now() < 24 * 3600 * 1000);
   return (
     <div className="card" style={{ padding: 14, opacity: past ? 0.7 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -495,10 +567,15 @@ function RoundCard({ b, onCancel, busy, past, go }) {
       {b.partner && (
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Partner: {formatHandle(b.partner.handle)}</div>
       )}
-      {!past && (
+      {!past && !within24h && (
         <button onClick={onCancel} disabled={busy} style={{ marginTop: 12, background: 'transparent', border: 'none', color: 'var(--loss, #C44536)', fontSize: 12, fontWeight: 700, opacity: busy ? 0.5 : 0.85 }}>
           {busy ? 'Cancelling…' : 'Cancel reservation'}
         </button>
+      )}
+      {!past && within24h && (
+        <div style={{ marginTop: 12, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.04em' }}>
+          Locked in — within 24h of tee time.
+        </div>
       )}
     </div>
   );

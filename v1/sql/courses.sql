@@ -140,6 +140,7 @@ create table if not exists public.bookings (
   user_id       uuid not null references public.profiles(id) on delete cascade,
   partner_id    uuid references public.profiles(id) on delete set null, -- 2v2 teammate
   match_type    text not null default '1v1' check (match_type in ('1v1','2v2')),
+  needs_partner boolean not null default false,  -- solo in the 2v2 auto-pair pool
   status        text not null default 'reserved'
                   check (status in ('reserved','checked_in','playing','completed','cancelled','no_show')),
   match_id      uuid references public.matches(id) on delete set null,

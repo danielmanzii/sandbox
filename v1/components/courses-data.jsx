@@ -300,13 +300,14 @@ function useMyBookings(userId) {
 // ─── Mutations ────────────────────────────────────────────────────────
 // Reserve a slot. Snapshots the slot price (reserve-only; no charge yet).
 // Throws a friendly Error on the common failures.
-async function createBooking({ slotId, userId, partnerId, matchType, price }) {
+async function createBooking({ slotId, userId, partnerId, matchType, price, needsPartner }) {
   if (!slotId || !userId) throw new Error('Missing slot or user.');
   const { data, error } = await sbx.from('bookings').insert({
     slot_id: slotId,
     user_id: userId,
     partner_id: partnerId || null,
     match_type: matchType === '2v2' ? '2v2' : '1v1',
+    needs_partner: !!needsPartner,
     status: 'reserved',
     price_charged: price != null ? price : null,
   }).select('id').maybeSingle();
