@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, createBooking, cancelBooking, useUserSearch */
+/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, createBooking, cancelBooking, useUserSearch, invitePartner */
 // Golfer booking flow (Phase B):
 //   BookScreen        — date-first availability: near-you courses + open slots
 //   CourseDetailScreen— hero + Sandbox 9 + the day's bookable slots
@@ -362,12 +362,16 @@ function BookingSheet({ slot, course, profile, onClose, onBooked }) {
     }
     setErr(''); setBusy(true);
     try {
-      await createBooking({
-        slotId: slot.id, userId: profile.id,
-        partnerId: matchType === '2v2' && hasPartner && partner ? partner.id : null,
-        needsPartner: matchType === '2v2' && hasPartner === false,
-        matchType, price: slot.price,
-      });
+      if (matchType === '2v2' && hasPartner && partner) {
+        // Invite a chosen partner — they must accept (consent) to be booked.
+        await invitePartner({ slotId: slot.id, partnerId: partner.id, price: slot.price });
+      } else {
+        await createBooking({
+          slotId: slot.id, userId: profile.id, partnerId: null,
+          needsPartner: matchType === '2v2' && hasPartner === false,
+          matchType, price: slot.price,
+        });
+      }
       onBooked();
     } catch (e) { setErr(e.message || 'Could not reserve.'); setBusy(false); }
   }

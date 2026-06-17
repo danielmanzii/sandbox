@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useNotifications, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
 // Home screen — next event, live leaderboard, activity
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
@@ -19,6 +19,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [pendingEventInvites]  = useMyPendingEventInvites(profile && profile.id);
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
   const [newFollowers]         = useNewFollowers(profile && profile.id);
+  const [notifs]               = useNotifications(profile && profile.id);
   // Only count items the user hasn't seen yet (seen IDs written by NotificationsScreen)
   const seenNotifIds = React.useMemo(() => {
     try { return new Set(JSON.parse(localStorage.getItem('spp_seen_notifs') || '[]')); }
@@ -28,6 +29,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
     ...(pendingInvites      || []).map(i => `inv-${i.id}`),
     ...(newFollowers        || []).map(f => `fol-${f.follower_id}-${f.created_at}`),
     ...(pendingEventInvites || []).map(e => `ei-${e.id}`),
+    ...(notifs              || []).map(n => `gn-${n.id}`),
   ].filter(id => !seenNotifIds.has(id)).length;
 
   // Friends-here pills on the Up Next teaser cards.

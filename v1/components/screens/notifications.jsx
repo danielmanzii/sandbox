@@ -1,4 +1,4 @@
-/* global React, Icon, Button, useMyPendingInvites, useMyPendingEventInvites, useNewFollowers, useIsFollowing, followUser, formatHandle, acceptInvite, declineInvite, acceptEventInvite, declineEventInvite */
+/* global React, Icon, Button, useMyPendingInvites, useMyPendingEventInvites, useNewFollowers, useNotifications, useIsFollowing, followUser, formatHandle, acceptInvite, declineInvite, acceptEventInvite, declineEventInvite, acceptPartnerInvite, declinePartnerInvite */
 // Notifications screen — opened from the bell on Home.
 // Surfaces:
 //   - Pending event partner/general invites (Accept / Decline / View)
@@ -11,7 +11,8 @@ function NotificationsScreen({ profile, go }) {
   const [invites, invitesLoading]         = useMyPendingInvites(profile && profile.id);
   const [eventInvites, eventInvLoading]   = useMyPendingEventInvites(profile && profile.id);
   const [followers, followersLoading]     = useNewFollowers(profile && profile.id);
-  const loading = invitesLoading || eventInvLoading || followersLoading;
+  const [notifs, notifsLoading]           = useNotifications(profile && profile.id);
+  const loading = invitesLoading || eventInvLoading || followersLoading || notifsLoading;
 
   // Load which IDs were already seen on a prior visit (read from localStorage once on mount).
   const [seenIds] = React.useState(() => {
@@ -30,8 +31,11 @@ function NotificationsScreen({ profile, go }) {
     const c = (eventInvites || []).map(ei => ({
       kind: 'event-invite', id: `ei-${ei.id}`, ts: ei.created_at, payload: ei,
     }));
-    return [...a, ...b, ...c].sort((x, y) => new Date(y.ts) - new Date(x.ts));
-  }, [invites, followers, eventInvites]);
+    const d = (notifs || []).map(n => ({
+      kind: 'notif', id: `gn-${n.id}`, ts: n.created_at, payload: n,
+    }));
+    return [...a, ...b, ...c, ...d].sort((x, y) => new Date(y.ts) - new Date(x.ts));
+  }, [invites, followers, eventInvites, notifs]);
 
   // After items load, mark all as seen for the NEXT visit (don't update seenIds state
   // so items stay in their correct New/Old section for the duration of this visit).
@@ -49,6 +53,7 @@ function NotificationsScreen({ profile, go }) {
   function renderCard(it) {
     if (it.kind === 'event-invite') return <EventInviteCard   key={it.id} invite={it.payload} profile={profile} go={go}/>;
     if (it.kind === 'invite')       return <NotificationCard  key={it.id} invite={it.payload} profile={profile} go={go}/>;
+    if (it.kind === 'notif')        return <GenericNotifCard  key={it.id} n={it.payload}      go={go}/>;
     return                                 <FollowerCard       key={it.id} row={it.payload}    viewerId={profile && profile.id} go={go}/>;
   }
 
@@ -320,6 +325,61 @@ function EventInviteCard({ invite, profile, go }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Generic notification card (pairing / refund / partner invite) ────
+function GenericNotifCard({ n, go }) {
+  const [busy, setBusy] = React.useState(null); // 'accept' | 'decline'
+  const [err, setErr]   = React.useState('');
+  const [done, setDone] = React.useState('');   // 'accepted' | 'declined'
+  const ago = timeAgo(n.created_at);
+  const isInvite = n.type === 'partner_invite' && !n.read && !done;
+
+  const accent = n.type === 'refund' ? '💸'
+    : n.type === 'paired' ? '🤝'
+    : n.type === 'partner_invite' ? '⛳'
+    : n.type === 'partner_accepted' ? '✅'
+    : '🔔';
+
+  async function act(kind) {
+    setBusy(kind); setErr('');
+    try {
+      if (kind === 'accept') { await acceptPartnerInvite(n.id); setDone('accepted'); }
+      else                   { await declinePartnerInvite(n.id); setDone('declined'); }
+    } catch (e) { setErr(e.message || 'Something went wrong.'); setBusy(null); }
+  }
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          {n.type === 'partner_invite' ? 'Partner invite' : n.type === 'refund' ? 'Reservation' : 'Pairing'}
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink)', opacity: 0.45 }}>{ago}</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+        <span style={{ fontSize: 20 }}>{accent}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)', lineHeight: 1.15, letterSpacing: '-0.01em' }}>{n.title}</div>
+          {n.body && <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4, lineHeight: 1.4 }}>{n.body}</div>}
+        </div>
+      </div>
+
+      {err && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--loss, #C44536)' }}>{err}</div>}
+      {done && <div style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: 'var(--forest)', opacity: 0.7 }}>{done === 'accepted' ? "You're in — see you out there." : 'Invite declined.'}</div>}
+
+      {isInvite && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <Button variant="forest" full onClick={() => act('accept')} disabled={!!busy}>
+            {busy === 'accept' ? 'Joining…' : 'Accept'}
+          </Button>
+          <Button variant="outline" onClick={() => act('decline')} disabled={!!busy}>
+            {busy === 'decline' ? '…' : 'Decline'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
