@@ -1,8 +1,9 @@
-/* global React, Button, Chip, Eyebrow, Icon, sbx */
+/* global React, Button, Chip, Eyebrow, Icon, sbx, suggestBall */
 // Live 1v1 match screen. Real-time synced via Supabase channels.
 // Match-play scoring: lower score wins the hole; state = holes_up (A) vs (B).
 
-function MatchLive({ matchId, profile, onExit }) {
+function MatchLive({ matchId, profile, tier, onExit }) {
+  const isMember = tier === 'league' || tier === 'plus' || tier === 'stats';
   const [match, setMatch]   = React.useState(null);
   const [holes, setHoles]   = React.useState([]);
   const [players, setPlayers] = React.useState({}); // id → { first_name, handle }
@@ -158,6 +159,7 @@ function MatchLive({ matchId, profile, onExit }) {
             hole={hole}
             youAreA={youAreA}
             is2v2={is2v2}
+            isMember={isMember}
             yourTeam={yourTeam}
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
@@ -218,7 +220,7 @@ function MatchLive({ matchId, profile, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(false);
@@ -334,7 +336,7 @@ function HoleCard({ hole, youAreA, is2v2, yourTeam, yourTeamLabel, theirTeamLabe
         {/* 2v2 ball-selection capture — one tap, optional zone. Feeds shot
             usage, the clutch stat, and the future "whose ball" AI. */}
         {is2v2 && yourScore != null && (yourTeam || []).length === 2 && (
-          <TeamCapture hole={hole} yourTeam={yourTeam} onSaveStat={onSaveStat}/>
+          <TeamCapture hole={hole} yourTeam={yourTeam} isMember={isMember} onSaveStat={onSaveStat}/>
         )}
 
         {yourScore != null && oppScore != null && (
@@ -350,7 +352,7 @@ function HoleCard({ hole, youAreA, is2v2, yourTeam, yourTeamLabel, theirTeamLabe
 // ─── 2v2 per-hole capture: whose ball + who holed + optional zone ──────
 const GREEN_ZONES = ['Long L', 'Long', 'Long R', 'Left', 'Pin high', 'Right', 'Short L', 'Short', 'Short R'];
 
-function TeamCapture({ hole, yourTeam, onSaveStat }) {
+function TeamCapture({ hole, yourTeam, isMember, onSaveStat }) {
   const [showZone, setShowZone] = React.useState(false);
   const [p1, p2] = yourTeam;
   const ball  = hole.ball_player;
@@ -359,6 +361,9 @@ function TeamCapture({ hole, yourTeam, onSaveStat }) {
 
   return (
     <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* AI caddie — member perk */}
+      <Caddie players={yourTeam} isMember={isMember} onUseBall={(pid, z) => { onSaveStat('ball_player', pid); onSaveStat('zone', z); }}/>
+
       <CaptureRow label="Whose ball did the team play?">
         {[p1, p2].map(p => (
           <StatChoice key={p.id} active={ball === p.id} onClick={() => onSaveStat('ball_player', ball === p.id ? null : p.id)}>{p.name}</StatChoice>
@@ -407,6 +412,68 @@ function CaptureRow({ label, children }) {
     <div>
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>{label}</div>
       <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>{children}</div>
+    </div>
+  );
+}
+
+// ─── AI caddie: "whose ball?" suggestion (Sandbox+ member perk) ────────
+function Caddie({ players, isMember, onUseBall }) {
+  const [open, setOpen] = React.useState(false);
+  const [zones, setZones] = React.useState({}); // playerId -> zone
+  const [p1, p2] = players;
+  const suggestion = suggestBall(players, zones);
+
+  if (!isMember) {
+    return (
+      <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.15)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 18 }}>🤖</span>
+        <div style={{ flex: 1, fontSize: 12, opacity: 0.85 }}>
+          <strong>Caddie</strong> tells you whose ball to play — a Sandbox+ perk.
+        </div>
+        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'var(--clay)', color: 'var(--forest-deep)', padding: '3px 7px', borderRadius: 999, fontWeight: 800 }}>SBX+</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.15)', overflow: 'hidden' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--cream)',
+        padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 18 }}>🤖</span>
+        <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Caddie — which ball?</div>
+        <span style={{ fontSize: 16, opacity: 0.7 }}>{open ? '–' : '+'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[p1, p2].map(p => (
+            <div key={p.id}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 5 }}>{p.name}'s ball</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+                {GREEN_ZONES.map(z => (
+                  <StatChoice key={z} active={zones[p.id] === z} onClick={() => setZones(s => ({ ...s, [p.id]: s[p.id] === z ? undefined : z }))}>{z}</StatChoice>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {suggestion && (
+            <div style={{ background: 'rgba(212,165,116,0.18)', border: '1px solid var(--clay)', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--clay)', fontWeight: 800 }}>Caddie says</span>
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--cream)' }}>{suggestion.line}</div>
+              {suggestion.pick !== 'tie' && (
+                <Button variant="clay" size="sm" full style={{ marginTop: 10 }}
+                  onClick={() => onUseBall(suggestion.best.id, zones[suggestion.best.id])}>
+                  Use {suggestion.best.name}'s ball
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
