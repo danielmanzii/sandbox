@@ -115,6 +115,29 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </button>
       </div>
 
+      {/* Book a round — primary network action (twilight tee times) */}
+      <div style={{ padding: '16px 16px 0' }}>
+        <button onClick={() => go({ screen: 'book' })} style={{
+          width: '100%', textAlign: 'left', border: 'none',
+          borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
+          background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+          color: 'var(--cream)', padding: 20, position: 'relative',
+          boxShadow: 'var(--shadow-md)', display: 'block',
+        }}>
+          <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Twilight tee times</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, marginTop: 8, letterSpacing: '-0.01em' }}>Book a round</div>
+              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>Nine holes near you, done in under an hour.</div>
+            </div>
+            <div style={{ width: 44, height: 44, borderRadius: 999, background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon.ArrowRight size={18}/>
+            </div>
+          </div>
+        </button>
+      </div>
+
       {/* Match invite banners — pending invites the signed-in user got */}
       {pendingInvites && pendingInvites.length > 0 && (
         <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -60,9 +60,10 @@
 <script type="text/babel" src="components/screens/match-hub.jsx"></script>
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
 <script type="text/babel" src="components/screens/notifications.jsx"></script>
+<script type="text/babel" src="components/screens/courses.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, BookScreen, CourseDetailScreen, MyRoundsScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "tier": "walkup",
@@ -200,6 +201,11 @@ function App({ profile }) {
     case 'notifications':
       screen = <NotificationsScreen profile={profile} go={go}/>;
       break;
+
+    // Course booking flow (Phase B)
+    case 'book':         screen = <BookScreen {...screenProps}/>; break;
+    case 'courseDetail': screen = <CourseDetailScreen {...screenProps} courseId={route.courseId}/>; break;
+    case 'myRounds':     screen = <MyRoundsScreen {...screenProps}/>; break;
 
     default: screen = <HomeScreen {...screenProps}/>;
   }
