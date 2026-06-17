@@ -114,6 +114,14 @@ function MatchLive({ matchId, profile, onExit }) {
   const yourTeamLabel  = is2v2 ? (youAreA ? teamAName : teamBName) : 'You';
   const theirTeamLabel = is2v2 ? (youAreA ? teamBName : teamAName) : (youAreA ? teamBName : teamAName);
 
+  // Your team's two players (for 2v2 ball-selection / who-holed capture).
+  const yourTeamIds = is2v2
+    ? (youAreA ? [match.player_a, match.player_a2] : [match.player_b, match.player_b2])
+    : [];
+  const yourTeam = yourTeamIds.filter(Boolean).map(id => ({
+    id, name: (players[id] && (players[id].first_name || players[id].handle)) || 'Player',
+  }));
+
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
@@ -150,6 +158,7 @@ function MatchLive({ matchId, profile, onExit }) {
             hole={hole}
             youAreA={youAreA}
             is2v2={is2v2}
+            yourTeam={yourTeam}
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
             onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
@@ -209,7 +218,7 @@ function MatchLive({ matchId, profile, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(false);
@@ -322,12 +331,72 @@ function HoleCard({ hole, youAreA, is2v2, yourTeamLabel, theirTeamLabel, onYourS
           </div>
         )}
 
+        {/* 2v2 ball-selection capture — one tap, optional zone. Feeds shot
+            usage, the clutch stat, and the future "whose ball" AI. */}
+        {is2v2 && yourScore != null && (yourTeam || []).length === 2 && (
+          <TeamCapture hole={hole} yourTeam={yourTeam} onSaveStat={onSaveStat}/>
+        )}
+
         {yourScore != null && oppScore != null && (
           <Button variant="primary" size="lg" full onClick={onAdvance} style={{ marginTop: 16 }}>
             Next hole <Icon.ArrowRight size={16}/>
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── 2v2 per-hole capture: whose ball + who holed + optional zone ──────
+const GREEN_ZONES = ['Long L', 'Long', 'Long R', 'Left', 'Pin high', 'Right', 'Short L', 'Short', 'Short R'];
+
+function TeamCapture({ hole, yourTeam, onSaveStat }) {
+  const [showZone, setShowZone] = React.useState(false);
+  const [p1, p2] = yourTeam;
+  const ball  = hole.ball_player;
+  const holed = hole.holed_by;
+  const zone  = hole.zone;
+
+  return (
+    <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <CaptureRow label="Whose ball did the team play?">
+        {[p1, p2].map(p => (
+          <StatChoice key={p.id} active={ball === p.id} onClick={() => onSaveStat('ball_player', ball === p.id ? null : p.id)}>{p.name}</StatChoice>
+        ))}
+      </CaptureRow>
+
+      <CaptureRow label="Who holed it?">
+        {[p1, p2].map(p => (
+          <StatChoice key={p.id} active={holed === p.id} onClick={() => onSaveStat('holed_by', holed === p.id ? null : p.id)}>{p.name}</StatChoice>
+        ))}
+      </CaptureRow>
+
+      <div>
+        <button onClick={() => setShowZone(s => !s)} style={{
+          background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7,
+          fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700,
+          display: 'flex', alignItems: 'center', gap: 6, padding: 0,
+        }}>
+          {zone ? `✓ ${zone}` : 'Add ball position'} <span>{showZone ? '–' : '+'}</span>
+          <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>· +points</span>
+        </button>
+        {showZone && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
+            {GREEN_ZONES.map(z => (
+              <StatChoice key={z} active={zone === z} onClick={() => onSaveStat('zone', zone === z ? null : z)}>{z}</StatChoice>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CaptureRow({ label, children }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>{children}</div>
     </div>
   );
 }
