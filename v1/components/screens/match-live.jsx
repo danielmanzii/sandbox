@@ -361,14 +361,15 @@ function TeamCapture({ hole, yourTeam, isMember, onSaveStat }) {
 
   return (
     <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* AI caddie — member perk */}
-      <Caddie players={yourTeam} isMember={isMember} onUseBall={(pid, z) => { onSaveStat('ball_player', pid); onSaveStat('zone', z); }}/>
-
-      <CaptureRow label="Whose ball did the team play?">
-        {[p1, p2].map(p => (
-          <StatChoice key={p.id} active={ball === p.id} onClick={() => onSaveStat('ball_player', ball === p.id ? null : p.id)}>{p.name}</StatChoice>
-        ))}
-      </CaptureRow>
+      <div>
+        <CaptureRow label="Whose ball did the team play?">
+          {[p1, p2].map(p => (
+            <StatChoice key={p.id} active={ball === p.id} onClick={() => onSaveStat('ball_player', ball === p.id ? null : p.id)}>{p.name}</StatChoice>
+          ))}
+        </CaptureRow>
+        {/* AI caddie — a subtle suggestion that hovers under the ball pick */}
+        <CaddieTip players={yourTeam} isMember={isMember}/>
+      </div>
 
       <CaptureRow label="Who holed it?">
         {[p1, p2].map(p => (
@@ -416,62 +417,48 @@ function CaptureRow({ label, children }) {
   );
 }
 
-// ─── AI caddie: "whose ball?" suggestion (Sandbox+ member perk) ────────
-function Caddie({ players, isMember, onUseBall }) {
+// ─── AI caddie: a subtle suggestion tip under the ball pick ───────────
+function CaddieTip({ players, isMember }) {
   const [open, setOpen] = React.useState(false);
   const [zones, setZones] = React.useState({}); // playerId -> zone
-  const [p1, p2] = players;
   const suggestion = suggestBall(players, zones);
 
+  // Non-members: a faint nudge to the perk, no interaction.
   if (!isMember) {
     return (
-      <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.15)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 18 }}>🤖</span>
-        <div style={{ flex: 1, fontSize: 12, opacity: 0.85 }}>
-          <strong>Caddie</strong> tells you whose ball to play — a Sandbox+ perk.
-        </div>
-        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'var(--clay)', color: 'var(--forest-deep)', padding: '3px 7px', borderRadius: 999, fontWeight: 800 }}>SBX+</span>
+      <div style={{ marginTop: 7, fontSize: 11, opacity: 0.55, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span>🤖</span><span>Caddie tip — whose ball to play</span>
+        <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', background: 'rgba(212,165,116,0.4)', color: 'var(--cream)', padding: '2px 5px', borderRadius: 999, fontWeight: 800 }}>SBX+</span>
       </div>
     );
   }
 
   return (
-    <div style={{ borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.15)', overflow: 'hidden' }}>
+    <div style={{ marginTop: 7 }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--cream)',
-        padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10,
+        background: 'transparent', border: 'none', padding: 0,
+        color: 'var(--clay)', fontSize: 11, fontWeight: 700,
+        display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer',
       }}>
-        <span style={{ fontSize: 18 }}>🤖</span>
-        <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Caddie — which ball?</div>
-        <span style={{ fontSize: 16, opacity: 0.7 }}>{open ? '–' : '+'}</span>
+        <span>🤖</span> Caddie tip {open ? '▾' : '▸'}
       </button>
+
       {open && (
-        <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[p1, p2].map(p => (
-            <div key={p.id}>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 5 }}>{p.name}'s ball</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+        <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 10, background: 'rgba(212,165,116,0.14)', border: '1px solid rgba(212,165,116,0.4)' }}>
+          <div style={{ fontSize: 10, opacity: 0.8, marginBottom: 8 }}>Where did each ball land? I'll suggest the play.</div>
+          {players.map(p => (
+            <div key={p.id} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
                 {GREEN_ZONES.map(z => (
                   <StatChoice key={z} active={zones[p.id] === z} onClick={() => setZones(s => ({ ...s, [p.id]: s[p.id] === z ? undefined : z }))}>{z}</StatChoice>
                 ))}
               </div>
             </div>
           ))}
-
-          {suggestion && (
-            <div style={{ background: 'rgba(212,165,116,0.18)', border: '1px solid var(--clay)', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--clay)', fontWeight: 800 }}>Caddie says</span>
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--cream)' }}>{suggestion.line}</div>
-              {suggestion.pick !== 'tie' && (
-                <Button variant="clay" size="sm" full style={{ marginTop: 10 }}
-                  onClick={() => onUseBall(suggestion.best.id, zones[suggestion.best.id])}>
-                  Use {suggestion.best.name}'s ball
-                </Button>
-              )}
-            </div>
-          )}
+          <div style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--cream)', marginTop: 4, fontStyle: 'italic' }}>
+            {suggestion ? `💡 ${suggestion.line}` : 'Tap both ball positions for a suggestion.'}
+          </div>
         </div>
       )}
     </div>
