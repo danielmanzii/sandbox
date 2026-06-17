@@ -163,7 +163,7 @@ grant execute on function public.recompute_sbx() to authenticated;
 -- Run the engine the moment a match becomes confirmed.
 create or replace function public.confirm_match_result(p_match uuid)
 returns void language plpgsql security definer as $$
-declare m record; side text; both boolean;
+declare m record; side text; both_done boolean;
 begin
   select * into m from public.matches where id = p_match;
   if not found then raise exception 'Match not found'; end if;
@@ -175,8 +175,8 @@ begin
   if side = 'a' then update public.matches set confirmed_a = true where id = p_match;
   else                update public.matches set confirmed_b = true where id = p_match; end if;
 
-  select confirmed_a and confirmed_b into both from public.matches where id = p_match;
-  if both then
+  select confirmed_a and confirmed_b into both_done from public.matches where id = p_match;
+  if both_done then
     update public.matches set confirmed_at = now() where id = p_match and confirmed_at is null;
     perform public.recompute_sbx();
   end if;
