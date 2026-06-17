@@ -140,6 +140,9 @@ function MatchLive({ matchId, profile, onExit }) {
       {/* Decided — final result banner */}
       {matchDecided && <FinalBanner match={match} state={state} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>}
 
+      {/* Dual result confirmation — gates SBX + points */}
+      {matchDecided && <ResultConfirm match={match} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>}
+
       {/* Current hole card */}
       {!matchDecided && (
         <div style={{ padding: '0 16px' }}>
@@ -427,6 +430,57 @@ function ResultBadge({ result, youAreA }) {
 }
 
 // ─── Final banner ────────────────────────────────────────────
+// ─── Dual result confirmation (one per side) ──────────────────────────
+function ResultConfirm({ match, youAreA, theirTeamLabel }) {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr]   = React.useState('');
+  const mySide    = youAreA ? 'a' : 'b';
+  const iConfirmed     = mySide === 'a' ? match.confirmed_a : match.confirmed_b;
+  const theyConfirmed  = mySide === 'a' ? match.confirmed_b : match.confirmed_a;
+  const bothConfirmed  = match.confirmed_a && match.confirmed_b;
+
+  async function confirm() {
+    setBusy(true); setErr('');
+    const { error } = await sbx.rpc('confirm_match_result', { p_match: match.id });
+    if (error) { setErr(error.message || 'Could not confirm.'); setBusy(false); }
+    // On success, realtime updates `match` → this re-renders into the next state.
+  }
+
+  return (
+    <div style={{ padding: '14px 16px 0' }}>
+      <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+        {bothConfirmed ? (
+          <>
+            <div style={{ fontSize: 22 }}>✅</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginTop: 4 }}>Result confirmed</div>
+            <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
+              Both sides agreed — this match now counts toward your SBX.
+            </div>
+          </>
+        ) : iConfirmed ? (
+          <>
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Confirmed on your side</div>
+            <div className="caption-serif" style={{ fontSize: 14, opacity: 0.75, marginTop: 6 }}>
+              Waiting for {theirTeamLabel} to confirm the result…
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>Confirm the result</div>
+            <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4, marginBottom: 12 }}>
+              Both teams confirm before it counts toward SBX. {theyConfirmed ? `${theirTeamLabel} already confirmed.` : ''}
+            </div>
+            {err && <div style={{ fontSize: 12, color: 'var(--loss)', marginBottom: 8 }}>{err}</div>}
+            <Button variant="forest" full onClick={confirm} disabled={busy}>
+              {busy ? 'Confirming…' : 'Confirm result'}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FinalBanner({ match, state, youAreA, theirTeamLabel }) {
   const youWon = (state.up > 0 && youAreA) || (state.up < 0 && !youAreA);
   const halved = state.up === 0;
