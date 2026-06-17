@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -218,6 +218,8 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
           )}
         </div>
       </div>
+
+      {isSelf && <LoyaltyCard userId={viewerId}/>}
 
       {isSelf && (
         <div style={{ padding: '22px 16px 0' }}>
@@ -1416,6 +1418,32 @@ function EditProfileSheet({ profile, onClose }) {
               marginTop: 16,
             }}>{err}</div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Loyalty points card (self) ──────────────────────────────────────
+function LoyaltyCard({ userId }) {
+  const [balance, recent] = useLoyalty(userId);
+  const lastBonus = (recent || []).find(r => r.reason === 'Detailed tracking bonus');
+  return (
+    <div style={{ padding: '22px 16px 0' }}>
+      <div style={{
+        borderRadius: 'var(--radius-card-lg)', padding: 18, position: 'relative', overflow: 'hidden',
+        background: 'linear-gradient(135deg, var(--clay) 0%, #C98A4E 100%)', color: 'var(--forest-deep)',
+        boxShadow: 'var(--shadow-md)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>Sandbox Points</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 1, marginTop: 6 }}>{balance.toLocaleString()}</div>
+          </div>
+          <span style={{ fontSize: 34 }}>🎁</span>
+        </div>
+        <div style={{ fontSize: 12, marginTop: 10, opacity: 0.85, lineHeight: 1.4, fontWeight: 600 }}>
+          Earn points every match — and <strong>bonus points</strong> for logging ball position while you score.
         </div>
       </div>
     </div>

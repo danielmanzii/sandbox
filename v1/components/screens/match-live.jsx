@@ -372,13 +372,23 @@ function TeamCapture({ hole, yourTeam, onSaveStat }) {
       </CaptureRow>
 
       <div>
+        {/* Bonus-points callout — make the reward obvious */}
         <button onClick={() => setShowZone(s => !s)} style={{
-          background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7,
-          fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700,
-          display: 'flex', alignItems: 'center', gap: 6, padding: 0,
+          width: '100%', textAlign: 'left',
+          background: zone ? 'rgba(212,165,116,0.18)' : 'rgba(212,165,116,0.25)',
+          border: '1px solid var(--clay)', borderRadius: 12, padding: '10px 12px',
+          color: 'var(--cream)', display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          {zone ? `✓ ${zone}` : 'Add ball position'} <span>{showZone ? '–' : '+'}</span>
-          <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>· +points</span>
+          <span style={{ fontSize: 18 }}>🎁</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--clay)' }}>
+              {zone ? `✓ Ball position: ${zone}` : 'Bonus points up for grabs'}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>
+              {zone ? '+10 pts earned this hole' : 'Log your ball position to earn +10 pts'}
+            </div>
+          </div>
+          <span style={{ fontSize: 16, opacity: 0.7 }}>{showZone ? '–' : '+'}</span>
         </button>
         {showZone && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
