@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, useMatchup, createBooking, cancelBooking, useUserSearch, invitePartner */
+/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, useMatchup, createBooking, cancelBooking, startBookedMatch, useUserSearch, invitePartner */
 // Golfer booking flow (Phase B):
 //   BookScreen        — date-first availability: near-you courses + open slots
 //   CourseDetailScreen— hero + Sandbox 9 + the day's bookable slots
@@ -588,7 +588,14 @@ function RoundCard({ b, onCancel, busy, past, go }) {
 // ─── Matchup reveal (scout your foursome / opponent) ──────────────────
 function MatchupScreen({ go, matchId, profile }) {
   const [data, loading] = useMatchup(matchId);
+  const [starting, setStarting] = React.useState(false);
   const meId = profile && profile.id;
+
+  async function checkIn(mid) {
+    setStarting(true);
+    try { await startBookedMatch(mid); go({ screen: 'match', matchId: mid }); }
+    catch (_) { setStarting(false); }
+  }
 
   if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
   if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Matchup not found.</div>;
@@ -623,7 +630,16 @@ function MatchupScreen({ go, matchId, profile }) {
       </div>
 
       <div style={{ padding: '20px 16px 0' }}>
-        <Button variant="forest" full size="md" onClick={() => go({ screen: 'chat', matchId: match.id, title: 'Group chat' })}>
+        {match.status === 'completed' ? (
+          <Button variant="forest" full size="md" onClick={() => go({ screen: 'match', matchId: match.id })}>
+            View result
+          </Button>
+        ) : (
+          <Button variant="forest" full size="md" onClick={() => checkIn(match.id)} disabled={starting}>
+            {starting ? 'Starting…' : 'Check in & start match'}
+          </Button>
+        )}
+        <Button variant="outline" full size="md" onClick={() => go({ screen: 'chat', matchId: match.id, title: 'Group chat' })} style={{ marginTop: 10 }}>
           💬 Group chat
         </Button>
         <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.65, textAlign: 'center', lineHeight: 1.5, marginTop: 14 }}>

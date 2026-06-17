@@ -349,9 +349,17 @@ async function cancelBooking({ bookingId }) {
   if (error) throw new Error(error.message || 'Could not cancel.');
 }
 
+// Check in at the course: seed the Sandbox 9 holes (if needed) and flip
+// the match to active. Then the caller routes into the live scorecard.
+async function startBookedMatch(matchId) {
+  if (!matchId) return;
+  const { error } = await sbx.rpc('start_booked_match', { p_match: matchId });
+  if (error) throw new Error(error.message || 'Could not start the match.');
+}
+
 Object.assign(window, {
   haversineMiles, useGeolocation,
   useCourses, useAvailability, useCourse, useCourseSlots,
   useFriendsOnSlots, useMyBookings, useMatchup,
-  createBooking, cancelBooking,
+  createBooking, cancelBooking, startBookedMatch,
 });
