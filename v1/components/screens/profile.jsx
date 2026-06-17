@@ -20,6 +20,14 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
             avatar:       realTarget.avatar_url || null,
             avatar_url:   realTarget.avatar_url || null,
             sbx:          Number(realTarget.sbx) || 4.0,
+            sbx2v2:       realTarget.sbx_2v2 != null ? Number(realTarget.sbx_2v2) : null,
+            sbx1v1:       realTarget.sbx_1v1 != null ? Number(realTarget.sbx_1v1) : null,
+            sbx2v2N:      realTarget.sbx_2v2_n || 0,
+            sbx1v1N:      realTarget.sbx_1v1_n || 0,
+            sbx2v2Rel:    realTarget.sbx_2v2_rel != null ? Number(realTarget.sbx_2v2_rel) : 0,
+            sbx1v1Rel:    realTarget.sbx_1v1_rel != null ? Number(realTarget.sbx_1v1_rel) : 0,
+            bio:          realTarget.bio || null,
+            homeCourse:   realTarget.home_course || null,
             color:        'var(--moss)',
           }
         : (mockTarget || MOCK.FRIENDS[0]));
@@ -282,7 +290,29 @@ function SelfStatsBlock({ user, go, tier }) {
       </div>
     );
   }
-  const trend = user.sbxTrend;
+  return <RealSbxCard user={user} go={go} showDashboard/>;
+}
+
+// ─── Tier label from an SBX value (2.000–8.000 scale) ─────────────────
+function sbxTier(r) {
+  if (r == null) return '';
+  if (r >= 6.5) return 'Professional';
+  if (r >= 5.0) return 'Advanced';
+  if (r >= 3.5) return 'Experienced';
+  return 'Beginner';
+}
+
+// ─── Real SBX card (placement-aware). Headline = 2v2; 1v1 secondary. ───
+function RealSbxCard({ user, go, showDashboard }) {
+  const r   = user.sbx2v2;          // headline (2v2)
+  const n   = user.sbx2v2N || 0;
+  const rel = Math.round((user.sbx2v2Rel || 0) * 100);
+  const r1  = user.sbx1v1;
+  const n1  = user.sbx1v1N || 0;
+  const unrated     = n < 3;
+  const provisional = n >= 3 && n < 10;
+  const record = `${user.matchesW || 0}–${user.matchesL || 0}–${user.matchesH || 0}`;
+
   return (
     <div style={{
       background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
@@ -292,76 +322,56 @@ function SelfStatsBlock({ user, go, tier }) {
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <div style={{ position: 'absolute', right: 16, top: 16, fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.6, letterSpacing: '0.24em', fontWeight: 700 }}>SBX · v1</div>
-      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™</div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 10, position: 'relative' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 56, lineHeight: 0.85, letterSpacing: '-0.03em' }}>{user.sbx.toFixed(3)}</span>
-            <span style={{ fontSize: 12, color: user.sbxDelta >= 0 ? '#B8E0A4' : 'var(--clay)', fontWeight: 700 }}>
-              {user.sbxDelta >= 0 ? '+' : ''}{user.sbxDelta.toFixed(3)}
-            </span>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™ · 2v2</div>
+
+      {unrated ? (
+        <div style={{ position: 'relative', marginTop: 10 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.9, letterSpacing: '-0.02em' }}>Unrated</div>
+          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
+            Play <strong>{3 - n}</strong> more {3 - n === 1 ? 'match' : 'matches'} to lock in your rating.
           </div>
-          <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>Top {100 - user.sbxPercentile}% · #{user.sbxGlobalRank.toLocaleString()} global</div>
+          {/* progress pips */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ flex: 1, height: 5, borderRadius: 999, background: i < n ? 'var(--clay)' : 'rgba(234,226,206,0.22)' }}/>
+            ))}
+          </div>
         </div>
-        {/* mini sparkline */}
-        <svg viewBox="0 0 80 36" style={{ width: 90, height: 40 }} preserveAspectRatio="none">
-          {(() => {
-            const lo = Math.min(...trend), hi = Math.max(...trend);
-            const pts = trend.map((v, i) => [(i / (trend.length - 1)) * 78 + 1, 34 - ((v - lo) / (hi - lo || 1)) * 30]);
-            const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-            return (
-              <>
-                <path d={d} fill="none" stroke="var(--clay)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.5" fill="var(--clay)"/>
-              </>
-            );
-          })()}
-        </svg>
-      </div>
-      <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '16px 0 12px' }}/>
-      <div style={{ display: 'flex', gap: 14, fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.06em' }}>
-        <span><strong>{user.matchesW}–{user.matchesL}–{user.matchesH}</strong> RECORD</span>
-        <span>·</span>
-        <span>REL. {Math.round(user.sbxReliability * 100)}%</span>
-      </div>
-      <Button variant="outlineCream" size="sm" full style={{ marginTop: 12 }} onClick={() => go({ screen: 'stats' })}>
-        Full dashboard <Icon.ArrowRight size={14}/>
-      </Button>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 10, position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 56, lineHeight: 0.85, letterSpacing: '-0.03em' }}>{r.toFixed(3)}</span>
+              <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 700 }}>{sbxTier(r)}</span>
+            </div>
+            {provisional && (
+              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(234,226,206,0.18)', padding: '4px 8px', borderRadius: 999, fontWeight: 700 }}>Provisional</span>
+            )}
+          </div>
+          <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '16px 0 12px' }}/>
+          <div style={{ display: 'flex', gap: 14, fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.06em' }}>
+            <span><strong>{record}</strong> W–L–H</span>
+            <span>·</span>
+            <span>REL. {rel}%</span>
+            <span>·</span>
+            <span>1v1 {r1 != null && n1 >= 3 ? r1.toFixed(3) : '—'}</span>
+          </div>
+        </>
+      )}
+
+      {showDashboard && (
+        <Button variant="outlineCream" size="sm" full style={{ marginTop: 14 }} onClick={() => go({ screen: 'stats' })}>
+          Full dashboard <Icon.ArrowRight size={14}/>
+        </Button>
+      )}
     </div>
   );
 }
 
 function PublicStatsBlock({ user, viewerIsMember, go }) {
-  // If viewer is member, show full. If not, show gated teaser.
+  // If viewer is member, show full real card. If not, show gated teaser.
   if (viewerIsMember) {
-    const rel = user.rel ?? 0.8;
-    const reliable = rel >= 0.5;
-    return (
-      <div style={{
-        background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
-        color: 'var(--cream)',
-        borderRadius: 'var(--radius-card-lg)', padding: 20, position: 'relative', overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)',
-      }}>
-        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-        <div style={{ position: 'absolute', right: 16, top: 16, fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.6, letterSpacing: '0.24em', fontWeight: 700 }}>SBX · v1</div>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-          <div style={{
-            fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.85,
-            letterSpacing: '-0.03em',
-            borderBottom: reliable ? 'none' : '3px dotted rgba(234,226,206,0.5)',
-          }}>{user.sbx?.toFixed(3) ?? '—'}</div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Mini2 label="Record" value="9–5–1"/>
-            <Mini2 label="Events attended" value={user.eventsPlayed || 0}/>
-          </div>
-        </div>
-        <div style={{ fontSize: 11, opacity: 0.65, marginTop: 6 }}>
-          {reliable ? 'Rated · reliability ' : 'Provisional · reliability '}{Math.round(rel * 100)}%
-        </div>
-      </div>
-    );
+    return <RealSbxCard user={user} go={go}/>;
   }
   return (
     <div style={{

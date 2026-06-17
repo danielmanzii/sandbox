@@ -138,6 +138,15 @@ function buildRealUser(profile, stats) {
     sbxGlobalRank: 0,
     sbxReliability: Math.min(1, (stats ? stats.matchesTotal : 0) / 10),
     sbxMatchesToProvisional: Math.max(0, 5 - (stats ? stats.matchesTotal : 0)),
+
+    // ── Real SBX engine fields (Phase D2). Placement: unrated until 3
+    //    confirmed matches; provisional until 10.
+    sbx2v2:     profile.sbx_2v2 != null ? Number(profile.sbx_2v2) : null,
+    sbx1v1:     profile.sbx_1v1 != null ? Number(profile.sbx_1v1) : null,
+    sbx2v2N:    profile.sbx_2v2_n || 0,
+    sbx1v1N:    profile.sbx_1v1_n || 0,
+    sbx2v2Rel:  profile.sbx_2v2_rel != null ? Number(profile.sbx_2v2_rel) : 0,
+    sbx1v1Rel:  profile.sbx_1v1_rel != null ? Number(profile.sbx_1v1_rel) : 0,
     matchesW:     stats ? stats.matchesW : 0,
     matchesL:     stats ? stats.matchesL : 0,
     matchesH:     stats ? stats.matchesH : 0,

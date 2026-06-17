@@ -171,7 +171,7 @@ function useProfileByHandle(handle) {
     const cleaned = String(handle).replace(/^@/, '').toLowerCase();
     (async () => {
       const { data } = await sbx.from('profiles')
-        .select('id, handle, first_name, last_name, avatar_url, sbx, created_at')
+        .select('id, handle, first_name, last_name, avatar_url, sbx, sbx_2v2, sbx_1v1, sbx_2v2_n, sbx_1v1_n, sbx_2v2_rel, sbx_1v1_rel, bio, home_course, created_at')
         .or(`handle.ilike.${cleaned},handle.ilike.@${cleaned}`)
         .limit(1);
       if (!cancelled) {
