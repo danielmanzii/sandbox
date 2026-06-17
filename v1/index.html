@@ -64,7 +64,7 @@
 <script type="text/babel" src="components/screens/courses.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, BookScreen, CourseDetailScreen, MyRoundsScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, BookScreen, CourseDetailScreen, MyRoundsScreen, MatchupScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "tier": "walkup",
@@ -207,6 +207,7 @@ function App({ profile }) {
     case 'book':         screen = <BookScreen {...screenProps}/>; break;
     case 'courseDetail': screen = <CourseDetailScreen {...screenProps} courseId={route.courseId}/>; break;
     case 'myRounds':     screen = <MyRoundsScreen {...screenProps}/>; break;
+    case 'matchup':      screen = <MatchupScreen {...screenProps} matchId={route.matchId}/>; break;
 
     default: screen = <HomeScreen {...screenProps}/>;
   }

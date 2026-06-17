@@ -297,6 +297,31 @@ function useMyBookings(userId) {
   return [upcoming, past, loading, load];
 }
 
+// ─── Matchup: the formed foursome (or 1v1) for a match ───────────────
+// Returns [{ match, teamA:[profiles], teamB:[profiles] }, loading].
+function useMatchup(matchId) {
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!matchId) { setData(null); setLoading(false); return; }
+    const { data: m } = await sbx.from('matches').select('*').eq('id', matchId).maybeSingle();
+    if (!m) { setData(null); setLoading(false); return; }
+    const ids = [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean);
+    const { data: profs } = await sbx.from('profiles')
+      .select('id, handle, first_name, last_name, avatar_url, sbx')
+      .in('id', ids);
+    const byId = {}; (profs || []).forEach(p => { byId[p.id] = p; });
+    const teamA = [m.player_a, m.player_a2].filter(Boolean).map(id => byId[id]).filter(Boolean);
+    const teamB = [m.player_b, m.player_b2].filter(Boolean).map(id => byId[id]).filter(Boolean);
+    setData({ match: m, teamA, teamB });
+    setLoading(false);
+  }, [matchId]);
+
+  React.useEffect(() => { load(); }, [load]);
+  return [data, loading];
+}
+
 // ─── Mutations ────────────────────────────────────────────────────────
 // Reserve a slot. Snapshots the slot price (reserve-only; no charge yet).
 // Throws a friendly Error on the common failures.
@@ -327,6 +352,6 @@ async function cancelBooking({ bookingId }) {
 Object.assign(window, {
   haversineMiles, useGeolocation,
   useCourses, useAvailability, useCourse, useCourseSlots,
-  useFriendsOnSlots, useMyBookings,
+  useFriendsOnSlots, useMyBookings, useMatchup,
   createBooking, cancelBooking,
 });

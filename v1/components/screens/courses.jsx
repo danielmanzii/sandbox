@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, createBooking, cancelBooking, useUserSearch, invitePartner */
+/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, useMatchup, createBooking, cancelBooking, useUserSearch, invitePartner */
 // Golfer booking flow (Phase B):
 //   BookScreen        — date-first availability: near-you courses + open slots
 //   CourseDetailScreen— hero + Sandbox 9 + the day's bookable slots
@@ -585,4 +585,84 @@ function RoundCard({ b, onCancel, busy, past, go }) {
   );
 }
 
-Object.assign(window, { BookScreen, CourseDetailScreen, MyRoundsScreen });
+// ─── Matchup reveal (scout your foursome / opponent) ──────────────────
+function MatchupScreen({ go, matchId, profile }) {
+  const [data, loading] = useMatchup(matchId);
+  const meId = profile && profile.id;
+
+  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Matchup not found.</div>;
+
+  const { match, teamA, teamB } = data;
+  const is2v2 = (teamA.length + teamB.length) > 2;
+  const mySide = teamA.some(p => p.id === meId) ? 'A' : teamB.some(p => p.id === meId) ? 'B' : null;
+
+  return (
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
+      <div style={{
+        padding: '56px 20px 24px', color: 'var(--cream)', position: 'relative',
+        background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      }}>
+        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+        <button onClick={() => go({ screen: 'myRounds' })} style={{
+          position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 999,
+          background: 'rgba(14,28,19,0.45)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '1px solid rgba(234,226,206,0.22)',
+        }}><Icon.ArrowLeft size={16}/></button>
+        <div style={{ position: 'relative', textAlign: 'center', marginTop: 8 }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.16em', textTransform: 'uppercase' }}>{is2v2 ? '2v2 Scramble' : 'Head-to-head'} · {match.course_name}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, marginTop: 8, letterSpacing: '-0.01em' }}>The Matchup</div>
+        </div>
+      </div>
+
+      <div style={{ padding: '20px 16px 0' }}>
+        <TeamBlock label={mySide === 'A' ? 'Your team' : 'Team A'} players={teamA} meId={meId} go={go}/>
+        <div style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', opacity: 0.5, margin: '10px 0' }}>VS</div>
+        <TeamBlock label={mySide === 'B' ? 'Your team' : (is2v2 ? 'Team B' : 'Opponent')} players={teamB} meId={meId} go={go}/>
+      </div>
+
+      <div style={{ padding: '20px 16px 0' }}>
+        <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.65, textAlign: 'center', lineHeight: 1.5 }}>
+          Scout the field — know your SBX gap before the first tee.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamBlock({ label, players, meId, go }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8, paddingLeft: 4 }}>{label}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {players.map(p => <ScoutCard key={p.id} p={p} me={p.id === meId} go={go}/>)}
+      </div>
+    </div>
+  );
+}
+
+function ScoutCard({ p, me, go }) {
+  const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.handle;
+  const initial = (name || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  return (
+    <button onClick={() => go({ screen: 'profile', viewingHandle: p.handle })} className="card" style={{
+      width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 14, padding: 14,
+      border: me ? '1.5px solid var(--forest)' : 'var(--hairline)',
+    }}>
+      <div style={{ width: 48, height: 48, borderRadius: 999, background: '#5A7B4A', color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 20, overflow: 'hidden', flexShrink: 0 }}>
+        {p.avatar_url ? <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/> : initial}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--ink)' }}>{name}{me && <span style={{ opacity: 0.5, fontWeight: 600 }}> · you</span>}</div>
+        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>{formatHandle(p.handle)}</div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1 }}>{(Number(p.sbx) || 4).toFixed(3)}</div>
+        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.1em', marginTop: 3 }}>SBX</div>
+      </div>
+    </button>
+  );
+}
+
+Object.assign(window, { BookScreen, CourseDetailScreen, MyRoundsScreen, MatchupScreen });

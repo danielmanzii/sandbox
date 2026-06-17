@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useNotifications, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useNotifications, useMyBookings, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
 // Home screen — next event, live leaderboard, activity
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
@@ -20,6 +20,8 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
   const [newFollowers]         = useNewFollowers(profile && profile.id);
   const [notifs]               = useNotifications(profile && profile.id);
+  const [upcomingBookings]     = useMyBookings(profile && profile.id);
+  const nextBooking            = (upcomingBookings && upcomingBookings[0]) || null;
   // Only count items the user hasn't seen yet (seen IDs written by NotificationsScreen)
   const seenNotifIds = React.useMemo(() => {
     try { return new Set(JSON.parse(localStorage.getItem('spp_seen_notifs') || '[]')); }
@@ -116,6 +118,9 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           )}
         </button>
       </div>
+
+      {/* Your next round status (paired / match set / finding partner) */}
+      {nextBooking && <NextRoundStatus booking={nextBooking} go={go}/>}
 
       {/* Book a round — primary network action (twilight tee times) */}
       <div style={{ padding: '16px 16px 0' }}>
@@ -632,6 +637,59 @@ function FriendsHere({ friends, size = 18, max = 4, light = false }) {
         {friends.length} {friends.length === 1 ? 'friend' : 'friends'}
         {extra > 0 ? '' : ' here'}
       </span>
+    </div>
+  );
+}
+
+// Home card: status of your next reserved round.
+function NextRoundStatus({ booking, go }) {
+  const slot = booking.slot || {};
+  const course = slot.course || {};
+  const when = slot.starts_at ? new Date(slot.starts_at) : null;
+  const whenLabel = when ? `${when.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '';
+
+  let eyebrow, title, sub, onClick, icon;
+  if (booking.match_id) {
+    eyebrow = 'Your match is set';
+    title = 'Scout the matchup';
+    sub = `${course.short_name || 'Course'} · ${whenLabel}`;
+    icon = '🏌️';
+    onClick = () => go({ screen: 'matchup', matchId: booking.match_id });
+  } else if (booking.partner_id && booking.partner) {
+    const pname = [booking.partner.first_name, booking.partner.last_name].filter(Boolean).join(' ') || booking.partner.handle;
+    eyebrow = 'Paired up';
+    title = `With ${pname}`;
+    sub = `${formatHandle(booking.partner.handle)} · finding your opponents`;
+    icon = '🤝';
+    onClick = () => go({ screen: 'profile', viewingHandle: booking.partner.handle });
+  } else if (booking.needs_partner) {
+    eyebrow = 'Finding your partner';
+    title = 'On the waitlist';
+    sub = `${course.short_name || 'Course'} · ${whenLabel}`;
+    icon = '⏳';
+    onClick = () => go({ screen: 'myRounds' });
+  } else {
+    eyebrow = booking.match_type === '2v2' ? 'Team booked' : 'Booked';
+    title = 'Finding your match';
+    sub = `${course.short_name || 'Course'} · ${whenLabel}`;
+    icon = '⛳';
+    onClick = () => go({ screen: 'myRounds' });
+  }
+
+  return (
+    <div style={{ padding: '16px 16px 0' }}>
+      <button onClick={onClick} className="card" style={{
+        width: '100%', textAlign: 'left', padding: 16, borderRadius: 'var(--radius-card-lg)',
+        display: 'flex', alignItems: 'center', gap: 14, border: '1.5px solid var(--forest)',
+      }}>
+        <span style={{ fontSize: 26 }}>{icon}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{eyebrow}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1.05, marginTop: 4, letterSpacing: '-0.01em' }}>{title}</div>
+          <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>{sub}</div>
+        </div>
+        <Icon.ArrowRight size={16} color="var(--forest)"/>
+      </button>
     </div>
   );
 }
