@@ -57,14 +57,16 @@
 <script type="text/babel" src="components/social-data.jsx"></script>
 <script type="text/babel" src="components/courses-data.jsx"></script>
 <script type="text/babel" src="components/notifications-data.jsx"></script>
+<script type="text/babel" src="components/chat-data.jsx"></script>
 <script type="text/babel" src="components/screens/auth.jsx"></script>
 <script type="text/babel" src="components/screens/match-hub.jsx"></script>
 <script type="text/babel" src="components/screens/match-live.jsx"></script>
 <script type="text/babel" src="components/screens/notifications.jsx"></script>
 <script type="text/babel" src="components/screens/courses.jsx"></script>
+<script type="text/babel" src="components/screens/chat.jsx"></script>
 
 <script type="text/babel">
-/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, BookScreen, CourseDetailScreen, MyRoundsScreen, MatchupScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
+/* global React, ReactDOM, Icon, HomeScreen, EventsScreen, EventDetailScreen, PlayScreen, StatsScreen, ProfileScreen, SocialScreen, MembershipScreen, LiveScorecardScreen, ResultShareScreen, MatchHub, MatchLive, NotificationsScreen, BookScreen, CourseDetailScreen, MyRoundsScreen, MatchupScreen, ChatScreen, AuthScreens, ProfileSetupScreen, DisplayNameScreen, ResetPasswordScreen, useSession, useProfile, useRecovering, useRealUserSync, signOut */
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "tier": "walkup",
@@ -208,6 +210,7 @@ function App({ profile }) {
     case 'courseDetail': screen = <CourseDetailScreen {...screenProps} courseId={route.courseId}/>; break;
     case 'myRounds':     screen = <MyRoundsScreen {...screenProps}/>; break;
     case 'matchup':      screen = <MatchupScreen {...screenProps} matchId={route.matchId}/>; break;
+    case 'chat':         screen = <ChatScreen {...screenProps} matchId={route.matchId} dmWith={route.dmWith} title={route.title}/>; break;
 
     default: screen = <HomeScreen {...screenProps}/>;
   }
@@ -221,7 +224,7 @@ function App({ profile }) {
   ];
 
   // Hide tab bar on deep screens where the tab UI would obscure primary actions
-  const hideTabs = ['live', 'resultShare', 'match', 'challenge'].includes(route.screen);
+  const hideTabs = ['live', 'resultShare', 'match', 'challenge', 'chat'].includes(route.screen);
 
   return (
     <>

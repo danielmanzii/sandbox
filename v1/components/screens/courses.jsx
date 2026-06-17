@@ -623,7 +623,10 @@ function MatchupScreen({ go, matchId, profile }) {
       </div>
 
       <div style={{ padding: '20px 16px 0' }}>
-        <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.65, textAlign: 'center', lineHeight: 1.5 }}>
+        <Button variant="forest" full size="md" onClick={() => go({ screen: 'chat', matchId: match.id, title: 'Group chat' })}>
+          💬 Group chat
+        </Button>
+        <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.65, textAlign: 'center', lineHeight: 1.5, marginTop: 14 }}>
           Scout the field — know your SBX gap before the first tee.
         </div>
       </div>

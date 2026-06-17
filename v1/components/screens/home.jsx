@@ -659,9 +659,9 @@ function NextRoundStatus({ booking, go }) {
     const pname = [booking.partner.first_name, booking.partner.last_name].filter(Boolean).join(' ') || booking.partner.handle;
     eyebrow = 'Paired up';
     title = `With ${pname}`;
-    sub = `${formatHandle(booking.partner.handle)} · finding your opponents`;
+    sub = `${formatHandle(booking.partner.handle)} · tap to message`;
     icon = '🤝';
-    onClick = () => go({ screen: 'profile', viewingHandle: booking.partner.handle });
+    onClick = () => go({ screen: 'chat', dmWith: booking.partner.id, title: pname });
   } else if (booking.needs_partner) {
     eyebrow = 'Finding your partner';
     title = 'On the waitlist';
