@@ -132,14 +132,16 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           boxShadow: 'var(--shadow-md)', display: 'block',
         }}>
           <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+          {/* Clay golfer accent */}
+          <img src="assets/clay-golfer.png" alt="" style={{
+            position: 'absolute', right: -14, bottom: -10, height: 130, opacity: 0.9,
+            pointerEvents: 'none', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.25))',
+          }}/>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, maxWidth: '70%' }}>
               <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Twilight tee times</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, marginTop: 8, letterSpacing: '-0.01em' }}>Book a round</div>
               <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>Nine holes near you, done in under an hour.</div>
-            </div>
-            <div style={{ width: 44, height: 44, borderRadius: 999, background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Icon.ArrowRight size={18}/>
             </div>
           </div>
         </button>

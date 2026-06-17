@@ -206,9 +206,16 @@ function CourseDetailScreen({ go, courseId, profile }) {
         background: course.renderImg
           ? `linear-gradient(180deg, rgba(14,28,19,0.1) 0%, rgba(14,28,19,0.7) 100%), url('${course.renderImg}')`
           : 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-        backgroundSize: 'cover', backgroundPosition: 'center',
+        backgroundSize: 'cover', backgroundPosition: 'center', overflow: 'hidden',
       }}>
         <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+        {/* Clay course-hole diorama (when no custom render set) */}
+        {!course.renderImg && (
+          <img src="assets/clay-course-hole.png" alt="" style={{
+            position: 'absolute', right: -10, bottom: -6, height: 150, opacity: 0.92,
+            pointerEvents: 'none', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.3))',
+          }}/>
+        )}
         <button onClick={() => go({ screen: 'book' })} style={{
           position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 999,
           background: 'rgba(14,28,19,0.55)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
@@ -523,6 +530,7 @@ function MyRoundsScreen({ go, profile }) {
             <Section label="Upcoming"/>
             {upcoming.length === 0 ? (
               <div className="card" style={{ padding: 22, textAlign: 'center', marginBottom: 18 }}>
+                <img src="assets/clay-golfer.png" alt="" style={{ height: 120, margin: '0 auto 6px', display: 'block' }}/>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>No rounds booked.</div>
                 <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 4, marginBottom: 14 }}>Find a twilight tee time near you.</div>
                 <Button variant="forest" size="sm" onClick={() => go({ screen: 'book' })}>Book a round</Button>

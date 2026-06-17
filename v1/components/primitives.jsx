@@ -290,9 +290,9 @@ function Wordmark({ size = 140, variant = 'forest', style }) {
   return <img src={src} alt="SANDBOX" style={{ width: size, height: 'auto', display: 'block', ...style }}/>;
 }
 
-// ─── Full Lockup (SANDBOX + Pitch & Putt) ────────────────
+// ─── Full Lockup (SANDBOX + Pitch & Putt) — official June 2026 set ─────
 function Lockup({ size = 200, variant = 'forest', style }) {
-  const src = `assets/lockup-${variant}.svg`;
+  const src = `assets/lockup-full-${variant}.svg`;
   return <img src={src} alt="Sandbox Pitch & Putt" style={{ width: size, height: 'auto', display: 'block', ...style }}/>;
 }
 
