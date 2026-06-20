@@ -801,8 +801,8 @@ function YouReadout({ label, count }) {
         <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label || 'Your team'}</span>
         <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>Strokes so far</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 12, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.9, minWidth: 32, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
           {n === 0 ? '–' : n}
         </div>
         <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.3 }}>
@@ -974,8 +974,8 @@ function OppReadout({ label, value, par, live, holeNumber }) {
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 12, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.9, minWidth: 32, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
           {big}
         </div>
         <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.3 }}>{sub}</div>
