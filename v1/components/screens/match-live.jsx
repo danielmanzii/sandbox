@@ -44,7 +44,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
       // Load all player profiles (up to 4 for 2v2)
       const ids = [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean);
       if (ids.length) {
-        const { data: ps } = await sbx.from('profiles').select('id, first_name, last_name, handle').in('id', ids);
+        const { data: ps } = await sbx.from('profiles').select('id, first_name, last_name, handle, avatar_url').in('id', ids);
         if (!cancelled && ps) {
           const byId = {};
           for (const p of ps) byId[p.id] = p;
@@ -153,6 +153,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
     id,
     name: (players[id] && (players[id].first_name || players[id].handle)) || 'Player',
     handle: players[id] && players[id].handle,
+    avatar: players[id] && players[id].avatar_url,
   }));
 
   return (
@@ -828,13 +829,31 @@ function SfPick({ options, onPick }) {
   );
 }
 
+// Player name row with avatar to the left.
+function PlayerTag({ player }) {
+  const handle = player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : '';
+  const initial = (player.name || player.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <div style={{ width: 24, height: 24, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
+        background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+        {player.avatar
+          ? <img src={player.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+          : initial}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 800 }}>
+        {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{handle}</span>
+      </div>
+    </div>
+  );
+}
+
 // Per-player putt card (@handle) — each teammate logs their own putt.
 function PuttCard({ player, result, onMade, onMissed }) {
   return (
     <div style={{ padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
-      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-        {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : ''}</span>
-      </div>
+      <PlayerTag player={player}/>
       <div style={{ display: 'flex', gap: 6 }}>
         <XoButton kind="x"     active={result === 'missed'} onClick={onMissed}/>
         <XoButton kind="check" active={result === 'made'}   onClick={onMade}/>
@@ -878,9 +897,7 @@ function XoButton({ kind, active, onClick }) {
 function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onZone }) {
   return (
     <div style={{ padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
-      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-        {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : ''}</span>
-      </div>
+      <PlayerTag player={player}/>
 
       {showFairway && (
         <FairwayCross value={data.fairway} onPick={onFairway}/>
