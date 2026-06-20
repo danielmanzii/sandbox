@@ -598,7 +598,7 @@ function FairwayCross({ value, onPick }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
       }}>
         {hit ? (
-          <StrokeIcon kind="check" size={18}/>
+          <StrokeIcon kind="check" size={22}/>
         ) : (
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
@@ -858,7 +858,7 @@ function StrokeIcon({ kind, size = 20 }) {
 function XoButton({ kind, active, onClick }) {
   return (
     <button onClick={onClick} style={{ ...pillStyle(active), padding: '12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <StrokeIcon kind={kind === 'check' ? 'check' : 'x'} size={20}/>
+      <StrokeIcon kind={kind === 'check' ? 'check' : 'x'} size={24}/>
     </button>
   );
 }
