@@ -199,6 +199,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
             liveOpp={liveOpp}
+            flowKey={`spp_flow_${matchId}_${hole.hole_number}`}
             onLiveScore={broadcastLive}
             onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
             onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
@@ -294,7 +295,7 @@ function ScoreModeChooser({ onPick, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, yourTeamLabel, theirTeamLabel, liveOpp, onLiveScore, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, yourTeamLabel, theirTeamLabel, liveOpp, flowKey, onLiveScore, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
@@ -359,6 +360,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
             <ShotFlow
               yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
               isRegular={isRegular} isMember={isMember}
+              flowKey={flowKey}
               onLiveScore={onLiveScore}
               onSavePlayerStat={onSavePlayerStat}
               onComplete={({ score, gir, zone, ballPlayer, holedBy }) => {
@@ -612,14 +614,18 @@ function FairwayCross({ value, onPick }) {
 // Each stroke both teammates log their own shot on their own card (@handle),
 // the caddie compares the two balls, you pick which to play, repeat until
 // holed. The team score emerges from the stroke count.
-function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onLiveScore, onSavePlayerStat, onComplete }) {
+function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onLiveScore, onSavePlayerStat, onComplete }) {
   const [p1, p2] = yourTeam;
-  const [stroke, setStroke] = React.useState(0);     // 0-based stroke (0 = tee)
-  const [card, setCard]     = React.useState({});    // { pid: { fairway, reached, zone } }
-  const [phase, setPhase]   = React.useState('cards');
-  const [putts, setPutts]   = React.useState(0);     // completed missed putt rounds
-  const [puttCard, setPuttCard] = React.useState({}); // this round: { pid: 'made'|'missed' }
-  const [chosen, setChosen] = React.useState(null);  // { ball, zone, strokesToGreen }
+  // Restore any in-progress hole so backing out of the match doesn't lose it.
+  const saved = (() => {
+    try { return JSON.parse((flowKey && localStorage.getItem(flowKey)) || 'null') || {}; } catch (_) { return {}; }
+  })();
+  const [stroke, setStroke] = React.useState(saved.stroke || 0);     // 0-based stroke (0 = tee)
+  const [card, setCard]     = React.useState(saved.card || {});      // { pid: { fairway, reached, zone } }
+  const [phase, setPhase]   = React.useState(saved.phase || 'cards');
+  const [putts, setPutts]   = React.useState(saved.putts || 0);      // completed missed putt rounds
+  const [puttCard, setPuttCard] = React.useState(saved.puttCard || {}); // this round: { pid: 'made'|'missed' }
+  const [chosen, setChosen] = React.useState(saved.chosen || null);  // { ball, zone, strokesToGreen }
 
   // Running strokes so far: full swings to the green, plus putt rounds.
   const count = (phase === 'putt' && chosen) ? chosen.strokesToGreen + putts : stroke;
@@ -629,7 +635,19 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onLiveScore,
     if (onLiveScore) onLiveScore(count, phase === 'done');
   }, [count, phase]);
 
-  function reset() { setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); }
+  // Persist in-progress state per match+hole; wipe it once the hole finalizes.
+  React.useEffect(() => {
+    if (!flowKey) return;
+    try {
+      if (phase === 'done') localStorage.removeItem(flowKey);
+      else localStorage.setItem(flowKey, JSON.stringify({ stroke, card, phase, putts, puttCard, chosen }));
+    } catch (_) {}
+  }, [flowKey, stroke, card, phase, putts, puttCard, chosen]);
+
+  function reset() {
+    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null);
+    try { if (flowKey) localStorage.removeItem(flowKey); } catch (_) {}
+  }
 
   if (savedScore != null && phase !== 'done') {
     return (
