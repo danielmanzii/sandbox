@@ -86,6 +86,15 @@ function BookScreen({ go, profile, embedded }) {
   return (
     <div style={{ background: 'var(--canvas)', minHeight: embedded ? 'auto' : '100%', paddingBottom: embedded ? 0 : 120 }}>
       <div style={{ padding: embedded ? '4px 20px 12px' : '58px 20px 12px', color: 'var(--forest)' }}>
+        {!embedded && (
+          <button onClick={() => go({ screen: 'home' })} style={{
+            width: 40, height: 40, borderRadius: 999, marginBottom: 12,
+            background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon.ArrowLeft size={16}/>
+          </button>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {!embedded ? (
             <div>
