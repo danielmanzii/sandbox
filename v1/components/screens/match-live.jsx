@@ -600,18 +600,17 @@ function FairwayCross({ value, onPick }) {
         {hit ? (
           <StrokeIcon kind="check" size={22}/>
         ) : (
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
+            strokeWidth="2" strokeLinejoin="round"
             style={{ display: 'block', transform: rot ? `rotate(${rot}deg)` : 'none' }}>
-            <line x1="12" y1="19" x2="12" y2="5"/>
-            <polyline points="6 11 12 5 18 11"/>
+            <polygon points="12 7 18 17 6 17"/>
           </svg>
         )}
       </button>
     );
   };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 5,
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 9,
       gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
       <Btn v="long"  area="long"  rot={0}/>
       <Btn v="left"  area="left"  rot={-90}/>
