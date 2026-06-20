@@ -717,7 +717,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
       return next;
     });
     return (
-      <SfWrap count={count} onReset={reset} label={yourTeamLabel} title="Putt made?">
+      <SfWrap count={count} onReset={reset} label={yourTeamLabel} title={`Putt ${roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[p1, p2].map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
@@ -731,7 +731,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
   // Cards phase — both teammates log this stroke
   return (
     <SfWrap count={count} onReset={reset} label={yourTeamLabel}
-      title={fairwayTee ? 'Fairway hit?' : 'Reached the green?'}>
+      title={`Shot ${stroke + 1} — ${fairwayTee ? 'Fairway hit?' : 'Reached the green?'}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[p1, p2].map(p => (
           <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}}
