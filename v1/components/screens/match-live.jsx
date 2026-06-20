@@ -617,15 +617,19 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onLiveScore,
   const [stroke, setStroke] = React.useState(0);     // 0-based stroke (0 = tee)
   const [card, setCard]     = React.useState({});    // { pid: { fairway, reached, zone } }
   const [phase, setPhase]   = React.useState('cards');
-  const [putts, setPutts]   = React.useState(0);
+  const [putts, setPutts]   = React.useState(0);     // completed missed putt rounds
+  const [puttCard, setPuttCard] = React.useState({}); // this round: { pid: 'made'|'missed' }
   const [chosen, setChosen] = React.useState(null);  // { ball, zone, strokesToGreen }
+
+  // Running strokes so far: full swings to the green, plus putt rounds.
+  const count = (phase === 'putt' && chosen) ? chosen.strokesToGreen + putts : stroke;
 
   // Stream our running stroke count to the other team's scoreboard.
   React.useEffect(() => {
-    if (onLiveScore) onLiveScore(stroke + putts, phase === 'done');
-  }, [stroke, putts, phase]);
+    if (onLiveScore) onLiveScore(count, phase === 'done');
+  }, [count, phase]);
 
-  function reset() { setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setChosen(null); }
+  function reset() { setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); }
 
   if (savedScore != null && phase !== 'done') {
     return (
@@ -669,27 +673,40 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onLiveScore,
     else { setStroke(stroke + 1); setCard({}); }
   }
 
-  // Putting + who-holed phases
+  // Putting — both teammates putt the chosen ball each round. The first to
+  // hole ends it (their ball is the line, the round is the team's last putt).
+  // If both miss, it's another round.
   if (phase === 'putt') {
-    return <SfWrap stroke={stroke} putts={putts} onReset={reset} title={`Putt ${putts + 1} — holed?`}>
-      <SfPick options={[{ k: 'no', label: 'Missed' }, { k: 'yes', label: 'Holed ✓' }]}
-        onPick={(v) => { setPutts(putts + 1); if (v === 'yes') setPhase('who'); }}/>
-    </SfWrap>;
-  }
-  if (phase === 'who') {
-    return <SfWrap stroke={stroke} putts={putts} onReset={reset} title="Who holed the putt?">
-      <SfPick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={(id) => {
-        const strokesToGreen = chosen ? chosen.strokesToGreen : stroke + 1;
-        const score = strokesToGreen + putts;
-        setPhase('done');
-        onComplete({ score, gir: strokesToGreen <= Math.max(1, (par || 3) - 2), zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: id });
-      }}/>
-    </SfWrap>;
+    const roundNo = putts + 1;
+    const strokesToGreen = chosen ? chosen.strokesToGreen : stroke;
+    const finish = (holer) => {
+      setPhase('done');
+      onComplete({
+        score: strokesToGreen + roundNo,
+        gir: strokesToGreen <= Math.max(1, (par || 3) - 2),
+        zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
+      });
+    };
+    const missed = (pid) => setPuttCard(pc => {
+      const next = { ...pc, [pid]: 'missed' };
+      if (next[p1.id] === 'missed' && next[p2.id] === 'missed') { setPutts(putts + 1); return {}; } // new round
+      return next;
+    });
+    return (
+      <SfWrap count={count} onReset={reset} title={`Putt ${roundNo} — each of you putt`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[p1, p2].map(p => (
+            <PuttCard key={p.id} player={p} result={puttCard[p.id]}
+              onMade={() => finish(p.id)} onMissed={() => missed(p.id)}/>
+          ))}
+        </div>
+      </SfWrap>
+    );
   }
 
   // Cards phase — both teammates log this stroke
   return (
-    <SfWrap stroke={stroke} putts={putts} onReset={reset}
+    <SfWrap count={count} onReset={reset}
       title={fairwayTee ? 'Tee shot — each of you log your drive' : `Shot ${stroke + 1} — each of you log your ball`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[p1, p2].map(p => (
@@ -718,14 +735,14 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onLiveScore,
   );
 }
 
-function SfWrap({ title, stroke, putts, onReset, children }) {
+function SfWrap({ title, count, onReset, children }) {
   return (
     <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
       <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
       {children}
-      {(stroke > 0 || putts > 0) && (
+      {count > 0 && (
         <div style={{ marginTop: 12, fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between' }}>
-          <span>Strokes so far: {stroke + putts}</span>
+          <span>Strokes so far: {count}</span>
           <button onClick={onReset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
         </div>
       )}
@@ -742,6 +759,21 @@ function SfPick({ options, onPick }) {
           border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)', fontWeight: 700, fontSize: 13,
         }}>{o.label}</button>
       ))}
+    </div>
+  );
+}
+
+// Per-player putt card (@handle) — each teammate logs their own putt.
+function PuttCard({ player, result, onMade, onMissed }) {
+  return (
+    <div style={{ padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
+      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+        {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : ''}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={onMissed} style={pillStyle(result === 'missed')}>Missed</button>
+        <button onClick={onMade} style={pillStyle(result === 'made')}>Holed ✓</button>
+      </div>
     </div>
   );
 }
