@@ -584,7 +584,9 @@ function StatChoice({ active, onClick, children }) {
 
 // ─── Fairway directional cross (hit / miss long-short-left-right) ─────
 function FairwayCross({ value, onPick }) {
-  const Btn = ({ v, label, area }) => {
+  // All directions use the SAME arrow glyph (↑) rotated, so every arrow has
+  // identical weight/metrics and stays centered (rotation pivots on center).
+  const Btn = ({ v, area, rot, glyph }) => {
     const on = value === v;
     const hit = v === 'hit';
     return (
@@ -594,17 +596,19 @@ function FairwayCross({ value, onPick }) {
         color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
         border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
-      }}>{label}</button>
+      }}>
+        <span style={{ display: 'inline-block', lineHeight: 1, transform: rot ? `rotate(${rot}deg)` : 'none' }}>{glyph || '↑'}</span>
+      </button>
     );
   };
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 44px)', gap: 6,
       gridTemplateAreas: '". long ." "left hit right" ". short ."', maxWidth: 200 }}>
-      <Btn v="long"  label="↑" area="long"/>
-      <Btn v="left"  label="←" area="left"/>
-      <Btn v="hit"   label="✓" area="hit"/>
-      <Btn v="right" label="→" area="right"/>
-      <Btn v="short" label="↓" area="short"/>
+      <Btn v="long"  area="long"  rot={0}/>
+      <Btn v="left"  area="left"  rot={-90}/>
+      <Btn v="hit"   area="hit"   glyph="✓"/>
+      <Btn v="right" area="right" rot={90}/>
+      <Btn v="short" area="short" rot={180}/>
     </div>
   );
 }
