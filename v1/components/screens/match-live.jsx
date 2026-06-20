@@ -224,6 +224,9 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(false);
+  const [mode, setMode] = React.useState('quick'); // 'quick' | 'stats' — persists across holes this session
+  const statsMode = mode === 'stats' && is2v2 && (yourTeam || []).length === 2;
+  const statPrefixEarly = youAreA ? 'player_a' : 'player_b';
 
   // Your per-hole stats (1v1 only). In 2v2, team-level stats need per-shot
   // tracking which is a follow-up — so the section is only shown for 1v1.
@@ -263,11 +266,42 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
           )}
         </div>
 
-        <div style={{ marginTop: 20 }}>
-          <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3} onChange={onYourScore}/>
-          <div style={{ height: 12 }}/>
-          <ScoreWheel label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} onChange={onOpponentScore}/>
-        </div>
+        {/* Scoring mode toggle — 2v2 only (1v1 uses the wheel + stat expander) */}
+        {is2v2 && (yourTeam || []).length === 2 && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 18, padding: 4, background: 'rgba(14,28,19,0.28)', borderRadius: 999 }}>
+            {[['quick', 'Quick score'], ['stats', '+ Track stats']].map(([k, l]) => (
+              <button key={k} onClick={() => setMode(k)} style={{
+                flex: 1, padding: '8px', borderRadius: 999,
+                background: mode === k ? 'var(--cream)' : 'transparent',
+                color: mode === k ? 'var(--forest)' : 'var(--cream)',
+                fontWeight: 700, fontSize: 12,
+              }}>{l}</button>
+            ))}
+          </div>
+        )}
+
+        {statsMode ? (
+          <div style={{ marginTop: 16 }}>
+            <ShotFlow
+              yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
+              onComplete={({ score, gir, zone, ballPlayer, holedBy }) => {
+                onYourScore(score);
+                if (gir != null)   onSaveStat(statPrefixEarly + '_gir', gir);
+                if (zone)          onSaveStat('zone', zone);
+                if (ballPlayer)    onSaveStat('ball_player', ballPlayer);
+                if (holedBy)       onSaveStat('holed_by', holedBy);
+              }}
+            />
+            <div style={{ height: 14 }}/>
+            <ScoreWheel label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} onChange={onOpponentScore}/>
+          </div>
+        ) : (
+          <div style={{ marginTop: 20 }}>
+            <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3} onChange={onYourScore}/>
+            <div style={{ height: 12 }}/>
+            <ScoreWheel label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} onChange={onOpponentScore}/>
+          </div>
+        )}
 
         {/* Advanced stats — 1v1 only for now. Tap "Log stats" to expand. */}
         {!is2v2 && yourScore != null && (
@@ -318,7 +352,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
 
         {/* 2v2 ball-selection capture — one tap, optional zone. Feeds shot
             usage, the clutch stat, and the future "whose ball" AI. */}
-        {is2v2 && yourScore != null && (yourTeam || []).length === 2 && (
+        {!statsMode && is2v2 && yourScore != null && (yourTeam || []).length === 2 && (
           <TeamCapture hole={hole} yourTeam={yourTeam} isMember={isMember} onSaveStat={onSaveStat}/>
         )}
 
@@ -458,6 +492,107 @@ function StatChoice({ active, onClick, children }) {
       fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',
     }}>{children}</button>
   );
+}
+
+// ─── Guided shot-by-shot flow (2v2 scramble) — score emerges ──────────
+function ShotFlow({ yourTeam, par, savedScore, onComplete }) {
+  const [p1, p2] = yourTeam;
+  const [shots, setShots]   = React.useState([]);   // [{ ball }] — strokes to reach the green
+  const [pendBall, setPend] = React.useState(null); // ball chosen for the current shot, awaiting reach?
+  const [phase, setPhase]   = React.useState('approach'); // approach → green → putt → who → done
+  const [zone, setZone]     = React.useState(null);
+  const [putts, setPutts]   = React.useState(0);
+
+  function reset() { setShots([]); setPend(null); setPhase('approach'); setZone(null); setPutts(0); }
+
+  // Already scored (e.g. via Quick) — show summary + re-score.
+  if (savedScore != null && phase !== 'done') {
+    return (
+      <div style={{ padding: '14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', textAlign: 'center' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Your team scored</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, margin: '4px 0 10px' }}>{savedScore}</div>
+        <button onClick={reset} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(234,226,206,0.22)', color: 'var(--cream)', borderRadius: 999, padding: '8px 16px', fontSize: 12, fontWeight: 700 }}>Re-score with shots</button>
+      </div>
+    );
+  }
+
+  const Wrap = ({ title, children }) => (
+    <div style={{ padding: '14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
+      <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
+      {children}
+      {(shots.length > 0 || putts > 0) && (
+        <div style={{ marginTop: 12, fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between' }}>
+          <span>Strokes so far: {shots.length + putts}</span>
+          <button onClick={reset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
+        </div>
+      )}
+    </div>
+  );
+  const Pick = ({ onPick, options }) => (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {options.map(o => (
+        <button key={o.k} onClick={() => onPick(o.k)} style={{
+          flex: 1, padding: '12px 8px', borderRadius: 12, background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)', fontWeight: 700, fontSize: 13,
+        }}>{o.label}</button>
+      ))}
+    </div>
+  );
+
+  // Step 1: whose ball for this shot
+  if (phase === 'approach' && pendBall == null) {
+    return <Wrap title={`Shot ${shots.length + 1} — whose ball did you take?`}>
+      <Pick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={(id) => setPend(id)}/>
+    </Wrap>;
+  }
+  // Step 2: did that shot reach the green?
+  if (phase === 'approach' && pendBall != null) {
+    return <Wrap title={`Shot ${shots.length + 1} — did it reach the green?`}>
+      <Pick options={[
+        { k: 'no',  label: 'Not yet' },
+        { k: 'yes', label: 'On the green ✓' },
+      ]} onPick={(v) => {
+        const newShots = [...shots, { ball: pendBall }];
+        setShots(newShots); setPend(null);
+        if (v === 'yes') setPhase('green');
+      }}/>
+    </Wrap>;
+  }
+  // Step 3: green position
+  if (phase === 'green') {
+    return <Wrap title="Where on the green?">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        {GREEN_ZONES.map(z => (
+          <button key={z} onClick={() => { setZone(z); setPhase('putt'); }} style={{
+            padding: '10px 4px', borderRadius: 10, background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)', fontSize: 11, fontWeight: 700,
+          }}>{z}</button>
+        ))}
+      </div>
+    </Wrap>;
+  }
+  // Step 4: putting
+  if (phase === 'putt') {
+    return <Wrap title={`Putt ${putts + 1} — holed?`}>
+      <Pick options={[
+        { k: 'no',  label: 'Missed' },
+        { k: 'yes', label: 'Holed ✓' },
+      ]} onPick={(v) => { setPutts(putts + 1); if (v === 'yes') setPhase('who'); }}/>
+    </Wrap>;
+  }
+  // Step 5: who holed it
+  if (phase === 'who') {
+    return <Wrap title="Who holed the putt?">
+      <Pick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={(id) => {
+        const score = shots.length + putts;
+        const gir = shots.length <= Math.max(1, (par || 3) - 2);
+        const ballPlayer = shots.length ? shots[shots.length - 1].ball : id;
+        setPhase('done');
+        onComplete({ score, gir, zone, ballPlayer, holedBy: id });
+      }}/>
+    </Wrap>;
+  }
+  return null;
 }
 
 // ─── Score wheel (GHIN-style) — tap a number, par-shape auto-draws ────
