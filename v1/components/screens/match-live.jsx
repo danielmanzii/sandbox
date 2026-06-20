@@ -834,7 +834,7 @@ function PlayerTag({ player }) {
   const handle = player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : '';
   const initial = (player.name || player.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
       <div style={{ width: 24, height: 24, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
         background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
