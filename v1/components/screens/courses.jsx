@@ -705,6 +705,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
   const [data, loading] = useMatchDetail(matchId);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
+  const [selHole, setSelHole] = React.useState(null);
   const meId = profile && profile.id;
 
   if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
@@ -794,26 +795,32 @@ function MatchDetailScreen({ go, matchId, profile }) {
         </div>
       </div>
 
-      {/* Hole-by-hole */}
+      {/* Hole-by-hole — tap a hole for its stats */}
       {holes.length > 0 && (
         <div style={{ padding: '18px 16px 0' }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole</div>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole · tap for detail</div>
           <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(holes.length, 9)}, 1fr)`, gap: 4 }}>
             {holes.map(h => {
               const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
               const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
               const lab = h.result == null ? '·' : w ? 'W' : l ? 'L' : 'H';
-              const bg = w ? 'var(--forest)' : l ? 'var(--cream)' : h.result === 'H' ? 'var(--paper)' : 'transparent';
-              const col = w ? 'var(--cream)' : 'var(--forest)';
+              const bg = w ? 'var(--forest)' : l ? '#C44536' : h.result === 'H' ? 'var(--paper)' : 'transparent';
+              const col = w ? 'var(--cream)' : l ? '#FFFFFF' : 'var(--forest)';
               return (
-                <div key={h.hole_number} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                <button key={h.hole_number} onClick={() => setSelHole(h)} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'transparent', border: 'none', padding: '2px 0', cursor: 'pointer',
+                }}>
                   <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>{h.hole_number}</div>
-                  <div style={{ width: 24, height: 24, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 12 }}>{lab}</div>
-                </div>
+                  <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13 }}>{lab}</div>
+                </button>
               );
             })}
           </div>
         </div>
+      )}
+
+      {selHole && (
+        <HoleStatSheet hole={selHole} youAreA={youAreA} is2v2={is2v2} byId={data.byId} onClose={() => setSelHole(null)}/>
       )}
 
       {/* Confirmation */}
@@ -844,6 +851,65 @@ function MatchDetailScreen({ go, matchId, profile }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Per-hole stat popup ──────────────────────────────────────────────
+function HoleStatSheet({ hole, youAreA, is2v2, byId, onClose }) {
+  const h = hole;
+  const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+  const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+  const verdict = h.result == null ? 'Not played' : w ? 'Won' : l ? 'Lost' : 'Halved';
+  const verdictColor = w ? 'var(--forest)' : l ? '#C44536' : 'var(--ink)';
+
+  const yourScore = youAreA ? h.player_a_score : h.player_b_score;
+  const oppScore  = youAreA ? h.player_b_score : h.player_a_score;
+  const name = (id) => { const p = byId[id]; return p ? (p.first_name || p.handle) : '—'; };
+  const yourGir   = youAreA ? h.player_a_gir : h.player_b_gir;
+  const yourPutts = youAreA ? h.player_a_putts : h.player_b_putts;
+  const yourProx  = youAreA ? h.player_a_proximity_ft : h.player_b_proximity_ft;
+
+  const Row = ({ label, value }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
+      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
+      position: 'fixed', inset: 0, background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000,
+    }}>
+      <div style={{ width: '100%', maxWidth: 440, background: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: '14px 20px 28px' }}>
+        <div style={{ width: 38, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.16)', margin: '0 auto 16px' }}/>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)' }}>Hole {h.hole_number}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: verdictColor }}>{verdict}</div>
+        </div>
+
+        <Row label="Par" value={h.par || 3}/>
+        {h.distance_yards != null && <Row label="Yards" value={h.distance_yards}/>}
+        <Row label="Your side" value={yourScore != null ? yourScore : '—'}/>
+        <Row label="Opponent" value={oppScore != null ? oppScore : '—'}/>
+
+        {is2v2 ? (
+          <>
+            <Row label="Ball played" value={h.ball_player ? name(h.ball_player) : '—'}/>
+            <Row label="Holed by" value={h.holed_by ? name(h.holed_by) : '—'}/>
+            <Row label="Ball position" value={h.zone || '—'}/>
+          </>
+        ) : (
+          <>
+            <Row label="GIR" value={yourGir == null ? '—' : yourGir ? 'Yes' : 'No'}/>
+            <Row label="Putts" value={yourPutts != null ? yourPutts : '—'}/>
+            <Row label="Proximity" value={yourProx != null ? `${yourProx}′` : '—'}/>
+          </>
+        )}
+
+        <Button variant="forest" full size="md" onClick={onClose} style={{ marginTop: 18 }}>Done</Button>
+      </div>
     </div>
   );
 }
