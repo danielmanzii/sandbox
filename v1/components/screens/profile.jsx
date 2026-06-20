@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, signOut */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -227,7 +227,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
           <div className="card" style={{ padding: 4 }}>
             <MenuRow label="Manage my membership" onClick={() => go({ screen: 'membership' })}/>
             <MenuRow label="Guest Passes" onClick={() => setGuestPassesOpen(true)}/>
-            <MenuRow label="Sign out" last/>
+            <MenuRow label="Sign out" last onClick={() => { if (window.confirm('Sign out of Sandbox?')) signOut(); }}/>
           </div>
         </div>
       )}
