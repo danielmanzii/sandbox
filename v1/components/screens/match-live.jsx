@@ -583,28 +583,15 @@ function StatChoice({ active, onClick, children }) {
 }
 
 // ─── Fairway directional cross (hit / miss long-short-left-right) ─────
-// Fairway direction glyph: straight arrow for long/short, curved (hook/slice)
-// arrow for left/right — matching standard golf fairway-miss UI.
+// Fairway direction glyph: one straight arrow rotated per direction.
 function FairwayArrow({ dir }) {
-  if (dir === 'up' || dir === 'down') {
-    return (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-        style={{ display: 'block', transform: dir === 'down' ? 'rotate(180deg)' : 'none' }}>
-        <path d="M12 19 V6"/>
-        <path d="M7 11 L12 6 L17 11"/>
-      </svg>
-    );
-  }
-  // Curved arrow drawn in its final orientation: sweeps down and out, the head
-  // points down-and-outward with its tip at the curve's end and wings angled to
-  // the curve's direction so it reads as a real arrowhead. Right = as drawn;
-  // left = horizontal mirror.
+  const rot = { up: 0, right: 90, down: 180, left: -90 }[dir] || 0;
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-      style={{ display: 'block', transform: dir === 'left' ? 'scaleX(-1)' : 'none' }}>
-      <path d="M7 4 C 7 12, 11 15, 17 18 L14 13.3 M17 18 L11.5 18.5"/>
+      style={{ display: 'block', transform: rot ? `rotate(${rot}deg)` : 'none' }}>
+      <path d="M12 19 V6"/>
+      <path d="M7 11 L12 6 L17 11"/>
     </svg>
   );
 }
