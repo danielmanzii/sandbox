@@ -349,13 +349,13 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               }}
             />
             <div style={{ height: 14 }}/>
-            <ScoreWheel label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} onChange={onOpponentScore}/>
+            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3}/>
           </div>
         ) : (
           <div style={{ marginTop: 20 }}>
             <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3} onChange={onYourScore}/>
             <div style={{ height: 12 }}/>
-            <ScoreWheel label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} onChange={onOpponentScore}/>
+            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3}/>
           </div>
         )}
 
@@ -611,13 +611,17 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onSavePlayer
   }
 
   const isTee = stroke === 0;
-  const needFairway = isTee && isRegular && (par || 3) >= 4;
+  // A tee shot on a regular par 4/5 is a DRIVE: log the fairway result only,
+  // no "on the green?" (you're not reaching it off the tee). Everything else —
+  // a par-3 tee, a pitch & putt hole, or any approach shot thereafter — asks
+  // "is the ball on the green?".
+  const fairwayTee = isTee && isRegular && (par || 3) >= 4;
   const setField = (pid, key, val) => setCard(c => ({ ...c, [pid]: { ...(c[pid] || {}), [key]: val } }));
   const cardDone = (pid) => {
     const c = card[pid]; if (!c) return false;
-    if (needFairway && !c.fairway) return false;
-    if (c.reached == null) return false;
-    if (c.reached === true && !c.zone) return false;
+    if (fairwayTee) return !!c.fairway;                 // drive: just need a fairway result
+    if (c.reached == null) return false;                // approach: on/off green required
+    if (c.reached === true && !c.zone) return false;    // on green: pick a position (bonus pts)
     return true;
   };
   const bothDone = cardDone(p1.id) && cardDone(p2.id);
@@ -627,12 +631,14 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onSavePlayer
   function pickBall(pid) {
     [p1, p2].forEach(p => {
       const c = card[p.id] || {}; const patch = {};
-      if (needFairway && c.fairway) patch.fairway = c.fairway;
-      if (c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
+      if (fairwayTee && c.fairway) patch.fairway = c.fairway;
+      if (!fairwayTee && c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
       if (Object.keys(patch).length) onSavePlayerStat(p.id, patch);
     });
     const c = card[pid] || {};
-    if (c.reached) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); }
+    // Off the tee (drive) you never reach the green → always advance to the
+    // approach. Otherwise, if the chosen ball is on the green, go putt.
+    if (!fairwayTee && c.reached) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); }
     else { setStroke(stroke + 1); setCard({}); }
   }
 
@@ -656,10 +662,12 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onSavePlayer
 
   // Cards phase — both teammates log this stroke
   return (
-    <SfWrap stroke={stroke} putts={putts} onReset={reset} title={`Shot ${stroke + 1} — each of you log your ball`}>
+    <SfWrap stroke={stroke} putts={putts} onReset={reset}
+      title={fairwayTee ? 'Tee shot — each of you log your drive' : `Shot ${stroke + 1} — each of you log your ball`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[p1, p2].map(p => (
-          <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}} needFairway={needFairway}
+          <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}}
+            showFairway={fairwayTee} showGreen={!fairwayTee}
             onFairway={(v) => setField(p.id, 'fairway', v)}
             onReached={(v) => setField(p.id, 'reached', v)}
             onZone={(z) => setField(p.id, 'zone', z)}/>
@@ -711,28 +719,33 @@ function SfPick({ options, onPick }) {
   );
 }
 
-// Per-player card (@handle) — fairway (tee), reach-green, green position.
-function PlayerShotCard({ player, data, needFairway, onFairway, onReached, onZone }) {
+// Per-player card (@handle). A tee drive shows ONLY the fairway cross; a
+// par-3 tee / approach shows ONLY the "on the green?" question (+ position).
+function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onZone }) {
   return (
     <div style={{ padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
       <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
         {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : ''}</span>
       </div>
 
-      {needFairway && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Fairway</div>
+      {showFairway && (
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Find the fairway?</div>
           <FairwayCross value={data.fairway} onPick={onFairway}/>
         </div>
       )}
 
-      <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Reach the green?</div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={() => onReached(false)} style={pillStyle(data.reached === false)}>Off green</button>
-        <button onClick={() => onReached(true)} style={pillStyle(data.reached === true)}>On green ✓</button>
-      </div>
+      {showGreen && (
+        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Reach the green?</div>
+      )}
+      {showGreen && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => onReached(false)} style={pillStyle(data.reached === false)}>Off green</button>
+          <button onClick={() => onReached(true)} style={pillStyle(data.reached === true)}>On green ✓</button>
+        </div>
+      )}
 
-      {data.reached === true && (
+      {showGreen && data.reached === true && (
         <div style={{ marginTop: 8 }}>
           <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700, marginBottom: 5 }}>Where on the green?</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
@@ -804,6 +817,32 @@ function ScoreWheel({ label, value, par, onChange }) {
             }}>{n}</button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Opponent score — READ ONLY ──────────────────────────────
+// You never enter the other team's score; it appears here as they log it on
+// their own device (realtime), so you always know what you're up against.
+function OppReadout({ label, value, par }) {
+  const p = par || 3;
+  const shape = parShape(value, p);
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label}</span>
+        {value != null && shape && shape !== 'par' && (
+          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: value == null ? 0.4 : 1 }}>
+          {value == null ? '–' : value}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.3 }}>
+          {value == null ? 'Waiting for their score…' : 'Logged by their team'}
+        </div>
       </div>
     </div>
   );
