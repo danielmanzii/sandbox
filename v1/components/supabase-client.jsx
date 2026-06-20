@@ -20,10 +20,23 @@ window.sbx = sbx;
 //   object    = active Supabase session
 function useSession() {
   const [session, setSession] = React.useState(undefined);
+  const resolved = React.useRef(false); // has the initial getSession() returned yet?
   React.useEffect(() => {
-    sbx.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const { data: sub } = sbx.auth.onAuthStateChange((_event, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
+    let mounted = true;
+    sbx.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      resolved.current = true;
+      setSession(data.session || null);
+    });
+    const { data: sub } = sbx.auth.onAuthStateChange((_event, s) => {
+      if (!mounted) return;
+      // A real session can apply any time. But ignore a NULL until the
+      // initial getSession() has resolved — otherwise an early "no session
+      // yet" event flashes the login screen before the saved session loads.
+      if (s) { resolved.current = true; setSession(s); }
+      else if (resolved.current) { setSession(null); }
+    });
+    return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, []);
   return session;
 }
