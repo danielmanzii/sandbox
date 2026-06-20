@@ -603,8 +603,8 @@ function FairwayCross({ value, onPick }) {
     return (
       <button onClick={() => onPick(on ? null : v)} style={{
         gridArea: area, width: 38, height: 38, borderRadius: 999, margin: '0 auto',
-        background: on ? (hit ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
-        color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
+        background: on ? (hit ? '#4F9D5B' : '#C44536') : 'rgba(255,255,255,0.08)',
+        color: on ? '#fff' : 'var(--cream)',
         border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
@@ -857,10 +857,18 @@ function StrokeIcon({ kind, size = 20 }) {
 }
 
 // ✕ / ✓ answer pair used across the shot flow (reach green, putt made).
+// When selected: ✓ turns green, ✕ turns red.
 function XoButton({ kind, active, onClick }) {
+  const isCheck = kind === 'check';
   return (
-    <button onClick={onClick} style={{ ...pillStyle(active), padding: '12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <StrokeIcon kind={kind === 'check' ? 'check' : 'x'} size={24}/>
+    <button onClick={onClick} style={{
+      flex: 1, padding: '12px 8px', borderRadius: 10,
+      background: active ? (isCheck ? '#4F9D5B' : '#C44536') : 'rgba(255,255,255,0.08)',
+      color: active ? '#fff' : 'var(--cream)',
+      border: active ? 'none' : '1px solid rgba(234,226,206,0.2)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <StrokeIcon kind={isCheck ? 'check' : 'x'} size={24}/>
     </button>
   );
 }
