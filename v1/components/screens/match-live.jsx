@@ -948,12 +948,14 @@ function OppReadout({ label, value, par, live, holeNumber }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label}</span>
-        {value != null && shape && shape !== 'par' && (
-          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
-        )}
-        {liveOn && (
-          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', fontWeight: 800, color: '#7BD389', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, background: '#7BD389', display: 'inline-block' }}/>LIVE
+        {value != null ? (
+          shape && shape !== 'par'
+            ? <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
+            : <span/>
+        ) : (
+          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, color: liveOn ? '#7BD389' : 'inherit', opacity: liveOn ? 1 : 0.55 }}>
+            {liveOn && <span style={{ width: 6, height: 6, borderRadius: 999, background: '#7BD389', display: 'inline-block' }}/>}
+            Strokes so far
           </span>
         )}
       </div>
