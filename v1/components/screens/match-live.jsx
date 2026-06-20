@@ -622,10 +622,12 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onL
   })();
   const [stroke, setStroke] = React.useState(saved.stroke || 0);     // 0-based stroke (0 = tee)
   const [card, setCard]     = React.useState(saved.card || {});      // { pid: { fairway, reached, zone } }
-  const [phase, setPhase]   = React.useState(saved.phase || 'cards');
+  // 'cards' | 'putt' | 'done'. A finalized hole opens straight to the summary.
+  const [phase, setPhase]   = React.useState(saved.phase || (savedScore != null ? 'done' : 'cards'));
   const [putts, setPutts]   = React.useState(saved.putts || 0);      // completed missed putt rounds
   const [puttCard, setPuttCard] = React.useState(saved.puttCard || {}); // this round: { pid: 'made'|'missed' }
   const [chosen, setChosen] = React.useState(saved.chosen || null);  // { ball, zone, strokesToGreen }
+  const [doneScore, setDoneScore] = React.useState(null); // shown instantly on finish, before DB echoes back
 
   // Running strokes so far: full swings to the green, plus putt rounds.
   const count = (phase === 'putt' && chosen) ? chosen.strokesToGreen + putts : stroke;
@@ -645,15 +647,18 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onL
   }, [flowKey, stroke, card, phase, putts, puttCard, chosen]);
 
   function reset() {
-    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null);
+    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null);
     try { if (flowKey) localStorage.removeItem(flowKey); } catch (_) {}
   }
 
-  if (savedScore != null && phase !== 'done') {
+  // Hole finalized → show the team's score + a way to re-score. This is the
+  // ONLY place 'done' renders, so it can never fall through to the cards view.
+  if (phase === 'done') {
+    const shown = savedScore != null ? savedScore : doneScore;
     return (
       <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)', textAlign: 'center' }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Your team scored</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, margin: '4px 0 10px' }}>{savedScore}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, margin: '4px 0 10px' }}>{shown != null ? shown : '✓'}</div>
         <button onClick={reset} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(234,226,206,0.22)', color: 'var(--cream)', borderRadius: 999, padding: '8px 16px', fontSize: 12, fontWeight: 700 }}>Re-score with shots</button>
       </div>
     );
@@ -698,9 +703,11 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onL
     const roundNo = putts + 1;
     const strokesToGreen = chosen ? chosen.strokesToGreen : stroke;
     const finish = (holer) => {
+      const score = strokesToGreen + roundNo;
+      setDoneScore(score);
       setPhase('done');
       onComplete({
-        score: strokesToGreen + roundNo,
+        score,
         gir: strokesToGreen <= Math.max(1, (par || 3) - 2),
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
       });
