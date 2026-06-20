@@ -344,7 +344,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
         {/* Scoring mode toggle — 2v2 only (1v1 uses the wheel + stat expander) */}
         {is2v2 && (yourTeam || []).length === 2 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 18, padding: 4, background: 'rgba(14,28,19,0.28)', borderRadius: 999 }}>
-            {[['quick', 'Quick score'], ['stats', '+ Track stats']].map(([k, l]) => (
+            {[['quick', 'Quick Score'], ['stats', '+ Track Stats']].map(([k, l]) => (
               <button key={k} onClick={() => setMode(k)} style={{
                 flex: 1, padding: '8px', borderRadius: 999,
                 background: mode === k ? 'var(--cream)' : 'transparent',
