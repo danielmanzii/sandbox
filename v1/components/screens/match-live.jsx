@@ -611,8 +611,8 @@ function FairwayCross({ value, onPick }) {
     );
   };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 44px)', gap: 6,
-      gridTemplateAreas: '". long ." "left hit right" ". short ."', maxWidth: 200 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 44px)', gridTemplateRows: 'repeat(3, 44px)', gap: 6,
+      gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content' }}>
       <Btn v="long"  area="long"  rot={0}/>
       <Btn v="left"  area="left"  rot={-90}/>
       <Btn v="hit"   area="hit"/>
