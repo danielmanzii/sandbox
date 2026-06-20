@@ -794,7 +794,7 @@ function YouReadout({ label, count }) {
           {n === 0 ? '–' : n}
         </div>
         <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.3 }}>
-          {n === 0 ? 'Tee it up' : (n === 1 ? '1 stroke this hole' : `${n} strokes this hole`)}
+          {n === 0 ? 'Tee it up' : 'Playing this hole…'}
         </div>
       </div>
     </div>
@@ -942,7 +942,7 @@ function OppReadout({ label, value, par, live, holeNumber }) {
   const liveOn = value == null && live && live.holeNumber === holeNumber && !live.done && live.strokes > 0;
   const big = value != null ? value : (liveOn ? live.strokes : '–');
   const sub = value != null ? 'Logged by their team'
-            : liveOn ? (live.strokes === 1 ? '1 stroke this hole' : `${live.strokes} strokes this hole`)
+            : liveOn ? 'Playing this hole…'
             : 'Waiting for their score…';
   return (
     <div>
