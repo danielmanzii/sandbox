@@ -344,7 +344,7 @@ function PlayerStatsSheet({ player, go, onClose }) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1 }}>{player.name}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {!isYou && (
-              <button onClick={() => { onClose(); go({ screen: 'profile', viewingHandle: player.name }); }} style={{
+              <button onClick={() => { onClose(); go({ screen: 'profile', viewingHandle: player.handle || player.name }); }} style={{
                 padding: '6px 12px', borderRadius: 999, background: 'var(--forest)', border: 'none',
                 color: 'var(--cream)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
               }}>View profile</button>

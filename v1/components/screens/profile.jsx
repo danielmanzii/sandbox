@@ -30,9 +30,9 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
             homeCourse:   realTarget.home_course || null,
             color:        'var(--moss)',
           }
-        : (mockTarget || MOCK.FRIENDS[0]));
+        : (mockTarget || null));
 
-  const userInitial = (user.name || user.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  const userInitial = ((user && (user.name || user.handle)) || '?').replace(/^@/, '').charAt(0).toUpperCase();
   const targetId    = (realTarget && realTarget.id) || (isSelf ? MOCK.USER.id : null);
 
   // Real follow state + counts
@@ -61,6 +61,21 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
     return (
       <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>
         Loading…
+      </div>
+    );
+  }
+
+  // No matching profile (handle didn't resolve, or a name was passed instead
+  // of a handle). Show a graceful empty state instead of crashing — MOCK has
+  // no friend fallback to fall back to anymore.
+  if (!user) {
+    return (
+      <div style={{ background: 'var(--canvas)', minHeight: '100%', padding: '80px 24px', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--forest)', lineHeight: 0.95 }}>Not found</div>
+        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--ink)', opacity: 0.7, marginTop: 10, marginBottom: 22 }}>
+          We couldn't pull up that player's profile.
+        </div>
+        <Button variant="forest" size="sm" onClick={() => go({ screen: 'social' })}>Back to search</Button>
       </div>
     );
   }
