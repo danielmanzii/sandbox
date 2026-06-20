@@ -9,6 +9,11 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const [players, setPlayers] = React.useState({}); // id → { first_name, handle }
   const [currentHole, setCurrentHole] = React.useState(1);
   const [err, setErr] = React.useState('');
+  // Ephemeral live running scores broadcast by each side as they tap through a
+  // hole (NOT persisted — the authoritative score lands in the DB on finish).
+  // { a: { holeNumber, strokes, done }, b: { … } }
+  const [liveScores, setLiveScores] = React.useState({});
+  const chRef = React.useRef(null);
   // How the player chose to score this match (asked once, up front).
   const [scoreMode, setScoreMode] = React.useState(() => {
     try { return localStorage.getItem('spp_scoremode_' + matchId); } catch (_) { return null; }
@@ -70,9 +75,14 @@ function MatchLive({ matchId, profile, tier, onExit }) {
           });
         }
       })
+      // Live running score the other side broadcasts while they tap a hole.
+      .on('broadcast', { event: 'live' }, ({ payload }) => {
+        if (payload && payload.side) setLiveScores(prev => ({ ...prev, [payload.side]: payload }));
+      })
       .subscribe();
 
-    return () => { cancelled = true; sbx.removeChannel(ch); };
+    chRef.current = ch;
+    return () => { cancelled = true; chRef.current = null; sbx.removeChannel(ch); };
   }, [matchId, profile.id]);
 
   // Always compute state (even before data arrives); this keeps hook count stable
@@ -128,6 +138,13 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const yourTeamLabel  = is2v2 ? (youAreA ? teamAName : teamBName) : 'You';
   const theirTeamLabel = is2v2 ? (youAreA ? teamBName : teamAName) : (youAreA ? teamBName : teamAName);
 
+  // Push our running count to the other side's scoreboard (ephemeral).
+  const broadcastLive = (strokes, done) => {
+    const c = chRef.current; if (!c) return;
+    c.send({ type: 'broadcast', event: 'live', payload: { side: youAreA ? 'a' : 'b', holeNumber: currentHole, strokes, done } });
+  };
+  const liveOpp = liveScores[youAreA ? 'b' : 'a']; // what the OTHER team is doing live
+
   // Your team's two players (for 2v2 ball-selection / who-holed capture).
   const yourTeamIds = is2v2
     ? (youAreA ? [match.player_a, match.player_a2] : [match.player_b, match.player_b2])
@@ -171,6 +188,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
       {!matchDecided && (
         <div style={{ padding: '0 16px' }}>
           <HoleCard
+            key={hole.hole_number}
             hole={hole}
             youAreA={youAreA}
             is2v2={is2v2}
@@ -180,6 +198,8 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             yourTeam={yourTeam}
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
+            liveOpp={liveOpp}
+            onLiveScore={broadcastLive}
             onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
             onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
             onSaveStat={(col, value) => saveHoleStat(matchId, hole.hole_number, col, value)}
@@ -274,7 +294,7 @@ function ScoreModeChooser({ onPick, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, yourTeamLabel, theirTeamLabel, liveOpp, onLiveScore, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
@@ -339,6 +359,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
             <ShotFlow
               yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
               isRegular={isRegular} isMember={isMember}
+              onLiveScore={onLiveScore}
               onSavePlayerStat={onSavePlayerStat}
               onComplete={({ score, gir, zone, ballPlayer, holedBy }) => {
                 onYourScore(score);
@@ -349,13 +370,14 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               }}
             />
             <div style={{ height: 14 }}/>
-            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3}/>
+            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
           </div>
         ) : (
           <div style={{ marginTop: 20 }}>
-            <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3} onChange={onYourScore}/>
+            <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3}
+              onChange={(n) => { onYourScore(n); onLiveScore && onLiveScore(n, true); }}/>
             <div style={{ height: 12 }}/>
-            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3}/>
+            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
           </div>
         )}
 
@@ -590,13 +612,18 @@ function FairwayCross({ value, onPick }) {
 // Each stroke both teammates log their own shot on their own card (@handle),
 // the caddie compares the two balls, you pick which to play, repeat until
 // holed. The team score emerges from the stroke count.
-function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onSavePlayerStat, onComplete }) {
+function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onLiveScore, onSavePlayerStat, onComplete }) {
   const [p1, p2] = yourTeam;
   const [stroke, setStroke] = React.useState(0);     // 0-based stroke (0 = tee)
   const [card, setCard]     = React.useState({});    // { pid: { fairway, reached, zone } }
   const [phase, setPhase]   = React.useState('cards');
   const [putts, setPutts]   = React.useState(0);
   const [chosen, setChosen] = React.useState(null);  // { ball, zone, strokesToGreen }
+
+  // Stream our running stroke count to the other team's scoreboard.
+  React.useEffect(() => {
+    if (onLiveScore) onLiveScore(stroke + putts, phase === 'done');
+  }, [stroke, putts, phase]);
 
   function reset() { setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setChosen(null); }
 
@@ -825,9 +852,15 @@ function ScoreWheel({ label, value, par, onChange }) {
 // ─── Opponent score — READ ONLY ──────────────────────────────
 // You never enter the other team's score; it appears here as they log it on
 // their own device (realtime), so you always know what you're up against.
-function OppReadout({ label, value, par }) {
+function OppReadout({ label, value, par, live, holeNumber }) {
   const p = par || 3;
   const shape = parShape(value, p);
+  // A live running count for THIS hole, only while no final score is in yet.
+  const liveOn = value == null && live && live.holeNumber === holeNumber && !live.done && live.strokes > 0;
+  const big = value != null ? value : (liveOn ? live.strokes : '–');
+  const sub = value != null ? 'Logged by their team'
+            : liveOn ? `Playing this hole · thru ${live.strokes}`
+            : 'Waiting for their score…';
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -835,14 +868,17 @@ function OppReadout({ label, value, par }) {
         {value != null && shape && shape !== 'par' && (
           <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
         )}
+        {liveOn && (
+          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', fontWeight: 800, color: '#7BD389', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: '#7BD389', display: 'inline-block' }}/>LIVE
+          </span>
+        )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: '1px solid rgba(234,226,206,0.14)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: value == null ? 0.4 : 1 }}>
-          {value == null ? '–' : value}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
+          {big}
         </div>
-        <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.3 }}>
-          {value == null ? 'Waiting for their score…' : 'Logged by their team'}
-        </div>
+        <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.3 }}>{sub}</div>
       </div>
     </div>
   );
