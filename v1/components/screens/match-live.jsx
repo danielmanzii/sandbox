@@ -324,11 +324,10 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
             <Eyebrow color="var(--cream)">Current hole</Eyebrow>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 60, lineHeight: 0.9, letterSpacing: '-0.02em' }}>
-                <span style={{ fontSize: 26, verticalAlign: 'top', lineHeight: 1, position: 'relative', top: '7px' }}>Hole </span>{hole.hole_number}
+                <span style={{ fontSize: 26, verticalAlign: 'top', lineHeight: 1, position: 'relative', top: '7px', marginRight: '10px' }}>Hole</span>{hole.hole_number}
               </span>
-              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.08em' }}>
-                PAR {hole.par || 3}
-              </span>
+              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.08em' }}>PAR</span>
+              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.08em' }}>{hole.par || 3}</span>
             </div>
           </div>
           {hole.result != null && (
