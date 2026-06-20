@@ -143,7 +143,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             {is2v2 ? `${teamAName} vs ${teamBName}` : `You vs ${theirTeamLabel}`}
           </div>
         </div>
-        <StateBadge state={state}/>
+        <StateBadge state={state} youAreA={youAreA}/>
       </div>
 
       {/* Decided — final result banner */}
@@ -549,10 +549,12 @@ function StepBtn({ children, onClick, disabled }) {
 }
 
 // ─── State badge (2 UP / 1 DN / AS / DORMIE / FINAL) ─────────
-function StateBadge({ state }) {
-  const lbl = labelForState(state);
-  const bg = state.up > 0 ? 'var(--forest)' : state.up < 0 ? 'var(--loss)' : 'var(--cream)';
-  const fg = state.up === 0 ? 'var(--forest)' : 'var(--cream)';
+function StateBadge({ state, youAreA }) {
+  // state.up is in player-A's absolute perspective; flip it to YOURS.
+  const up = youAreA === false ? -state.up : state.up;
+  const lbl = labelForState(state, up);
+  const bg = up > 0 ? 'var(--forest)' : up < 0 ? 'var(--loss)' : 'var(--cream)';
+  const fg = up === 0 ? 'var(--forest)' : 'var(--cream)';
   return (
     <div style={{
       padding: '6px 14px', borderRadius: 999,
@@ -563,12 +565,12 @@ function StateBadge({ state }) {
   );
 }
 
-function labelForState(state) {
-  if (state.up === 0) return state.remaining === 0 ? 'HALVED' : 'AS';
-  const absUp = Math.abs(state.up);
+function labelForState(state, up) {
+  if (up === 0) return state.remaining === 0 ? 'HALVED' : 'AS';
+  const absUp = Math.abs(up);
   if (state.decided) return state.margin;
   if (absUp === state.remaining) return 'DORMIE';
-  return `${absUp} ${state.up > 0 ? 'UP' : 'DN'}`;
+  return `${absUp} ${up > 0 ? 'UP' : 'DN'}`;
 }
 
 // ─── Result badge (hole-level) ───────────────────────────────
