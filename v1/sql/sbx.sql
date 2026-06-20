@@ -25,7 +25,10 @@ create or replace function public.recompute_sbx()
 returns void language plpgsql security definer as $$
 declare pass int; spread numeric := 1.5;  -- logistic spread on the 2–8 scale
 begin
-  for pass in 1..6 loop
+  -- 20 passes fully converges our graph (info propagates far past the
+  -- network's diameter at current scale) → this IS the global-solve answer.
+  -- A faster solver would yield the same numbers; only needed at huge scale.
+  for pass in 1..20 loop
     -- ===== 2v2 fixed-point pass =====
     update public.profiles pr set sbx_2v2 = x.new_r from (
       with mp as (
@@ -183,6 +186,32 @@ begin
 end $$;
 grant execute on function public.confirm_match_result(uuid) to authenticated;
 
--- Safety-net periodic recompute (keeps recency decay + cross-effects fresh).
+-- ─────────────────────────────────────────────────────────────────
+-- Recompute is EVENT-DRIVEN (confirm_match_result calls recompute_sbx
+-- on every confirmation — the real driver, DUPR-style). The cron below
+-- is only a once-daily SAFETY NET, and it's a no-op unless a match was
+-- confirmed since the last run — so idle days do nothing.
+-- (No inactivity penalty exists: not playing never lowers your rating.)
+-- ─────────────────────────────────────────────────────────────────
+create table if not exists public.sbx_state (
+  id int primary key default 1,
+  last_run timestamptz
+);
+insert into public.sbx_state (id, last_run) values (1, 'epoch') on conflict (id) do nothing;
+
+create or replace function public.recompute_sbx_safety()
+returns void language plpgsql security definer as $$
+declare last_ts timestamptz;
+begin
+  select last_run into last_ts from public.sbx_state where id = 1;
+  if exists (
+    select 1 from public.matches
+    where confirmed_at is not null and confirmed_at > coalesce(last_ts, 'epoch')
+  ) then
+    perform public.recompute_sbx();
+    update public.sbx_state set last_run = now() where id = 1;
+  end if;
+end $$;
+
 do $$ begin perform cron.unschedule('recompute-sbx'); exception when others then null; end $$;
-select cron.schedule('recompute-sbx', '*/15 * * * *', $$select public.recompute_sbx()$$);
+select cron.schedule('recompute-sbx', '0 7 * * *', $$select public.recompute_sbx_safety()$$);
