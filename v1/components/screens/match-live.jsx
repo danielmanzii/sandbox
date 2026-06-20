@@ -584,9 +584,9 @@ function StatChoice({ active, onClick, children }) {
 
 // ─── Fairway directional cross (hit / miss long-short-left-right) ─────
 function FairwayCross({ value, onPick }) {
-  // All directions use the SAME arrow glyph (↑) rotated, so every arrow has
-  // identical weight/metrics and stays centered (rotation pivots on center).
-  const Btn = ({ v, area, rot, glyph }) => {
+  // SVG arrow centered in its viewBox, rotated per direction — symmetric so
+  // every arrow renders identically and stays perfectly centered.
+  const Btn = ({ v, area, rot }) => {
     const on = value === v;
     const hit = v === 'hit';
     return (
@@ -595,9 +595,18 @@ function FairwayCross({ value, onPick }) {
         background: on ? (hit ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
         color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
         border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800,
       }}>
-        <span style={{ display: 'inline-block', lineHeight: 1, transform: rot ? `rotate(${rot}deg)` : 'none' }}>{glyph || '↑'}</span>
+        {hit ? (
+          <span style={{ lineHeight: 1 }}>✓</span>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+            style={{ display: 'block', transform: rot ? `rotate(${rot}deg)` : 'none' }}>
+            <line x1="12" y1="19" x2="12" y2="5"/>
+            <polyline points="6 11 12 5 18 11"/>
+          </svg>
+        )}
       </button>
     );
   };
@@ -606,7 +615,7 @@ function FairwayCross({ value, onPick }) {
       gridTemplateAreas: '". long ." "left hit right" ". short ."', maxWidth: 200 }}>
       <Btn v="long"  area="long"  rot={0}/>
       <Btn v="left"  area="left"  rot={-90}/>
-      <Btn v="hit"   area="hit"   glyph="✓"/>
+      <Btn v="hit"   area="hit"/>
       <Btn v="right" area="right" rot={90}/>
       <Btn v="short" area="short" rot={180}/>
     </div>
