@@ -9,6 +9,14 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const [players, setPlayers] = React.useState({}); // id → { first_name, handle }
   const [currentHole, setCurrentHole] = React.useState(1);
   const [err, setErr] = React.useState('');
+  // How the player chose to score this match (asked once, up front).
+  const [scoreMode, setScoreMode] = React.useState(() => {
+    try { return localStorage.getItem('spp_scoremode_' + matchId); } catch (_) { return null; }
+  });
+  function chooseMode(m) {
+    try { localStorage.setItem('spp_scoremode_' + matchId, m); } catch (_) {}
+    setScoreMode(m);
+  }
 
   // Remember which match we're in across refreshes
   React.useEffect(() => {
@@ -105,6 +113,11 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const hole = holes.find(h => h.hole_number === currentHole) || holes[0];
   const matchDecided = match.status === 'completed' || state.decided;
 
+  // Ask how to score this match — once, before play begins.
+  if (!scoreMode && !matchDecided) {
+    return <ScoreModeChooser onPick={chooseMode} onExit={onExit}/>;
+  }
+
   // Team label helpers
   const teamAName = is2v2
     ? [players[match.player_a], players[match.player_a2]].filter(Boolean).map(p => p.first_name || p.handle).join(' + ') || 'Team A'
@@ -163,6 +176,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             is2v2={is2v2}
             isMember={isMember}
             isRegular={match.format === 'regular'}
+            initialMode={scoreMode}
             yourTeam={yourTeam}
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
@@ -223,12 +237,48 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   );
 }
 
+// ─── Score-mode chooser (asked once, before the match) ────────────────
+function ScoreModeChooser({ onPick, onExit }) {
+  const Card = ({ m, emoji, title, sub }) => (
+    <button onClick={() => onPick(m)} style={{
+      width: '100%', textAlign: 'left', border: 'none', display: 'block',
+      borderRadius: 'var(--radius-card-lg)', overflow: 'hidden', marginBottom: 14,
+      background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', padding: 22, position: 'relative', boxShadow: 'var(--shadow-md)',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <div style={{ position: 'relative' }}>
+        <div style={{ fontSize: 30 }}>{emoji}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.01em' }}>{title}</div>
+        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 8, maxWidth: 320 }}>{sub}</div>
+      </div>
+    </button>
+  );
+  return (
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', padding: '56px 20px 24px' }}>
+      <button onClick={onExit} style={{
+        width: 40, height: 40, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)',
+        color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18,
+      }}><Icon.ArrowLeft size={16}/></button>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Before you tee off</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)', marginBottom: 22 }}>
+        How do you want to score?
+      </div>
+      <Card m="quick" emoji="⚡" title="Quick scoring" sub="Just the score each hole — fastest. Your match result and SBX still count."/>
+      <Card m="stats" emoji="📊" title="Quick scoring + stats" sub="Track every shot — fairways, greens, whose ball, the caddie — and earn bonus points. 🎁"/>
+      <div className="caption-serif" style={{ fontSize: 13, color: 'var(--ink)', opacity: 0.6, marginTop: 6, textAlign: 'center' }}>
+        You can switch anytime during the round.
+      </div>
+    </div>
+  );
+}
+
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
-  const [showStats, setShowStats] = React.useState(false);
-  const [mode, setMode] = React.useState('quick'); // 'quick' | 'stats' — persists across holes this session
+  const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
+  const [mode, setMode] = React.useState(initialMode || 'quick'); // 'quick' | 'stats'
   const statsMode = mode === 'stats' && is2v2 && (yourTeam || []).length === 2;
   const statPrefixEarly = youAreA ? 'player_a' : 'player_b';
 
