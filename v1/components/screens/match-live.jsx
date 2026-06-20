@@ -807,7 +807,7 @@ function YouReadout({ label, count }) {
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
           {n === 0 ? '–' : n}
         </div>
-        <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 11, opacity: 0.7, lineHeight: 1.3 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, opacity: 0.7, lineHeight: 1.3 }}>
           {n === 0 ? 'Tee it up' : 'Playing this hole…'}
         </div>
       </div>
@@ -1001,7 +1001,7 @@ function OppReadout({ label, value, par, live, holeNumber }) {
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
           {big}
         </div>
-        <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 11, opacity: 0.6, lineHeight: 1.3 }}>{sub}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, opacity: 0.6, lineHeight: 1.3 }}>{sub}</div>
       </div>
     </div>
   );
