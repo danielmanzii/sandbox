@@ -598,7 +598,7 @@ function FairwayCross({ value, onPick }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
       }}>
         {hit ? (
-          <span style={{ lineHeight: 1 }}>✓</span>
+          <StrokeIcon kind="check" size={18}/>
         ) : (
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
@@ -841,11 +841,24 @@ function PuttCard({ player, result, onMade, onMissed }) {
   );
 }
 
+// Thick, centered ✕ / ✓ drawn as SVG so they match the chunky display font
+// (text glyphs render thin and sit off-center).
+function StrokeIcon({ kind, size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+      {kind === 'check'
+        ? <polyline points="5 13 10 18 19 7"/>
+        : <g><line x1="7" y1="7" x2="17" y2="17"/><line x1="17" y1="7" x2="7" y2="17"/></g>}
+    </svg>
+  );
+}
+
 // ✕ / ✓ answer pair used across the shot flow (reach green, putt made).
 function XoButton({ kind, active, onClick }) {
   return (
-    <button onClick={onClick} style={{ ...pillStyle(active), fontSize: 20, lineHeight: 1, padding: '10px 8px' }}>
-      {kind === 'check' ? '✓' : '✕'}
+    <button onClick={onClick} style={{ ...pillStyle(active), padding: '12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <StrokeIcon kind={kind === 'check' ? 'check' : 'x'} size={20}/>
     </button>
   );
 }
