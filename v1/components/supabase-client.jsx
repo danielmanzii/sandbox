@@ -20,23 +20,38 @@ window.sbx = sbx;
 //   object    = active Supabase session
 function useSession() {
   const [session, setSession] = React.useState(undefined);
-  const resolved = React.useRef(false); // has the initial getSession() returned yet?
+  const nullTimer = React.useRef(null);
   React.useEffect(() => {
     let mounted = true;
-    sbx.auth.getSession().then(({ data }) => {
+
+    // On a cold start (e.g. iOS app swiped closed then reopened) Supabase can
+    // momentarily report "no session" while it reads/refreshes the stored
+    // token. For a user we've seen signed in before, defer committing to the
+    // logged-out state so that blip doesn't flash the login screen. A genuine
+    // sign-out (or a token that's truly gone) still lands on auth after the
+    // grace window. A user we've never seen authed gets auth immediately.
+    const cancelNull = () => { if (nullTimer.current) { clearTimeout(nullTimer.current); nullTimer.current = null; } };
+
+    const apply = (s) => {
       if (!mounted) return;
-      resolved.current = true;
-      setSession(data.session || null);
-    });
-    const { data: sub } = sbx.auth.onAuthStateChange((_event, s) => {
-      if (!mounted) return;
-      // A real session can apply any time. But ignore a NULL until the
-      // initial getSession() has resolved — otherwise an early "no session
-      // yet" event flashes the login screen before the saved session loads.
-      if (s) { resolved.current = true; setSession(s); }
-      else if (resolved.current) { setSession(null); }
-    });
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+      if (s) {
+        cancelNull();
+        try { localStorage.setItem('spp_authed', '1'); } catch {}
+        setSession(s);
+        return;
+      }
+      // wasAuthed is false right after an explicit signOut() (which clears the
+      // hint), so a real sign-out drops to auth immediately; a transient blip
+      // with the hint still set is debounced.
+      const wasAuthed = (() => { try { return localStorage.getItem('spp_authed') === '1'; } catch { return false; } })();
+      if (!wasAuthed) { cancelNull(); setSession(null); return; }
+      if (nullTimer.current) return; // already waiting out the grace window
+      nullTimer.current = setTimeout(() => { nullTimer.current = null; if (mounted) setSession(null); }, 1500);
+    };
+
+    sbx.auth.getSession().then(({ data }) => apply(data.session || null));
+    const { data: sub } = sbx.auth.onAuthStateChange((_event, s) => apply(s || null));
+    return () => { mounted = false; cancelNull(); sub.subscription.unsubscribe(); };
   }, []);
   return session;
 }
@@ -64,8 +79,11 @@ function useProfile(userId) {
 
 // ─── Sign out helper ───────────────────────────────────────
 async function signOut() {
-  await sbx.auth.signOut();
+  // Clear the "authed" hint first so the resulting SIGNED_OUT drops straight
+  // to the login screen (no grace-window delay reserved for cold-start blips).
+  try { localStorage.removeItem('spp_authed'); } catch {}
   try { localStorage.removeItem('spp_active_match'); } catch {}
+  await sbx.auth.signOut();
 }
 
 // ─── Recovery-mode hook ────────────────────────────────────
