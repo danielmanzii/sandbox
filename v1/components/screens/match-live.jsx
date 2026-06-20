@@ -603,8 +603,8 @@ function FairwayCross({ value, onPick }) {
     return (
       <button onClick={() => onPick(on ? null : v)} style={{
         gridArea: area, width: 38, height: 38, borderRadius: 999, margin: '0 auto',
-        background: on ? (hit ? '#4F9D5B' : '#C44536') : 'rgba(255,255,255,0.08)',
-        color: on ? '#fff' : 'var(--cream)',
+        background: on ? (hit ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
+        color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
         border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
@@ -863,8 +863,8 @@ function XoButton({ kind, active, onClick }) {
   return (
     <button onClick={onClick} style={{
       flex: 1, padding: '12px 8px', borderRadius: 10,
-      background: active ? (isCheck ? '#4F9D5B' : '#C44536') : 'rgba(255,255,255,0.08)',
-      color: active ? '#fff' : 'var(--cream)',
+      background: active ? (isCheck ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
+      color: active ? (isCheck ? '#fff' : 'var(--forest)') : 'var(--cream)',
       border: active ? 'none' : '1px solid rgba(234,226,206,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
