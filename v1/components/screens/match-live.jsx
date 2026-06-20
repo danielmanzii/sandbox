@@ -263,9 +263,10 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 22 }}>
-          <Stepper label={yourTeamLabel || 'Your score'} value={yourScore} onChange={onYourScore}/>
-          <Stepper label={theirTeamLabel || 'Opponent'}  value={oppScore}  onChange={onOpponentScore}/>
+        <div style={{ marginTop: 20 }}>
+          <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3} onChange={onYourScore}/>
+          <div style={{ height: 12 }}/>
+          <ScoreWheel label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} onChange={onOpponentScore}/>
         </div>
 
         {/* Advanced stats — 1v1 only for now. Tap "Log stats" to expand. */}
@@ -282,7 +283,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
               fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <span>{statsLogged ? '✓ Stats logged' : 'Log stats (optional)'}</span>
+              <span>{statsLogged ? '✓ Stats tracked' : '+ Track Stats'}</span>
               <span>{showStats ? '–' : '+'}</span>
             </button>
 
@@ -299,7 +300,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
                     <StatChoice active={yourGir == null}   onClick={() => onSaveStat(statPrefix + '_gir', null)}>—</StatChoice>
                   </div>
                 </div>
-                {/* Putts stepper */}
+                {/* Putts */}
                 <div>
                   <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
                     Putts
@@ -309,24 +310,6 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
                       <StatChoice key={n} active={yourPutts === n} onClick={() => onSaveStat(statPrefix + '_putts', n)}>{n}</StatChoice>
                     ))}
                   </div>
-                </div>
-                {/* Proximity (tee-shot to pin in feet) */}
-                <div>
-                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
-                    Proximity to pin <span style={{ opacity: 0.6 }}>· feet from tee shot</span>
-                  </div>
-                  <input
-                    type="number" inputMode="numeric" min="0" max="120"
-                    value={yourProx == null ? '' : yourProx}
-                    onChange={e => onSaveStat(statPrefix + '_proximity_ft', e.target.value === '' ? null : Number(e.target.value))}
-                    placeholder="e.g. 12"
-                    style={{
-                      marginTop: 6, width: '100%', padding: '10px 12px', borderRadius: 10,
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(234,226,206,0.18)',
-                      color: 'var(--cream)', fontSize: 15, outline: 'none',
-                    }}
-                  />
                 </div>
               </div>
             )}
@@ -474,6 +457,55 @@ function StatChoice({ active, onClick, children }) {
       border: active ? 'none' : '1px solid rgba(234,226,206,0.18)',
       fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',
     }}>{children}</button>
+  );
+}
+
+// ─── Score wheel (GHIN-style) — tap a number, par-shape auto-draws ────
+function parShape(score, par) {
+  if (score == null) return null;
+  const d = score - par;
+  if (d <= -2) return 'eagle';   // double circle
+  if (d === -1) return 'birdie'; // circle
+  if (d === 0)  return 'par';    // plain
+  if (d === 1)  return 'bogey';  // square
+  return 'double';               // double square
+}
+const SHAPE_LABEL = { eagle: 'Eagle or better', birdie: 'Birdie', par: 'Par', bogey: 'Bogey', double: 'Double bogey+' };
+
+function ScoreWheel({ label, value, par, onChange }) {
+  const p = par || 3;
+  const nums = Array.from({ length: p + 5 }, (_, i) => i + 1); // 1 … par+5
+  const sel = value;
+  const shape = parShape(sel, p);
+  const isCircle = shape === 'birdie' || shape === 'eagle';
+  const isDouble = shape === 'eagle' || shape === 'double';
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label}</span>
+        {sel != null && shape && shape !== 'par' && (
+          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 2px 2px' }} className="scroll-hide">
+        {nums.map(n => {
+          const on = sel === n;
+          return (
+            <button key={n} onClick={() => onChange(n)} style={{
+              flex: '0 0 auto', width: 46, height: 46,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: on ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
+              color: on ? 'var(--forest)' : 'var(--cream)',
+              borderRadius: on ? (isCircle ? 999 : 8) : 12,
+              border: on ? '2px solid var(--forest-deep)' : '1px solid rgba(234,226,206,0.18)',
+              boxShadow: on && isDouble ? '0 0 0 2px var(--cream), 0 0 0 4px var(--forest-deep)' : 'none',
+              fontFamily: 'var(--font-display)', fontSize: 19, lineHeight: 1,
+            }}>{n}</button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
