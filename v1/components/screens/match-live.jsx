@@ -160,6 +160,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             youAreA={youAreA}
             is2v2={is2v2}
             isMember={isMember}
+            isRegular={match.format === 'regular'}
             yourTeam={yourTeam}
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
@@ -220,7 +221,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(false);
@@ -323,6 +324,15 @@ function HoleCard({ hole, youAreA, is2v2, isMember, yourTeam, yourTeamLabel, the
 
             {showStats && (
               <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Fairway — regular course, par 4+ only */}
+                {isRegular && (hole.par || 3) >= 4 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700, marginBottom: 8 }}>
+                      Fairway
+                    </div>
+                    <FairwayCross value={hole[statPrefix + '_fairway']} onPick={(v) => onSaveStat(statPrefix + '_fairway', v)}/>
+                  </div>
+                )}
                 {/* GIR toggle */}
                 <div>
                   <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
@@ -491,6 +501,33 @@ function StatChoice({ active, onClick, children }) {
       border: active ? 'none' : '1px solid rgba(234,226,206,0.18)',
       fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',
     }}>{children}</button>
+  );
+}
+
+// ─── Fairway directional cross (hit / miss long-short-left-right) ─────
+function FairwayCross({ value, onPick }) {
+  const Btn = ({ v, label, area }) => {
+    const on = value === v;
+    const hit = v === 'hit';
+    return (
+      <button onClick={() => onPick(on ? null : v)} style={{
+        gridArea: area, width: 44, height: 44, borderRadius: hit ? 999 : 10, margin: '0 auto',
+        background: on ? (hit ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
+        color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
+        border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
+      }}>{label}</button>
+    );
+  };
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 44px)', gap: 6,
+      gridTemplateAreas: '". long ." "left hit right" ". short ."', maxWidth: 200 }}>
+      <Btn v="long"  label="↑" area="long"/>
+      <Btn v="left"  label="←" area="left"/>
+      <Btn v="hit"   label="✓" area="hit"/>
+      <Btn v="right" label="→" area="right"/>
+      <Btn v="short" label="↓" area="short"/>
+    </div>
   );
 }
 
