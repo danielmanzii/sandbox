@@ -24,13 +24,23 @@ function useSession() {
   React.useEffect(() => {
     let mounted = true;
 
-    // On a cold start (e.g. iOS app swiped closed then reopened) Supabase can
-    // momentarily report "no session" while it reads/refreshes the stored
-    // token. For a user we've seen signed in before, defer committing to the
-    // logged-out state so that blip doesn't flash the login screen. A genuine
-    // sign-out (or a token that's truly gone) still lands on auth after the
-    // grace window. A user we've never seen authed gets auth immediately.
+    // On any reload/cold start, Supabase can momentarily report "no session"
+    // while it reads/refreshes the persisted token — which flashes the login
+    // screen before the real session loads. The authoritative signal that a
+    // session SHOULD exist is Supabase's own stored token in localStorage
+    // (key: sb-<ref>-auth-token). If that token is present we wait out a grace
+    // window before committing to logged-out; if it's absent the user really
+    // is signed out, so we show auth immediately (no delay for new visitors).
     const cancelNull = () => { if (nullTimer.current) { clearTimeout(nullTimer.current); nullTimer.current = null; } };
+    const hasStoredSession = () => {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('sb-') && k.endsWith('-auth-token') && localStorage.getItem(k)) return true;
+        }
+      } catch {}
+      return localStorage.getItem('spp_authed') === '1';
+    };
 
     const apply = (s) => {
       if (!mounted) return;
@@ -40,13 +50,12 @@ function useSession() {
         setSession(s);
         return;
       }
-      // wasAuthed is false right after an explicit signOut() (which clears the
-      // hint), so a real sign-out drops to auth immediately; a transient blip
-      // with the hint still set is debounced.
-      const wasAuthed = (() => { try { return localStorage.getItem('spp_authed') === '1'; } catch { return false; } })();
-      if (!wasAuthed) { cancelNull(); setSession(null); return; }
+      // No session right now. If Supabase still has a stored token (or our
+      // hint is set), this is a transient blip during init/refresh → wait.
+      // signOut() clears both first, so a real sign-out drops to auth at once.
+      if (!hasStoredSession()) { cancelNull(); setSession(null); return; }
       if (nullTimer.current) return; // already waiting out the grace window
-      nullTimer.current = setTimeout(() => { nullTimer.current = null; if (mounted) setSession(null); }, 1500);
+      nullTimer.current = setTimeout(() => { nullTimer.current = null; if (mounted) setSession(null); }, 2000);
     };
 
     sbx.auth.getSession().then(({ data }) => apply(data.session || null));
