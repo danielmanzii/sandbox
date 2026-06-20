@@ -120,7 +120,9 @@ function MatchLive({ matchId, profile, tier, onExit }) {
     ? (youAreA ? [match.player_a, match.player_a2] : [match.player_b, match.player_b2])
     : [];
   const yourTeam = yourTeamIds.filter(Boolean).map(id => ({
-    id, name: (players[id] && (players[id].first_name || players[id].handle)) || 'Player',
+    id,
+    name: (players[id] && (players[id].first_name || players[id].handle)) || 'Player',
+    handle: players[id] && players[id].handle,
   }));
 
   return (
@@ -167,6 +169,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
             onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
             onSaveStat={(col, value) => saveHoleStat(matchId, hole.hole_number, col, value)}
+            onSavePlayerStat={(playerId, patch) => savePlayerHoleStat(matchId, hole.hole_number, playerId, patch)}
             onAdvance={() => {
               const next = holes.find(h => h.hole_number > currentHole && h.result == null);
               if (next) setCurrentHole(next.hole_number);
@@ -221,7 +224,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, yourTeam, yourTeamLabel, theirTeamLabel, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(false);
@@ -285,6 +288,8 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, yourTeam, yourTea
           <div style={{ marginTop: 16 }}>
             <ShotFlow
               yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
+              isRegular={isRegular} isMember={isMember}
+              onSavePlayerStat={onSavePlayerStat}
               onComplete={({ score, gir, zone, ballPlayer, holedBy }) => {
                 onYourScore(score);
                 if (gir != null)   onSaveStat(statPrefixEarly + '_gir', gir);
@@ -531,21 +536,23 @@ function FairwayCross({ value, onPick }) {
   );
 }
 
-// ─── Guided shot-by-shot flow (2v2 scramble) — score emerges ──────────
-function ShotFlow({ yourTeam, par, savedScore, onComplete }) {
+// ─── Guided shot-by-shot flow (2v2 scramble) — two-card, per player ───
+// Each stroke both teammates log their own shot on their own card (@handle),
+// the caddie compares the two balls, you pick which to play, repeat until
+// holed. The team score emerges from the stroke count.
+function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, onSavePlayerStat, onComplete }) {
   const [p1, p2] = yourTeam;
-  const [shots, setShots]   = React.useState([]);   // [{ ball }] — strokes to reach the green
-  const [pendBall, setPend] = React.useState(null); // ball chosen for the current shot, awaiting reach?
-  const [phase, setPhase]   = React.useState('approach'); // approach → green → putt → who → done
-  const [zone, setZone]     = React.useState(null);
+  const [stroke, setStroke] = React.useState(0);     // 0-based stroke (0 = tee)
+  const [card, setCard]     = React.useState({});    // { pid: { fairway, reached, zone } }
+  const [phase, setPhase]   = React.useState('cards');
   const [putts, setPutts]   = React.useState(0);
+  const [chosen, setChosen] = React.useState(null);  // { ball, zone, strokesToGreen }
 
-  function reset() { setShots([]); setPend(null); setPhase('approach'); setZone(null); setPutts(0); }
+  function reset() { setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setChosen(null); }
 
-  // Already scored (e.g. via Quick) — show summary + re-score.
   if (savedScore != null && phase !== 'done') {
     return (
-      <div style={{ padding: '14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', textAlign: 'center' }}>
+      <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)', textAlign: 'center' }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Your team scored</div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, margin: '4px 0 10px' }}>{savedScore}</div>
         <button onClick={reset} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(234,226,206,0.22)', color: 'var(--cream)', borderRadius: 999, padding: '8px 16px', fontSize: 12, fontWeight: 700 }}>Re-score with shots</button>
@@ -553,19 +560,96 @@ function ShotFlow({ yourTeam, par, savedScore, onComplete }) {
     );
   }
 
-  const Wrap = ({ title, children }) => (
-    <div style={{ padding: '14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
+  const isTee = stroke === 0;
+  const needFairway = isTee && isRegular && (par || 3) >= 4;
+  const setField = (pid, key, val) => setCard(c => ({ ...c, [pid]: { ...(c[pid] || {}), [key]: val } }));
+  const cardDone = (pid) => {
+    const c = card[pid]; if (!c) return false;
+    if (needFairway && !c.fairway) return false;
+    if (c.reached == null) return false;
+    if (c.reached === true && !c.zone) return false;
+    return true;
+  };
+  const bothDone = cardDone(p1.id) && cardDone(p2.id);
+  const suggestion = (isMember && card[p1.id] && card[p2.id] && card[p1.id].zone && card[p2.id].zone)
+    ? suggestBall(yourTeam, { [p1.id]: card[p1.id].zone, [p2.id]: card[p2.id].zone }) : null;
+
+  function pickBall(pid) {
+    [p1, p2].forEach(p => {
+      const c = card[p.id] || {}; const patch = {};
+      if (needFairway && c.fairway) patch.fairway = c.fairway;
+      if (c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
+      if (Object.keys(patch).length) onSavePlayerStat(p.id, patch);
+    });
+    const c = card[pid] || {};
+    if (c.reached) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); }
+    else { setStroke(stroke + 1); setCard({}); }
+  }
+
+  // Putting + who-holed phases
+  if (phase === 'putt') {
+    return <SfWrap stroke={stroke} putts={putts} onReset={reset} title={`Putt ${putts + 1} — holed?`}>
+      <SfPick options={[{ k: 'no', label: 'Missed' }, { k: 'yes', label: 'Holed ✓' }]}
+        onPick={(v) => { setPutts(putts + 1); if (v === 'yes') setPhase('who'); }}/>
+    </SfWrap>;
+  }
+  if (phase === 'who') {
+    return <SfWrap stroke={stroke} putts={putts} onReset={reset} title="Who holed the putt?">
+      <SfPick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={(id) => {
+        const strokesToGreen = chosen ? chosen.strokesToGreen : stroke + 1;
+        const score = strokesToGreen + putts;
+        setPhase('done');
+        onComplete({ score, gir: strokesToGreen <= Math.max(1, (par || 3) - 2), zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: id });
+      }}/>
+    </SfWrap>;
+  }
+
+  // Cards phase — both teammates log this stroke
+  return (
+    <SfWrap stroke={stroke} putts={putts} onReset={reset} title={`Shot ${stroke + 1} — each of you log your ball`}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {[p1, p2].map(p => (
+          <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}} needFairway={needFairway}
+            onFairway={(v) => setField(p.id, 'fairway', v)}
+            onReached={(v) => setField(p.id, 'reached', v)}
+            onZone={(z) => setField(p.id, 'zone', z)}/>
+        ))}
+      </div>
+
+      {suggestion && (
+        <div style={{ marginTop: 10, background: 'rgba(212,165,116,0.16)', border: '1px solid var(--clay)', borderRadius: 10, padding: '10px 12px' }}>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--clay)', fontWeight: 800, marginBottom: 4 }}>🤖 Caddie</div>
+          <div style={{ fontSize: 12, lineHeight: 1.4 }}>{suggestion.line}</div>
+        </div>
+      )}
+
+      {bothDone && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700, marginBottom: 6 }}>Whose ball did the team take?</div>
+          <SfPick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={pickBall}/>
+        </div>
+      )}
+    </SfWrap>
+  );
+}
+
+function SfWrap({ title, stroke, putts, onReset, children }) {
+  return (
+    <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
       <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
       {children}
-      {(shots.length > 0 || putts > 0) && (
+      {(stroke > 0 || putts > 0) && (
         <div style={{ marginTop: 12, fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between' }}>
-          <span>Strokes so far: {shots.length + putts}</span>
-          <button onClick={reset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
+          <span>Strokes so far: {stroke + putts}</span>
+          <button onClick={onReset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
         </div>
       )}
     </div>
   );
-  const Pick = ({ onPick, options }) => (
+}
+
+function SfPick({ options, onPick }) {
+  return (
     <div style={{ display: 'flex', gap: 8 }}>
       {options.map(o => (
         <button key={o.k} onClick={() => onPick(o.k)} style={{
@@ -575,61 +659,55 @@ function ShotFlow({ yourTeam, par, savedScore, onComplete }) {
       ))}
     </div>
   );
+}
 
-  // Step 1: whose ball for this shot
-  if (phase === 'approach' && pendBall == null) {
-    return <Wrap title={`Shot ${shots.length + 1} — whose ball did you take?`}>
-      <Pick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={(id) => setPend(id)}/>
-    </Wrap>;
-  }
-  // Step 2: did that shot reach the green?
-  if (phase === 'approach' && pendBall != null) {
-    return <Wrap title={`Shot ${shots.length + 1} — did it reach the green?`}>
-      <Pick options={[
-        { k: 'no',  label: 'Not yet' },
-        { k: 'yes', label: 'On the green ✓' },
-      ]} onPick={(v) => {
-        const newShots = [...shots, { ball: pendBall }];
-        setShots(newShots); setPend(null);
-        if (v === 'yes') setPhase('green');
-      }}/>
-    </Wrap>;
-  }
-  // Step 3: green position
-  if (phase === 'green') {
-    return <Wrap title="Where on the green?">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        {GREEN_ZONES.map(z => (
-          <button key={z} onClick={() => { setZone(z); setPhase('putt'); }} style={{
-            padding: '10px 4px', borderRadius: 10, background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)', fontSize: 11, fontWeight: 700,
-          }}>{z}</button>
-        ))}
+// Per-player card (@handle) — fairway (tee), reach-green, green position.
+function PlayerShotCard({ player, data, needFairway, onFairway, onReached, onZone }) {
+  return (
+    <div style={{ padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
+      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+        {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : ''}</span>
       </div>
-    </Wrap>;
-  }
-  // Step 4: putting
-  if (phase === 'putt') {
-    return <Wrap title={`Putt ${putts + 1} — holed?`}>
-      <Pick options={[
-        { k: 'no',  label: 'Missed' },
-        { k: 'yes', label: 'Holed ✓' },
-      ]} onPick={(v) => { setPutts(putts + 1); if (v === 'yes') setPhase('who'); }}/>
-    </Wrap>;
-  }
-  // Step 5: who holed it
-  if (phase === 'who') {
-    return <Wrap title="Who holed the putt?">
-      <Pick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={(id) => {
-        const score = shots.length + putts;
-        const gir = shots.length <= Math.max(1, (par || 3) - 2);
-        const ballPlayer = shots.length ? shots[shots.length - 1].ball : id;
-        setPhase('done');
-        onComplete({ score, gir, zone, ballPlayer, holedBy: id });
-      }}/>
-    </Wrap>;
-  }
-  return null;
+
+      {needFairway && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Fairway</div>
+          <FairwayCross value={data.fairway} onPick={onFairway}/>
+        </div>
+      )}
+
+      <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Reach the green?</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={() => onReached(false)} style={pillStyle(data.reached === false)}>Off green</button>
+        <button onClick={() => onReached(true)} style={pillStyle(data.reached === true)}>On green ✓</button>
+      </div>
+
+      {data.reached === true && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700, marginBottom: 5 }}>Where on the green?</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+            {GREEN_ZONES.map(z => (
+              <button key={z} onClick={() => onZone(z)} style={{
+                padding: '8px 2px', borderRadius: 8, fontSize: 10, fontWeight: 700,
+                background: data.zone === z ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
+                color: data.zone === z ? 'var(--forest)' : 'var(--cream)',
+                border: data.zone === z ? 'none' : '1px solid rgba(234,226,206,0.2)',
+              }}>{z}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function pillStyle(active) {
+  return {
+    flex: 1, padding: '10px 8px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+    background: active ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
+    color: active ? 'var(--forest)' : 'var(--cream)',
+    border: active ? 'none' : '1px solid rgba(234,226,206,0.2)',
+  };
 }
 
 // ─── Score wheel (GHIN-style) — tap a number, par-shape auto-draws ────
@@ -870,6 +948,14 @@ function FullScreenMessage({ title, detail, onBack }) {
 async function saveHoleStat(matchId, holeNumber, column, value) {
   const patch = { [column]: value, updated_at: new Date().toISOString() };
   await sbx.from('match_holes').update(patch).eq('match_id', matchId).eq('hole_number', holeNumber);
+}
+
+// Per-player, per-hole stat (2v2) → hole_player_stats (upsert).
+async function savePlayerHoleStat(matchId, holeNumber, playerId, patch) {
+  await sbx.from('hole_player_stats').upsert(
+    { match_id: matchId, hole_number: holeNumber, player_id: playerId, ...patch },
+    { onConflict: 'match_id,hole_number,player_id' }
+  );
 }
 
 // Save a score for one player on one hole, recompute result, and bump match_holes row.
