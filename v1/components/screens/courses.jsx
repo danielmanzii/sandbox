@@ -841,7 +841,9 @@ function MatchDetailScreen({ go, matchId, profile }) {
       )}
 
       {selHole && (
-        <HoleStatSheet hole={selHole} youAreA={youAreA} is2v2={is2v2} byId={data.byId} onClose={() => setSelHole(null)}/>
+        <HoleStatSheet hole={selHole} youAreA={youAreA} is2v2={is2v2} byId={data.byId}
+          playerStats={(data.playerStatsByHole || {})[selHole.hole_number] || []}
+          onClose={() => setSelHole(null)}/>
       )}
 
       {/* Confirmation */}
@@ -877,7 +879,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
 }
 
 // ─── Per-hole stat popup ──────────────────────────────────────────────
-function HoleStatSheet({ hole, youAreA, is2v2, byId, onClose }) {
+function HoleStatSheet({ hole, youAreA, is2v2, byId, playerStats = [], onClose }) {
   const h = hole;
   const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
   const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
@@ -889,7 +891,8 @@ function HoleStatSheet({ hole, youAreA, is2v2, byId, onClose }) {
   const name = (id) => { const p = byId[id]; return p ? (p.first_name || p.handle) : '—'; };
   const yourGir   = youAreA ? h.player_a_gir : h.player_b_gir;
   const yourPutts = youAreA ? h.player_a_putts : h.player_b_putts;
-  const yourProx  = youAreA ? h.player_a_proximity_ft : h.player_b_proximity_ft;
+  const yourFair  = youAreA ? h.player_a_fairway : h.player_b_fairway;
+  const fairLabel = { hit: 'Hit', left: 'Missed left', right: 'Missed right', long: 'Long', short: 'Short' };
 
   const Row = ({ label, value }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
@@ -920,12 +923,33 @@ function HoleStatSheet({ hole, youAreA, is2v2, byId, onClose }) {
             <Row label="Ball played" value={h.ball_player ? name(h.ball_player) : '—'}/>
             <Row label="Holed by" value={h.holed_by ? name(h.holed_by) : '—'}/>
             <Row label="Ball position" value={h.zone || '—'}/>
+
+            {/* Per-player breakdown (both teammates' own shots) */}
+            {playerStats.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>By player</div>
+                {playerStats.map(s => {
+                  const p = byId[s.player_id]; if (!p) return null;
+                  const pname = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.handle;
+                  return (
+                    <div key={s.player_id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 800 }}>{pname} <span style={{ opacity: 0.55, fontWeight: 600 }}>{formatHandle(p.handle)}</span></div>
+                      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 3 }}>
+                        {s.fairway ? `Fairway: ${fairLabel[s.fairway] || s.fairway} · ` : ''}
+                        {s.gir != null ? `GIR: ${s.gir ? 'Yes' : 'No'}` : ''}
+                        {s.zone ? ` · ${s.zone}` : ''}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         ) : (
           <>
+            {(h.par || 3) >= 4 && <Row label="Fairway" value={yourFair ? (fairLabel[yourFair] || yourFair) : '—'}/>}
             <Row label="GIR" value={yourGir == null ? '—' : yourGir ? 'Yes' : 'No'}/>
             <Row label="Putts" value={yourPutts != null ? yourPutts : '—'}/>
-            <Row label="Proximity" value={yourProx != null ? `${yourProx}′` : '—'}/>
           </>
         )}
 

@@ -331,14 +331,18 @@ function useMatchDetail(matchId) {
     if (!matchId) { setData(null); setLoading(false); return; }
     const { data: m } = await sbx.from('matches').select('*').eq('id', matchId).maybeSingle();
     if (!m) { setData(null); setLoading(false); return; }
-    const [{ data: holes }, { data: profs }] = await Promise.all([
+    const [{ data: holes }, { data: profs }, { data: pstats }] = await Promise.all([
       sbx.from('match_holes').select('*').eq('match_id', matchId).order('hole_number'),
       sbx.from('profiles').select('id, handle, first_name, last_name, avatar_url, sbx')
         .in('id', [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean)),
+      sbx.from('hole_player_stats').select('*').eq('match_id', matchId),
     ]);
     const byId = {}; (profs || []).forEach(p => { byId[p.id] = p; });
+    // Per-player stats keyed by hole_number → [{player_id, fairway, gir, zone}]
+    const playerStatsByHole = {};
+    (pstats || []).forEach(s => { (playerStatsByHole[s.hole_number] = playerStatsByHole[s.hole_number] || []).push(s); });
     setData({
-      match: m, holes: holes || [], byId,
+      match: m, holes: holes || [], byId, playerStatsByHole,
       teamA: [m.player_a, m.player_a2].filter(Boolean).map(i => byId[i]).filter(Boolean),
       teamB: [m.player_b, m.player_b2].filter(Boolean).map(i => byId[i]).filter(Boolean),
     });
