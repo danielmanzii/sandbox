@@ -50,7 +50,7 @@ function useUserStats(profileId) {
     // Only 1v1 matches have per-player GIR/putts/proximity columns populated; in
     // 2v2 those are team-level and we skip them for now.
     const matchIds = list.map(m => m.id);
-    let gir = null, putts = null, proximity = null, girTrend = [];
+    let gir = null, putts = null, proximity = null, fairway = null, girTrend = [];
     let holeCount = 0;
     if (matchIds.length > 0) {
       const { data: holes } = await sbx.from('match_holes').select('*').in('match_id', matchIds);
@@ -58,6 +58,7 @@ function useUserStats(profileId) {
       let girNum = 0, girDen = 0;
       let puttsSum = 0, puttsCount = 0;
       let proxSum = 0, proxCount = 0;
+      let fairNum = 0, fairDen = 0;
       for (const h of holes || []) {
         const m = matchById[h.match_id];
         if (!m || m.match_type === '2v2') continue;
@@ -65,14 +66,26 @@ function useUserStats(profileId) {
         const girV   = userIsA ? h.player_a_gir           : h.player_b_gir;
         const puttsV = userIsA ? h.player_a_putts         : h.player_b_putts;
         const proxV  = userIsA ? h.player_a_proximity_ft  : h.player_b_proximity_ft;
+        const fairV  = userIsA ? h.player_a_fairway        : h.player_b_fairway;
         if (girV !== null && girV !== undefined) { girDen++; if (girV) girNum++; }
         if (puttsV != null) { puttsSum += puttsV; puttsCount++; }
         if (proxV  != null) { proxSum  += proxV;  proxCount++; }
+        if (fairV) { fairDen++; if (fairV === 'hit') fairNum++; }
         holeCount++;
       }
+
+      // 2v2 per-player stats (fairway + GIR) from hole_player_stats.
+      const { data: ps } = await sbx.from('hole_player_stats')
+        .select('fairway, gir').eq('player_id', profileId).in('match_id', matchIds);
+      for (const s of ps || []) {
+        if (s.fairway) { fairDen++; if (s.fairway === 'hit') fairNum++; }
+        if (s.gir != null) { girDen++; if (s.gir) girNum++; }
+      }
+
       if (girDen > 0) gir = girNum / girDen;
       if (puttsCount > 0) putts = puttsSum / puttsCount;
       if (proxCount > 0)  proximity = proxSum / proxCount;
+      if (fairDen > 0) fairway = fairNum / fairDen;
 
       // GIR trend: per-match GIR % over the last up-to-8 completed matches (reverse chron).
       const completedIds = list.filter(m => m.status === 'completed' && m.match_type !== '2v2').slice(0, 8).reverse().map(m => m.id);
@@ -98,7 +111,7 @@ function useUserStats(profileId) {
       seasonPoints: W + 0.5 * H,
       recentMatches: list,
       // Advanced (real) — null when the user hasn't logged any stats yet.
-      gir, putts, proximity, girTrend,
+      gir, putts, proximity, fairway, girTrend,
       holesLogged: holeCount,
     });
   }, [profileId]);
@@ -172,6 +185,7 @@ function buildRealUser(profile, stats) {
     girTrend:  stats && stats.girTrend ? stats.girTrend : [],
     putts:     stats && stats.putts     != null ? stats.putts     : 0,
     proximity: stats && stats.proximity != null ? stats.proximity : 0,
+    fairway:   stats && stats.fairway   != null ? stats.fairway   : null,
 
     // Scramble-specific metrics we don't track yet — overridden to honest
     // zeros rather than inheriting Alex's mock numbers. Trends default to

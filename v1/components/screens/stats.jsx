@@ -58,7 +58,7 @@ function StatsYou({ go }) {
   const total = u.matchesTotal || 0;
   const decided = (u.matchesW || 0) + (u.matchesL || 0);
   const winRate = decided > 0 ? Math.round((u.matchesW / decided) * 100) + '%' : '—';
-  const hasShotData = (u.gir > 0) || (u.putts > 0) || (u.proximity > 0);
+  const hasShotData = (u.gir > 0) || (u.putts > 0) || (u.fairway != null);
   const history = (MOCK.HISTORY || []);
 
   return (
@@ -79,9 +79,9 @@ function StatsYou({ go }) {
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Shot stats</div>
         {hasShotData ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            <CoreStat label="GIR" value={`${Math.round(u.gir * 100)}%`} sub="greens in reg"/>
+            <CoreStat label="Fairways" value={u.fairway != null ? `${Math.round(u.fairway * 100)}%` : '—'} sub="hit off the tee"/>
+            <CoreStat label="GIR" value={`${Math.round((u.gir || 0) * 100)}%`} sub="greens in reg"/>
             <CoreStat label="Putts" value={(u.putts || 0).toFixed(2)} sub="per hole"/>
-            <CoreStat label="Proximity" value={`${u.proximity || 0}′`} sub="avg to pin"/>
           </div>
         ) : (
           <div className="card" style={{ padding: 20, textAlign: 'center' }}>
