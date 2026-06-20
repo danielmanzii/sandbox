@@ -583,40 +583,54 @@ function StatChoice({ active, onClick, children }) {
 }
 
 // ─── Fairway directional cross (hit / miss long-short-left-right) ─────
+// Fairway direction glyph: straight arrow for long/short, curved (hook/slice)
+// arrow for left/right — matching standard golf fairway-miss UI.
+function FairwayArrow({ dir }) {
+  if (dir === 'up' || dir === 'down') {
+    return (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+        style={{ display: 'block', transform: dir === 'down' ? 'rotate(180deg)' : 'none' }}>
+        <path d="M12 19 V6"/>
+        <path d="M7 11 L12 6 L17 11"/>
+      </svg>
+    );
+  }
+  // Curved arrow drawn pointing right; mirrored for left.
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: 'block', transform: dir === 'left' ? 'scaleX(-1)' : 'none' }}>
+      <path d="M8 4 C 8 12, 11 16, 18 16"/>
+      <path d="M14 12 L18 16 L14 20"/>
+    </svg>
+  );
+}
+
 function FairwayCross({ value, onPick }) {
-  // SVG arrow centered in its viewBox, rotated per direction — symmetric so
-  // every arrow renders identically and stays perfectly centered.
-  const Btn = ({ v, area, rot }) => {
+  const Btn = ({ v, area, dir }) => {
     const on = value === v;
     const hit = v === 'hit';
     return (
       <button onClick={() => onPick(on ? null : v)} style={{
-        gridArea: area, width: 38, height: 38, borderRadius: hit ? 999 : 9, margin: '0 auto',
+        gridArea: area, width: 38, height: 38, borderRadius: 999, margin: '0 auto',
         background: on ? (hit ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
         color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
         border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {hit ? (
-          <StrokeIcon kind="check" size={22}/>
-        ) : (
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
-            strokeWidth="2" strokeLinejoin="round"
-            style={{ display: 'block', transform: rot ? `rotate(${rot}deg)` : 'none' }}>
-            <polygon points="12 7 18 17 6 17"/>
-          </svg>
-        )}
+        {hit ? <StrokeIcon kind="check" size={22}/> : <FairwayArrow dir={dir}/>}
       </button>
     );
   };
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 9,
       gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
-      <Btn v="long"  area="long"  rot={0}/>
-      <Btn v="left"  area="left"  rot={-90}/>
+      <Btn v="long"  area="long"  dir="up"/>
+      <Btn v="left"  area="left"  dir="left"/>
       <Btn v="hit"   area="hit"/>
-      <Btn v="right" area="right" rot={90}/>
-      <Btn v="short" area="short" rot={180}/>
+      <Btn v="right" area="right" dir="right"/>
+      <Btn v="short" area="short" dir="down"/>
     </div>
   );
 }
