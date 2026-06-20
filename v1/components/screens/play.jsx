@@ -78,12 +78,12 @@ function ChallengeFriendsView({ go, profile }) {
           />
           <div style={{ height: 12 }}/>
           <ModeCard
-            onClick={undefined}
+            onClick={() => setFormat('regular')}
             eyebrow="🏌 Full course"
             title="Regular course"
-            subtitle="9 or 18 on a real course with fairways + GIR tracking. Lighting up once we load course scorecards."
+            subtitle="9 or 18 on a real course — real pars, with fairway + GIR tracking."
             accent="moss"
-            available={false}
+            available
           />
         </>
       ) : (
@@ -92,7 +92,7 @@ function ChallengeFriendsView({ go, profile }) {
             background: 'transparent', border: 'none', color: 'var(--forest)', fontSize: 13, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 0 12px', opacity: 0.75,
           }}>
-            <Icon.ArrowLeft size={14}/> Pitch & Putt
+            <Icon.ArrowLeft size={14}/> {format === 'regular' ? 'Regular course' : 'Pitch & Putt'}
           </button>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 4px 10px' }}>
             Step 2 · Pick your format

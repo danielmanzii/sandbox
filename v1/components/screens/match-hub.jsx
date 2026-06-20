@@ -1,7 +1,7 @@
 /* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut, useMatchInvitesForMatch, sendInviteByHandle, cancelInvite, formatHandle */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
-function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', initialJoinCode }) {
+function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', format = 'pp', initialJoinCode }) {
   // If we received a deep-link ?join=CODE, jump straight to the join
   // view with the code pre-filled.
   const [mode, setMode] = React.useState(initialJoinCode ? 'join' : 'home'); // home | start | join | code | handle
@@ -21,7 +21,7 @@ function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', initi
 
   React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
-  if (mode === 'start') return <StartMatchView profile={profile} matchType={matchType} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
+  if (mode === 'start') return <StartMatchView profile={profile} matchType={matchType} format={format} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
   if (mode === 'join')  return <JoinMatchView  profile={profile} initialCode={initialJoinCode} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
   if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} profile={profile} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onReady={(id) => onOpenMatch(id)}/>;
   if (mode === 'handle' && window.DisplayNameScreen) {
@@ -181,49 +181,76 @@ function StatusChip({ match, youAreA }) {
 }
 
 // ─── Start Match view ────────────────────────────────────────
-function StartMatchView({ profile, matchType = '1v1', onCancel, onCreated }) {
-  const [course, setCourse] = React.useState('Melreese');
-  const [holes, setHoles]   = React.useState(9);
+function StartMatchView({ profile, matchType = '1v1', format = 'pp', onCancel, onCreated }) {
+  const isRegular = format === 'regular';
+  const [course, setCourse] = React.useState('Killian Greens'); // pp: free text
+  const [holes, setHoles]   = React.useState(isRegular ? 18 : 9);
   const [busy, setBusy]     = React.useState(false);
   const [err, setErr]       = React.useState('');
+
+  // Regular course: load real scorecards (rc_courses + tees).
+  const [rcCourses, setRcCourses] = React.useState([]);
+  const [courseId, setCourseId]   = React.useState(null);
+  const [teeId, setTeeId]         = React.useState(null);
+
+  React.useEffect(() => {
+    if (!isRegular) return;
+    (async () => {
+      const [{ data: cs }, { data: ts }] = await Promise.all([
+        sbx.from('rc_courses').select('id, name, city').order('name'),
+        sbx.from('rc_tees').select('id, course_id, name, color, par, yards, rating, slope'),
+      ]);
+      const list = (cs || []).map(c => ({ ...c, tees: (ts || []).filter(t => t.course_id === c.id) }));
+      setRcCourses(list);
+      if (list[0]) { setCourseId(list[0].id); if (list[0].tees[0]) setTeeId(list[0].tees[0].id); }
+    })();
+  }, [isRegular]);
+
+  const selCourse = rcCourses.find(c => c.id === courseId);
+  const selTee    = selCourse && selCourse.tees.find(t => t.id === teeId);
 
   async function create() {
     if (busy) return;
     setBusy(true); setErr('');
     const join_code = randomJoinCode();
+
+    if (isRegular) {
+      if (!selCourse || !selTee) { setErr('Pick a course and tee.'); setBusy(false); return; }
+      const { data: rcHoles } = await sbx.from('rc_holes')
+        .select('hole_number, par, yards').eq('tee_id', selTee.id).order('hole_number');
+      const picked = (rcHoles || []).filter(h => holes === 18 ? true : h.hole_number <= 9);
+      const { data, error } = await sbx.from('matches').insert({
+        join_code, course_name: selCourse.name, total_holes: holes,
+        match_type: matchType, format: 'regular', player_a: profile.id, status: 'waiting',
+      }).select().single();
+      if (error) { setErr(error.message); setBusy(false); return; }
+      const rows = picked.map((h, i) => ({ match_id: data.id, hole_number: i + 1, par: h.par, distance_yards: h.yards }));
+      await sbx.from('match_holes').insert(rows);
+      setBusy(false); onCreated(data);
+      return;
+    }
+
+    // Pitch & putt: free-text course, all par 3.
     const { data, error } = await sbx.from('matches').insert({
-      join_code,
-      course_name: course.trim() || null,
-      total_holes: holes,
-      match_type: matchType,
-      player_a: profile.id,
-      status: 'waiting',
+      join_code, course_name: course.trim() || null, total_holes: holes,
+      match_type: matchType, format: 'pp', player_a: profile.id, status: 'waiting',
     }).select().single();
     if (error) { setErr(error.message); setBusy(false); return; }
-
-    // Seed empty hole rows so both players render a consistent list.
-    const rows = Array.from({ length: holes }, (_, i) => ({
-      match_id: data.id, hole_number: i + 1, par: 3,
-    }));
+    const rows = Array.from({ length: holes }, (_, i) => ({ match_id: data.id, hole_number: i + 1, par: 3 }));
     await sbx.from('match_holes').insert(rows);
-
-    setBusy(false);
-    onCreated(data);
+    setBusy(false); onCreated(data);
   }
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
       <button onClick={onCancel} style={{
-        position: 'absolute', top: 20, left: 20,
-        width: 38, height: 38, borderRadius: 999,
-        background: 'var(--paper)', border: 'var(--hairline)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--forest)',
+        position: 'absolute', top: 20, left: 20, width: 38, height: 38, borderRadius: 999,
+        background: 'var(--paper)', border: 'var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)',
       }}>
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <Eyebrow color="var(--forest)">New {matchType} match</Eyebrow>
+      <Eyebrow color="var(--forest)">New {matchType} · {isRegular ? 'regular course' : 'pitch & putt'}</Eyebrow>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
         Set it up.
       </div>
@@ -234,14 +261,50 @@ function StartMatchView({ profile, matchType = '1v1', onCancel, onCreated }) {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 24 }}>
-        <label style={{ display: 'block' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Course</div>
-          <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Melreese" style={{
-            width: '100%', padding: '13px 14px', borderRadius: 12,
-            background: 'var(--paper)', border: 'var(--hairline-strong)',
-            color: 'var(--ink)', fontSize: 15, outline: 'none',
-          }}/>
-        </label>
+        {isRegular ? (
+          <>
+            {/* Course */}
+            <label style={{ display: 'block' }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Course</div>
+              <select value={courseId || ''} onChange={e => { setCourseId(e.target.value); const c = rcCourses.find(x => x.id === e.target.value); setTeeId(c && c.tees[0] ? c.tees[0].id : null); }} style={{
+                width: '100%', padding: '13px 14px', borderRadius: 12, background: 'var(--paper)',
+                border: 'var(--hairline-strong)', color: 'var(--ink)', fontSize: 15, outline: 'none',
+              }}>
+                {rcCourses.length === 0 && <option>Loading…</option>}
+                {rcCourses.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` · ${c.city}` : ''}</option>)}
+              </select>
+            </label>
+            {/* Tees */}
+            <label style={{ display: 'block' }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Tees</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {selCourse && selCourse.tees.map(t => (
+                  <button key={t.id} onClick={() => setTeeId(t.id)} style={{
+                    flex: 1, minWidth: 90, padding: '12px 10px', borderRadius: 12,
+                    background: teeId === t.id ? 'var(--forest)' : 'var(--paper)',
+                    color: teeId === t.id ? 'var(--cream)' : 'var(--forest)',
+                    border: teeId === t.id ? 'none' : 'var(--hairline-strong)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || 'var(--forest)', display: 'inline-block' }}/>
+                      {t.name}
+                    </span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
+                  </button>
+                ))}
+              </div>
+            </label>
+          </>
+        ) : (
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Course</div>
+            <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Killian Greens" style={{
+              width: '100%', padding: '13px 14px', borderRadius: 12, background: 'var(--paper)',
+              border: 'var(--hairline-strong)', color: 'var(--ink)', fontSize: 15, outline: 'none',
+            }}/>
+          </label>
+        )}
 
         <label style={{ display: 'block' }}>
           <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Holes</div>
@@ -253,7 +316,7 @@ function StartMatchView({ profile, matchType = '1v1', onCancel, onCreated }) {
                 color: holes === n ? 'var(--cream)' : 'var(--forest)',
                 border: holes === n ? 'none' : 'var(--hairline-strong)',
                 fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
-              }}>{n} HOLES</button>
+              }}>{n} HOLES{isRegular && n === 9 ? ' (FRONT)' : ''}</button>
             ))}
           </div>
         </label>
