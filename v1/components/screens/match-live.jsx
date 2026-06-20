@@ -591,16 +591,16 @@ function FairwayCross({ value, onPick }) {
     const hit = v === 'hit';
     return (
       <button onClick={() => onPick(on ? null : v)} style={{
-        gridArea: area, width: 44, height: 44, borderRadius: hit ? 999 : 10, margin: '0 auto',
+        gridArea: area, width: 38, height: 38, borderRadius: hit ? 999 : 9, margin: '0 auto',
         background: on ? (hit ? '#4F9D5B' : 'var(--cream)') : 'rgba(255,255,255,0.08)',
         color: on ? (hit ? '#fff' : 'var(--forest)') : 'var(--cream)',
         border: on ? 'none' : '1px solid rgba(234,226,206,0.2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800,
       }}>
         {hit ? (
           <span style={{ lineHeight: 1 }}>✓</span>
         ) : (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
             style={{ display: 'block', transform: rot ? `rotate(${rot}deg)` : 'none' }}>
             <line x1="12" y1="19" x2="12" y2="5"/>
@@ -611,7 +611,7 @@ function FairwayCross({ value, onPick }) {
     );
   };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 44px)', gridTemplateRows: 'repeat(3, 44px)', gap: 6,
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 5,
       gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
       <Btn v="long"  area="long"  rot={0}/>
       <Btn v="left"  area="left"  rot={-90}/>
@@ -801,8 +801,8 @@ function YouReadout({ label, count }) {
         <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label || 'Your team'}</span>
         <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>Strokes so far</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 12, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.9, minWidth: 32, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
           {n === 0 ? '–' : n}
         </div>
         <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.3 }}>
@@ -974,8 +974,8 @@ function OppReadout({ label, value, par, live, holeNumber }) {
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 12, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.9, minWidth: 32, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
           {big}
         </div>
         <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.3 }}>{sub}</div>
