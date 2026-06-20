@@ -942,7 +942,7 @@ function OppReadout({ label, value, par, live, holeNumber }) {
   const liveOn = value == null && live && live.holeNumber === holeNumber && !live.done && live.strokes > 0;
   const big = value != null ? value : (liveOn ? live.strokes : '–');
   const sub = value != null ? 'Logged by their team'
-            : liveOn ? `Playing this hole · thru ${live.strokes}`
+            : liveOn ? (live.strokes === 1 ? '1 stroke this hole' : `${live.strokes} strokes this hole`)
             : 'Waiting for their score…';
   return (
     <div>
