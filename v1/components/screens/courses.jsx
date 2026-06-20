@@ -66,7 +66,7 @@ function SlotChip({ slot, onClick, friends }) {
 }
 
 // ─── Book screen ──────────────────────────────────────────────────────
-function BookScreen({ go, profile }) {
+function BookScreen({ go, profile, embedded }) {
   const [coords, geoStatus] = useGeolocation();
   const [date, setDate] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const [q, setQ] = React.useState('');
@@ -84,24 +84,32 @@ function BookScreen({ go, profile }) {
     : 'Miami, FL';
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <div style={{ padding: '58px 20px 12px', color: 'var(--forest)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Twilight tee times</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em' }}>Book a round.</div>
-          </div>
+    <div style={{ background: 'var(--canvas)', minHeight: embedded ? 'auto' : '100%', paddingBottom: embedded ? 0 : 120 }}>
+      <div style={{ padding: embedded ? '4px 20px 12px' : '58px 20px 12px', color: 'var(--forest)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {!embedded ? (
+            <div>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Twilight tee times</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em' }}>Book a round.</div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon.Pin size={12}/> {locLabel}
+            </div>
+          )}
           <button onClick={() => go({ screen: 'myRounds' })} style={{
-            marginTop: 6, padding: '8px 12px', borderRadius: 999,
+            marginTop: embedded ? 0 : 6, padding: '8px 12px', borderRadius: 999,
             background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)',
-            fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5,
+            fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
           }}>
             <Icon.Calendar size={13}/> My rounds
           </button>
         </div>
-        <div style={{ fontSize: 12, marginTop: 8, opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <Icon.Pin size={12}/> {locLabel}
-        </div>
+        {!embedded && (
+          <div style={{ fontSize: 12, marginTop: 8, opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Icon.Pin size={12}/> {locLabel}
+          </div>
+        )}
       </div>
 
       <DateStrip selected={date} onSelect={setDate}/>
