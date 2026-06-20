@@ -24,13 +24,11 @@ function useSession() {
   React.useEffect(() => {
     let mounted = true;
 
-    // On any reload/cold start, Supabase can momentarily report "no session"
-    // while it reads/refreshes the persisted token — which flashes the login
-    // screen before the real session loads. The authoritative signal that a
-    // session SHOULD exist is Supabase's own stored token in localStorage
-    // (key: sb-<ref>-auth-token). If that token is present we wait out a grace
-    // window before committing to logged-out; if it's absent the user really
-    // is signed out, so we show auth immediately (no delay for new visitors).
+    // The login screen must only appear when we're SURE there's no session.
+    // We go "logged out" from exactly two authoritative places: the initial
+    // getSession() returning null, and an explicit SIGNED_OUT event. Every
+    // other null an auth event might emit during init/token-refresh is a
+    // transient blip and is IGNORED, so it can never flash the login screen.
     const cancelNull = () => { if (nullTimer.current) { clearTimeout(nullTimer.current); nullTimer.current = null; } };
     const hasStoredSession = () => {
       try {
@@ -41,25 +39,34 @@ function useSession() {
       } catch {}
       return localStorage.getItem('spp_authed') === '1';
     };
-
-    const apply = (s) => {
+    const goLoggedIn = (s) => {
       if (!mounted) return;
-      if (s) {
-        cancelNull();
-        try { localStorage.setItem('spp_authed', '1'); } catch {}
-        setSession(s);
-        return;
-      }
-      // No session right now. If Supabase still has a stored token (or our
-      // hint is set), this is a transient blip during init/refresh → wait.
-      // signOut() clears both first, so a real sign-out drops to auth at once.
-      if (!hasStoredSession()) { cancelNull(); setSession(null); return; }
-      if (nullTimer.current) return; // already waiting out the grace window
-      nullTimer.current = setTimeout(() => { nullTimer.current = null; if (mounted) setSession(null); }, 2000);
+      cancelNull();
+      try { localStorage.setItem('spp_authed', '1'); } catch {}
+      setSession(s);
+    };
+    const goLoggedOut = () => {
+      if (!mounted) return;
+      cancelNull();
+      try { localStorage.removeItem('spp_authed'); } catch {}
+      setSession(null);
     };
 
-    sbx.auth.getSession().then(({ data }) => apply(data.session || null));
-    const { data: sub } = sbx.auth.onAuthStateChange((_event, s) => apply(s || null));
+    sbx.auth.getSession().then(({ data }) => {
+      if (data && data.session) { goLoggedIn(data.session); return; }
+      // No session at startup. If Supabase still has a stored token, it's
+      // mid-init/refresh — wait for the session event before showing auth.
+      if (!hasStoredSession()) { goLoggedOut(); return; }
+      // If no session event arrives within the grace window (token gone or
+      // unrefreshable), fall back to the login screen.
+      nullTimer.current = setTimeout(() => { nullTimer.current = null; goLoggedOut(); }, 2500);
+    });
+
+    const { data: sub } = sbx.auth.onAuthStateChange((event, s) => {
+      if (s) { goLoggedIn(s); return; }       // any real session wins immediately
+      if (event === 'SIGNED_OUT') goLoggedOut(); // explicit sign-out only
+      // ignore every other transient null (INITIAL_SESSION/TOKEN_REFRESHED/etc.)
+    });
     return () => { mounted = false; cancelNull(); sub.subscription.unsubscribe(); };
   }, []);
   return session;
