@@ -735,7 +735,11 @@ function MatchDetailScreen({ go, matchId, profile }) {
 
   async function confirm() {
     setBusy(true); setErr('');
-    try { await confirmMatchResult(matchId); } catch (e) { setErr(e.message || 'Could not confirm.'); }
+    try {
+      await confirmMatchResult(matchId);
+      // Rating + points just recomputed server-side — refresh our profile.
+      try { if (typeof window.reloadProfile === 'function') window.reloadProfile(); } catch (_) {}
+    } catch (e) { setErr(e.message || 'Could not confirm.'); }
     setBusy(false);
   }
 

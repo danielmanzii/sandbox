@@ -387,7 +387,7 @@ function PlayerStatsSheet({ player, go, onClose }) {
               const badgeStyle = isW
                 ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
                 : isL
-                ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
+                ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
                 : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
               return (
                 <div key={r.id} style={{

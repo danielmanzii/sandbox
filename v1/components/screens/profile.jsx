@@ -181,26 +181,27 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
                 const badgeStyle = isW
                   ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
                   : isL
-                  ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
+                  ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
                   : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
                 const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
                 const marginOpacity = isL ? 0.55 : 1;
                 return (
-                  <div key={r.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '13px 14px',
-                    borderBottom: '1px solid rgba(14,28,19,0.05)',
+                  <button key={r.id} onClick={() => go({ screen: 'matchDetail', matchId: r.id })} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+                    padding: '13px 14px', background: 'transparent',
+                    borderBottom: '1px solid rgba(14,28,19,0.05)', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                    cursor: 'pointer',
                   }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
                     <div style={{
                       width: 24, height: 24, borderRadius: 6,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontFamily: 'var(--font-display)', fontSize: 13,
                       ...badgeStyle,
                     }}>{r.result}</div>
-                    <div style={{ flex: 1, fontSize: 12 }}>vs {r.opp}</div>
+                    <div style={{ flex: 1, fontSize: 12 }}>vs {formatHandle(r.opp)}</div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{r.margin}</div>
-                  </div>
+                    <Icon.Chevron dir="right" size={12} color="var(--forest)"/>
+                  </button>
                 );
               })}
               {MOCK.HISTORY.length > 4 && (
@@ -304,15 +305,24 @@ function sbxTier(r) {
   return 'Beginner';
 }
 
-// ─── Real SBX card (placement-aware). Headline = 2v2; 1v1 secondary. ───
+// ─── Real SBX card (placement-aware). Prefers 2v2; falls back to 1v1. ──
 function RealSbxCard({ user, go, showDashboard }) {
-  const r   = user.sbx2v2;          // headline (2v2)
-  const n   = user.sbx2v2N || 0;
-  const rel = Math.round((user.sbx2v2Rel || 0) * 100);
-  const r1  = user.sbx1v1;
-  const n1  = user.sbx1v1N || 0;
-  const unrated     = n < 3;
-  const provisional = n >= 3 && n < 10;
+  const n2 = user.sbx2v2N || 0, n1 = user.sbx1v1N || 0;
+  const has2 = n2 >= 1 && user.sbx2v2 != null;
+  const has1 = n1 >= 1 && user.sbx1v1 != null;
+
+  // Headline = 2v2 once it has data; otherwise show 1v1 so a player who's
+  // only played 1v1 still sees a number.
+  const fmt = has2 ? '2v2' : has1 ? '1v1' : '2v2';
+  const r   = has2 ? user.sbx2v2 : has1 ? user.sbx1v1 : null;
+  const n   = has2 ? n2 : n1;
+  const rel = Math.round(((has2 ? user.sbx2v2Rel : user.sbx1v1Rel) || 0) * 100);
+  const secLabel = has2 && has1 ? '1v1' : null;
+  const secR = secLabel ? user.sbx1v1 : null;
+
+  const noData      = !has2 && !has1;
+  const calibrating = !noData && n < 3;       // still showing a provisional number
+  const provisional = !noData && n >= 3 && n < 10;
   const record = `${user.matchesW || 0}–${user.matchesL || 0}–${user.matchesH || 0}`;
 
   return (
@@ -324,18 +334,17 @@ function RealSbxCard({ user, go, showDashboard }) {
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <div style={{ position: 'absolute', right: 16, top: 16, fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.6, letterSpacing: '0.24em', fontWeight: 700 }}>SBX · v1</div>
-      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™ · 2v2</div>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™ · {fmt}</div>
 
-      {unrated ? (
+      {noData ? (
         <div style={{ position: 'relative', marginTop: 10 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.9, letterSpacing: '-0.02em' }}>Unrated</div>
           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
-            Play <strong>{3 - n}</strong> more {3 - n === 1 ? 'match' : 'matches'} to lock in your rating.
+            Play <strong>3</strong> confirmed matches to lock in your rating.
           </div>
-          {/* progress pips */}
           <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
             {[0,1,2].map(i => (
-              <div key={i} style={{ flex: 1, height: 5, borderRadius: 999, background: i < n ? 'var(--clay)' : 'rgba(234,226,206,0.22)' }}/>
+              <div key={i} style={{ flex: 1, height: 5, borderRadius: 999, background: 'rgba(234,226,206,0.22)' }}/>
             ))}
           </div>
         </div>
@@ -346,17 +355,21 @@ function RealSbxCard({ user, go, showDashboard }) {
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 56, lineHeight: 0.85, letterSpacing: '-0.03em' }}>{r.toFixed(3)}</span>
               <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 700 }}>{sbxTier(r)}</span>
             </div>
-            {provisional && (
-              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(234,226,206,0.18)', padding: '4px 8px', borderRadius: 999, fontWeight: 700 }}>Provisional</span>
+            {(calibrating || provisional) && (
+              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(234,226,206,0.18)', padding: '4px 8px', borderRadius: 999, fontWeight: 700 }}>
+                {calibrating ? `Calibrating ${n}/3` : 'Provisional'}
+              </span>
             )}
           </div>
-          <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '16px 0 12px' }}/>
+          {calibrating && (
+            <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>Provisional — firms up after {3 - n} more confirmed {3 - n === 1 ? 'match' : 'matches'}.</div>
+          )}
+          <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '14px 0 12px' }}/>
           <div style={{ display: 'flex', gap: 14, fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.06em' }}>
             <span><strong>{record}</strong> W–L–H</span>
             <span>·</span>
             <span>REL. {rel}%</span>
-            <span>·</span>
-            <span>1v1 {r1 != null && n1 >= 3 ? r1.toFixed(3) : '—'}</span>
+            {secLabel && <><span>·</span><span>{secLabel} {secR.toFixed(3)}</span></>}
           </div>
         </>
       )}
@@ -992,7 +1005,7 @@ function MatchHistorySheet({ history, onClose }) {
                 const badgeStyle = isW
                   ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
                   : isL
-                  ? { background: 'var(--cream)', color: 'var(--forest)', border: 'none' }
+                  ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
                   : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
                 const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
                 const marginOpacity = isL ? 0.55 : 1;
