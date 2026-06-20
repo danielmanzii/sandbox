@@ -360,7 +360,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
             <ShotFlow
               yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
               isRegular={isRegular} isMember={isMember}
-              flowKey={flowKey}
+              flowKey={flowKey} yourTeamLabel={yourTeamLabel}
               onLiveScore={onLiveScore}
               onSavePlayerStat={onSavePlayerStat}
               onComplete={({ score, gir, zone, ballPlayer, holedBy }) => {
@@ -614,7 +614,7 @@ function FairwayCross({ value, onPick }) {
 // Each stroke both teammates log their own shot on their own card (@handle),
 // the caddie compares the two balls, you pick which to play, repeat until
 // holed. The team score emerges from the stroke count.
-function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onLiveScore, onSavePlayerStat, onComplete }) {
+function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, yourTeamLabel, onLiveScore, onSavePlayerStat, onComplete }) {
   const [p1, p2] = yourTeam;
   // Restore any in-progress hole so backing out of the match doesn't lose it.
   const saved = (() => {
@@ -718,7 +718,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onL
       return next;
     });
     return (
-      <SfWrap count={count} onReset={reset} title={`Putt ${roundNo} — each of you putt`}>
+      <SfWrap count={count} onReset={reset} label={yourTeamLabel} title={`Putt ${roundNo} — each of you putt`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[p1, p2].map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
@@ -731,7 +731,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onL
 
   // Cards phase — both teammates log this stroke
   return (
-    <SfWrap count={count} onReset={reset}
+    <SfWrap count={count} onReset={reset} label={yourTeamLabel}
       title={fairwayTee ? 'Tee shot — each of you log your drive' : `Shot ${stroke + 1} — each of you log your ball`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[p1, p2].map(p => (
@@ -760,17 +760,43 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, onL
   );
 }
 
-function SfWrap({ title, count, onReset, children }) {
+function SfWrap({ title, count, label, onReset, children }) {
   return (
-    <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
-      <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
-      {children}
-      {count > 0 && (
-        <div style={{ marginTop: 12, fontSize: 11, opacity: 0.6, display: 'flex', justifyContent: 'space-between' }}>
-          <span>Strokes so far: {count}</span>
-          <button onClick={onReset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
+    <div>
+      {/* Your team's running score — mirrors the opponent scoreboard */}
+      <YouReadout label={label} count={count}/>
+      <div style={{ height: 12 }}/>
+      <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
+        <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
+        {children}
+        {count > 0 && (
+          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={onReset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Your team's live strokes — same card language as the opponent readout, with
+// a cream accent so "you" reads distinct from "them".
+function YouReadout({ label, count }) {
+  const n = count || 0;
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label || 'Your team'}</span>
+        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>Strokes so far</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
+          {n === 0 ? '–' : n}
         </div>
-      )}
+        <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.3 }}>
+          {n === 0 ? 'Tee it up' : (n === 1 ? '1 stroke this hole' : `${n} strokes this hole`)}
+        </div>
+      </div>
     </div>
   );
 }
