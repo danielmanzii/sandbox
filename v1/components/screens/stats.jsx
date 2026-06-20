@@ -98,7 +98,7 @@ function StatsYou({ go }) {
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
         {history.length > 0 ? (
           <div className="card" style={{ overflow: 'hidden' }}>
-            {history.slice(0, 8).map((r, i) => <MatchRow key={r.id} r={r} last={i === Math.min(history.length, 8) - 1}/>)}
+            {history.slice(0, 8).map((r, i) => <MatchRow key={r.id} r={r} go={go} last={i === Math.min(history.length, 8) - 1}/>)}
           </div>
         ) : (
           <div className="card" style={{ padding: '24px 20px', textAlign: 'center' }}>
@@ -126,7 +126,7 @@ function CoreStat({ label, value, sub, accent }) {
   );
 }
 
-function MatchRow({ r, last }) {
+function MatchRow({ r, last, go }) {
   const isW = r.result === 'W', isL = r.result === 'L';
   const badgeStyle = isW
     ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
@@ -135,11 +135,14 @@ function MatchRow({ r, last }) {
     : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
   const label = isW ? 'W' : isL ? 'L' : 'H';
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-      borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',
-      background: r.live ? 'rgba(28,73,42,0.04)' : 'transparent',
-    }}>
+    <div
+      onClick={() => go && go({ screen: 'matchDetail', matchId: r.id })}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+        borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',
+        background: r.live ? 'rgba(28,73,42,0.04)' : 'transparent',
+        cursor: 'pointer',
+      }}>
       <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 15, lineHeight: 1, ...badgeStyle }}>{label}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700 }}>

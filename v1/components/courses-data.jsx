@@ -322,6 +322,49 @@ function useMatchup(matchId) {
   return [data, loading];
 }
 
+// ─── Match detail: match + holes + players (for the summary screen) ───
+function useMatchDetail(matchId) {
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!matchId) { setData(null); setLoading(false); return; }
+    const { data: m } = await sbx.from('matches').select('*').eq('id', matchId).maybeSingle();
+    if (!m) { setData(null); setLoading(false); return; }
+    const [{ data: holes }, { data: profs }] = await Promise.all([
+      sbx.from('match_holes').select('*').eq('match_id', matchId).order('hole_number'),
+      sbx.from('profiles').select('id, handle, first_name, last_name, avatar_url, sbx')
+        .in('id', [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean)),
+    ]);
+    const byId = {}; (profs || []).forEach(p => { byId[p.id] = p; });
+    setData({
+      match: m, holes: holes || [], byId,
+      teamA: [m.player_a, m.player_a2].filter(Boolean).map(i => byId[i]).filter(Boolean),
+      teamB: [m.player_b, m.player_b2].filter(Boolean).map(i => byId[i]).filter(Boolean),
+    });
+    setLoading(false);
+  }, [matchId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const channelName = React.useRef(`match-detail-${Math.random().toString(36).slice(2, 10)}`).current;
+  React.useEffect(() => {
+    if (!matchId) return;
+    const ch = sbx.channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` }, () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [matchId, channelName, load]);
+
+  return [data, loading];
+}
+
+async function confirmMatchResult(matchId) {
+  if (!matchId) return;
+  const { error } = await sbx.rpc('confirm_match_result', { p_match: matchId });
+  if (error) throw new Error(error.message || 'Could not confirm.');
+}
+
 // ─── Mutations ────────────────────────────────────────────────────────
 // Reserve a slot. Snapshots the slot price (reserve-only; no charge yet).
 // Throws a friendly Error on the common failures.
@@ -360,6 +403,6 @@ async function startBookedMatch(matchId) {
 Object.assign(window, {
   haversineMiles, useGeolocation,
   useCourses, useAvailability, useCourse, useCourseSlots,
-  useFriendsOnSlots, useMyBookings, useMatchup,
-  createBooking, cancelBooking, startBookedMatch,
+  useFriendsOnSlots, useMyBookings, useMatchup, useMatchDetail,
+  createBooking, cancelBooking, startBookedMatch, confirmMatchResult,
 });

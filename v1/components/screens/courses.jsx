@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, useMatchup, createBooking, cancelBooking, startBookedMatch, useUserSearch, invitePartner */
+/* global React, Icon, Button, Chip, MOCK, formatHandle, useGeolocation, useAvailability, useCourse, useCourseSlots, useFriendsOnSlots, useMyBookings, useMatchup, useMatchDetail, createBooking, cancelBooking, startBookedMatch, confirmMatchResult, useUserSearch, invitePartner */
 // Golfer booking flow (Phase B):
 //   BookScreen        — date-first availability: near-you courses + open slots
 //   CourseDetailScreen— hero + Sandbox 9 + the day's bookable slots
@@ -579,6 +579,14 @@ function RoundCard({ b, onCancel, busy, past, go }) {
       {b.partner && (
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Partner: {formatHandle(b.partner.handle)}</div>
       )}
+      {b.match_id && (
+        <button onClick={() => go({ screen: past ? 'matchDetail' : 'matchup', matchId: b.match_id })} style={{
+          marginTop: 10, background: 'transparent', border: 'none', color: 'var(--forest)',
+          fontSize: 12, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0,
+        }}>
+          {past ? 'View result' : 'View matchup'} <Icon.ArrowRight size={13}/>
+        </button>
+      )}
       {!past && !within24h && (
         <button onClick={onCancel} disabled={busy} style={{ marginTop: 12, background: 'transparent', border: 'none', color: 'var(--loss, #C44536)', fontSize: 12, fontWeight: 700, opacity: busy ? 0.5 : 0.85 }}>
           {busy ? 'Cancelling…' : 'Cancel reservation'}
@@ -692,4 +700,152 @@ function ScoutCard({ p, me, go }) {
   );
 }
 
-Object.assign(window, { BookScreen, CourseDetailScreen, MyRoundsScreen, MatchupScreen });
+// ─── Match detail / summary (+ confirm result) ────────────────────────
+function MatchDetailScreen({ go, matchId, profile }) {
+  const [data, loading] = useMatchDetail(matchId);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const meId = profile && profile.id;
+
+  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Match not found.</div>;
+
+  const { match: m, holes, teamA, teamB } = data;
+  const is2v2 = m.match_type === '2v2';
+  const youAreA = m.player_a === meId || m.player_a2 === meId;
+  const isParticipant = youAreA || m.player_b === meId || m.player_b2 === meId;
+  const decided = m.status === 'completed' || m.result != null;
+
+  // Result from your POV
+  let verdict = 'In progress';
+  if (m.result === 'H') verdict = 'Halved';
+  else if (m.result === 'A') verdict = youAreA ? 'Won' : 'Lost';
+  else if (m.result === 'B') verdict = youAreA ? 'Lost' : 'Won';
+  const won = verdict === 'Won';
+
+  const holesWon = holes.filter(h => (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA)).length;
+  const holesLost = holes.filter(h => (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA)).length;
+  const holesHalved = holes.filter(h => h.result === 'H').length;
+
+  const mySide = youAreA ? 'a' : 'b';
+  const iConfirmed = mySide === 'a' ? m.confirmed_a : m.confirmed_b;
+  const theyConfirmed = mySide === 'a' ? m.confirmed_b : m.confirmed_a;
+  const bothConfirmed = m.confirmed_a && m.confirmed_b;
+
+  async function confirm() {
+    setBusy(true); setErr('');
+    try { await confirmMatchResult(matchId); } catch (e) { setErr(e.message || 'Could not confirm.'); }
+    setBusy(false);
+  }
+
+  const teamLabel = (team) => team.map(p => p.first_name || p.handle).join(' + ') || '—';
+
+  return (
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
+      {/* Hero */}
+      <div style={{
+        padding: '56px 20px 22px', color: 'var(--cream)', position: 'relative',
+        background: won
+          ? 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 60%, var(--moss) 100%)'
+          : 'linear-gradient(135deg, #3a3a3a 0%, var(--forest-dark) 100%)',
+      }}>
+        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+        <button onClick={() => go({ screen: 'stats' })} style={{
+          position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 999,
+          background: 'rgba(14,28,19,0.45)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(234,226,206,0.22)',
+        }}><Icon.ArrowLeft size={16}/></button>
+        <div style={{ position: 'relative', textAlign: 'center', marginTop: 6 }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            {is2v2 ? '2v2 Scramble' : 'Head-to-head'} · {m.course_name}
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, marginTop: 8, letterSpacing: '-0.02em' }}>
+            {decided ? verdict : 'In progress'}
+          </div>
+          {m.final_margin && decided && (
+            <div style={{ fontSize: 14, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 2 }}>{m.final_margin}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Teams */}
+      <div style={{ padding: '18px 16px 0' }}>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{youAreA ? 'Your side' : 'Team A'}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>{teamLabel(teamA)}</div>
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', opacity: 0.4, padding: '0 12px' }}>vs</div>
+            <div style={{ flex: 1, textAlign: 'right' }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{!youAreA ? 'Your side' : (is2v2 ? 'Team B' : 'Opponent')}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>{teamLabel(teamB)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Your hole record */}
+      <div style={{ padding: '12px 16px 0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <Stat label="Holes won" value={holesWon}/>
+          <Stat label="Lost" value={holesLost}/>
+          <Stat label="Halved" value={holesHalved}/>
+        </div>
+      </div>
+
+      {/* Hole-by-hole */}
+      {holes.length > 0 && (
+        <div style={{ padding: '18px 16px 0' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole</div>
+          <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(holes.length, 9)}, 1fr)`, gap: 4 }}>
+            {holes.map(h => {
+              const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+              const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+              const lab = h.result == null ? '·' : w ? 'W' : l ? 'L' : 'H';
+              const bg = w ? 'var(--forest)' : l ? 'var(--cream)' : h.result === 'H' ? 'var(--paper)' : 'transparent';
+              const col = w ? 'var(--cream)' : 'var(--forest)';
+              return (
+                <div key={h.hole_number} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>{h.hole_number}</div>
+                  <div style={{ width: 24, height: 24, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 12 }}>{lab}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation */}
+      {isParticipant && decided && (
+        <div style={{ padding: '18px 16px 0' }}>
+          <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+            {bothConfirmed ? (
+              <>
+                <div style={{ fontSize: 22 }}>✅</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginTop: 4 }}>Result confirmed</div>
+                <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Both sides agreed — this counts toward SBX.</div>
+              </>
+            ) : iConfirmed ? (
+              <>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Confirmed on your side</div>
+                <div className="caption-serif" style={{ fontSize: 14, opacity: 0.75, marginTop: 6 }}>Waiting for the other side to confirm…</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>Confirm the result</div>
+                <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4, marginBottom: 12 }}>
+                  Both sides confirm before it counts toward SBX. {theyConfirmed ? 'The other side already confirmed.' : ''}
+                </div>
+                {err && <div style={{ fontSize: 12, color: 'var(--loss, #C44536)', marginBottom: 8 }}>{err}</div>}
+                <Button variant="forest" full onClick={confirm} disabled={busy}>{busy ? 'Confirming…' : 'Confirm result'}</Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { BookScreen, CourseDetailScreen, MyRoundsScreen, MatchupScreen, MatchDetailScreen });
