@@ -717,7 +717,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
       return next;
     });
     return (
-      <SfWrap count={count} onReset={reset} label={yourTeamLabel} title={`Putt ${roundNo} — each of you putt`}>
+      <SfWrap count={count} onReset={reset} label={yourTeamLabel} title="Putt made?">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[p1, p2].map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
@@ -731,7 +731,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
   // Cards phase — both teammates log this stroke
   return (
     <SfWrap count={count} onReset={reset} label={yourTeamLabel}
-      title={fairwayTee ? 'Tee shot — each of you log your drive' : `Shot ${stroke + 1} — each of you log your ball`}>
+      title={fairwayTee ? 'Fairway hit?' : 'Reached the green?'}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[p1, p2].map(p => (
           <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}}
@@ -821,15 +821,24 @@ function PuttCard({ player, result, onMade, onMissed }) {
         {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : ''}</span>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={onMissed} style={pillStyle(result === 'missed')}>Missed</button>
-        <button onClick={onMade} style={pillStyle(result === 'made')}>Holed ✓</button>
+        <XoButton kind="x"     active={result === 'missed'} onClick={onMissed}/>
+        <XoButton kind="check" active={result === 'made'}   onClick={onMade}/>
       </div>
     </div>
   );
 }
 
+// ✕ / ✓ answer pair used across the shot flow (reach green, putt made).
+function XoButton({ kind, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{ ...pillStyle(active), fontSize: 20, lineHeight: 1, padding: '10px 8px' }}>
+      {kind === 'check' ? '✓' : '✕'}
+    </button>
+  );
+}
+
 // Per-player card (@handle). A tee drive shows ONLY the fairway cross; a
-// par-3 tee / approach shows ONLY the "on the green?" question (+ position).
+// par-3 tee / approach shows ONLY the on/off-green answer (+ position).
 function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onZone }) {
   return (
     <div style={{ padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
@@ -838,19 +847,13 @@ function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onRea
       </div>
 
       {showFairway && (
-        <div>
-          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Find the fairway?</div>
-          <FairwayCross value={data.fairway} onPick={onFairway}/>
-        </div>
+        <FairwayCross value={data.fairway} onPick={onFairway}/>
       )}
 
       {showGreen && (
-        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6, fontWeight: 700, marginBottom: 6 }}>Reach the green?</div>
-      )}
-      {showGreen && (
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => onReached(false)} style={pillStyle(data.reached === false)}>Off green</button>
-          <button onClick={() => onReached(true)} style={pillStyle(data.reached === true)}>On green ✓</button>
+          <XoButton kind="x"     active={data.reached === false} onClick={() => onReached(false)}/>
+          <XoButton kind="check" active={data.reached === true}  onClick={() => onReached(true)}/>
         </div>
       )}
 
