@@ -23,7 +23,7 @@ alter table public.profiles
 
 create or replace function public.recompute_sbx()
 returns void language plpgsql security definer as $$
-declare pass int; S numeric := 1.5;  -- logistic spread on the 2–8 scale
+declare pass int; spread numeric := 1.5;  -- logistic spread on the 2–8 scale
 begin
   for pass in 1..6 loop
     -- ===== 2v2 fixed-point pass =====
@@ -63,7 +63,7 @@ begin
       ),
       calc as (
         select uid,
-          (2*(opp_team + S*ln(a/(1-a))) - partner_r) as implied_r,
+          (2*(opp_team + spread*ln(a/(1-a))) - partner_r) as implied_r,
           (case when ranked then 1.0 else 0.5 end)
             * exp(- extract(epoch from (now()-confirmed_at))/(86400*180)) as w
         from (
@@ -108,7 +108,7 @@ begin
       ),
       calc as (
         select uid,
-          (opp_r + S*ln(a/(1-a))) as implied_r,
+          (opp_r + spread*ln(a/(1-a))) as implied_r,
           (case when ranked then 1.0 else 0.5 end)
             * exp(- extract(epoch from (now()-confirmed_at))/(86400*180)) as w
         from (
