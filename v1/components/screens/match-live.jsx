@@ -156,10 +156,9 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   };
   const liveOpp = liveScores[youAreA ? 'b' : 'a']; // what the OTHER team is doing live
 
-  // Your team's two players (for 2v2 ball-selection / who-holed capture).
-  const yourTeamIds = is2v2
-    ? (youAreA ? [match.player_a, match.player_a2] : [match.player_b, match.player_b2])
-    : [];
+  // Your side's player(s): one for 1v1, two for 2v2 (the *_2 ids are null in
+  // 1v1, so filter() collapses to a single player). Same scoring UI either way.
+  const yourTeamIds = youAreA ? [match.player_a, match.player_a2] : [match.player_b, match.player_b2];
   const toPlayer = (id) => ({
     id,
     name: (players[id] && (players[id].first_name || players[id].handle)) || 'Player',
@@ -167,9 +166,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
     avatar: players[id] && players[id].avatar_url,
   });
   const yourTeam = yourTeamIds.filter(Boolean).map(toPlayer);
-  const theirTeamIds = is2v2
-    ? (youAreA ? [match.player_b, match.player_b2] : [match.player_a, match.player_a2])
-    : [];
+  const theirTeamIds = youAreA ? [match.player_b, match.player_b2] : [match.player_a, match.player_a2];
   const theirTeam = theirTeamIds.filter(Boolean).map(toPlayer);
 
   return (
@@ -304,7 +301,7 @@ function ScoreModeChooser({ onPick, onExit }) {
         How do you want to score?
       </div>
       <Card m="quick" emoji="⚡" title="Quick scoring" sub="Just the score each hole — fastest. Your match result and SBX still count."/>
-      <Card m="stats" emoji="📊" title="Quick scoring + stats" sub="Track every shot — fairways, greens, whose ball, the caddie — and earn bonus points. 🎁"/>
+      <Card m="stats" emoji="📊" title="Quick scoring + stats" sub="Track every shot — fairways, greens, putts — and earn bonus Sandbox points."/>
       <div className="caption-serif" style={{ fontSize: 13, color: 'var(--ink)', opacity: 0.6, marginTop: 6, textAlign: 'center' }}>
         You can switch anytime during the round.
       </div>
@@ -318,7 +315,8 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
   const [mode, setMode] = React.useState(initialMode || 'quick'); // 'quick' | 'stats'
-  const statsMode = mode === 'stats' && is2v2 && (yourTeam || []).length === 2;
+  const hasTeam   = (yourTeam || []).length >= 1; // 1 (1v1) or 2 (2v2)
+  const statsMode = mode === 'stats' && hasTeam;
   const statPrefixEarly = youAreA ? 'player_a' : 'player_b';
 
   // Your per-hole stats (1v1 only). In 2v2, team-level stats need per-shot
@@ -358,8 +356,8 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
           )}
         </div>
 
-        {/* Scoring mode toggle — 2v2 only (1v1 uses the wheel + stat expander) */}
-        {is2v2 && (yourTeam || []).length === 2 && (
+        {/* Scoring mode toggle — same for 1v1 and 2v2 */}
+        {hasTeam && (
           <div style={{ display: 'flex', gap: 6, marginTop: 18, padding: 4, background: 'rgba(14,28,19,0.28)', borderRadius: 999 }}>
             {[['quick', 'Quick Score'], ['stats', '+ Track Stats']].map(([k, l]) => (
               <button key={k} onClick={() => setMode(k)} style={{
@@ -380,9 +378,10 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               flowKey={flowKey} yourTeamLabel={yourTeamLabel}
               onLiveScore={onLiveScore}
               onSavePlayerStat={onSavePlayerStat}
-              onComplete={({ score, gir, zone, ballPlayer, holedBy }) => {
+              onComplete={({ score, gir, putts, zone, ballPlayer, holedBy }) => {
                 onYourScore(score);
                 if (gir != null)   onSaveStat(statPrefixEarly + '_gir', gir);
+                if (putts != null) onSaveStat(statPrefixEarly + '_putts', putts);
                 if (zone)          onSaveStat('zone', zone);
                 if (ballPlayer)    onSaveStat('ball_player', ballPlayer);
                 if (holedBy)       onSaveStat('holed_by', holedBy);
@@ -400,64 +399,8 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
           </div>
         )}
 
-        {/* Advanced stats — 1v1 only for now. Tap "Log stats" to expand. */}
-        {!is2v2 && yourScore != null && (
-          <div style={{ marginTop: 12 }}>
-            <button onClick={() => setShowStats(s => !s)} style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 12,
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(234,226,206,0.15)',
-              color: 'var(--cream)',
-              fontSize: 12, fontWeight: 700,
-              fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <span>{statsLogged ? '✓ Stats tracked' : '+ Track Stats'}</span>
-              <span>{showStats ? '–' : '+'}</span>
-            </button>
-
-            {showStats && (
-              <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* Fairway — regular course, par 4+ only */}
-                {isRegular && (hole.par || 3) >= 4 && (
-                  <div>
-                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700, marginBottom: 8 }}>
-                      Fairway
-                    </div>
-                    <FairwayCross value={hole[statPrefix + '_fairway']} onPick={(v) => onSaveStat(statPrefix + '_fairway', v)}/>
-                  </div>
-                )}
-                {/* GIR toggle */}
-                <div>
-                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
-                    Green in regulation
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                    <StatChoice active={yourGir === true}  onClick={() => onSaveStat(statPrefix + '_gir', true)}>Yes</StatChoice>
-                    <StatChoice active={yourGir === false} onClick={() => onSaveStat(statPrefix + '_gir', false)}>No</StatChoice>
-                    <StatChoice active={yourGir == null}   onClick={() => onSaveStat(statPrefix + '_gir', null)}>—</StatChoice>
-                  </div>
-                </div>
-                {/* Putts */}
-                <div>
-                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65, fontWeight: 700 }}>
-                    Putts
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                    {[0, 1, 2, 3, 4, 5].map(n => (
-                      <StatChoice key={n} active={yourPutts === n} onClick={() => onSaveStat(statPrefix + '_putts', n)}>{n}</StatChoice>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Quick Score → nudge toward Track Stats for bonus points. */}
-        {!statsMode && is2v2 && yourScore != null && (yourTeam || []).length === 2 && (
+        {!statsMode && hasTeam && yourScore != null && (
           <TeamCapture onTrackStats={() => setMode('stats')}/>
         )}
 
@@ -675,12 +618,12 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
     if (c.reached === true && !c.zone) return false;    // on green: pick a position (bonus pts)
     return true;
   };
-  const bothDone = cardDone(p1.id) && cardDone(p2.id);
-  const suggestion = (isMember && card[p1.id] && card[p2.id] && card[p1.id].zone && card[p2.id].zone)
+  const allDone = yourTeam.every(p => cardDone(p.id));
+  const suggestion = (isMember && p2 && card[p1.id] && card[p2.id] && card[p1.id].zone && card[p2.id].zone)
     ? suggestBall(yourTeam, { [p1.id]: card[p1.id].zone, [p2.id]: card[p2.id].zone }) : null;
 
   function pickBall(pid) {
-    [p1, p2].forEach(p => {
+    yourTeam.forEach(p => {
       const c = card[p.id] || {}; const patch = {};
       if (fairwayTee && c.fairway) patch.fairway = c.fairway;
       if (!fairwayTee && c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
@@ -704,20 +647,20 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
       setDoneScore(score);
       setPhase('done');
       onComplete({
-        score,
+        score, putts: roundNo,
         gir: strokesToGreen <= Math.max(1, (par || 3) - 2),
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
       });
     };
     const missed = (pid) => setPuttCard(pc => {
       const next = { ...pc, [pid]: 'missed' };
-      if (next[p1.id] === 'missed' && next[p2.id] === 'missed') { setPutts(putts + 1); return {}; } // new round
+      if (yourTeam.every(p => next[p.id] === 'missed')) { setPutts(putts + 1); return {}; } // new round
       return next;
     });
     return (
       <SfWrap count={count} onReset={reset} label={yourTeamLabel} title={`Putt ${roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[p1, p2].map(p => (
+          {yourTeam.map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
               onMade={() => finish(p.id)} onMissed={() => missed(p.id)}/>
           ))}
@@ -731,7 +674,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
     <SfWrap count={count} onReset={reset} label={yourTeamLabel}
       title={`Shot ${stroke + 1} — ${fairwayTee ? 'Fairway hit?' : 'Reached the green?'}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {[p1, p2].map(p => (
+        {yourTeam.map(p => (
           <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}}
             showFairway={fairwayTee} showGreen={!fairwayTee}
             onFairway={(v) => setField(p.id, 'fairway', v)}
@@ -747,12 +690,18 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
         </div>
       )}
 
-      {bothDone && (
+      {allDone && (yourTeam.length > 1 ? (
         <div style={{ marginTop: 12 }}>
+          {/* 2v2 only — pick which teammate's ball the scramble plays. */}
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700, marginBottom: 6 }}>Whose ball did the team take?</div>
-          <SfPick options={[p1, p2]} onPick={pickBall}/>
+          <SfPick options={yourTeam} onPick={pickBall}/>
         </div>
-      )}
+      ) : (
+        <button onClick={() => pickBall(p1.id)} style={{
+          marginTop: 12, width: '100%', padding: '12px', borderRadius: 12,
+          background: 'var(--cream)', color: 'var(--forest)', border: 'none', fontWeight: 800, fontSize: 13,
+        }}>Continue →</button>
+      ))}
     </SfWrap>
   );
 }
