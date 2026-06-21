@@ -388,7 +388,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               }}
             />
             <div style={{ height: 14 }}/>
-            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
+            <OppReadout label={theirTeamLabel || 'Opponent'} labelPlayers={theirTeam} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
           </div>
         ) : (
           <div style={{ marginTop: 20 }}>
@@ -656,7 +656,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
       return next;
     });
     return (
-      <SfWrap count={count} onReset={reset} label={yourTeamLabel} title={`Putt ${roundNo} — Putt made?`}>
+      <SfWrap count={count} onReset={reset} label={yourTeamLabel} labelPlayers={yourTeam} title={`Putt ${roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {yourTeam.map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
@@ -669,7 +669,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
 
   // Cards phase — both teammates log this stroke
   return (
-    <SfWrap count={count} onReset={reset} label={yourTeamLabel}
+    <SfWrap count={count} onReset={reset} label={yourTeamLabel} labelPlayers={yourTeam}
       title={`Shot ${stroke + 1} — ${fairwayTee ? 'Fairway hit?' : 'Reached the green?'}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {yourTeam.map(p => (
@@ -704,11 +704,11 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
   );
 }
 
-function SfWrap({ title, count, label, onReset, children }) {
+function SfWrap({ title, count, label, labelPlayers, onReset, children }) {
   return (
     <div>
       {/* Your team's running score — mirrors the opponent scoreboard */}
-      <YouReadout label={label} count={count}/>
+      <YouReadout label={label} labelPlayers={labelPlayers} count={count}/>
       <div style={{ height: 12 }}/>
       <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
         <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
@@ -725,12 +725,12 @@ function SfWrap({ title, count, label, onReset, children }) {
 
 // Your team's live strokes — same card language as the opponent readout, with
 // a cream accent so "you" reads distinct from "them".
-function YouReadout({ label, count }) {
+function YouReadout({ label, labelPlayers, count }) {
   const n = count || 0;
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label || 'Your team'}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <TeamLabel players={labelPlayers} fallback={label || 'Your team'}/>
         <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>Strokes so far</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
