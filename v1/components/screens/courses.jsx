@@ -807,6 +807,15 @@ function MatchDetailScreen({ go, matchId, profile }) {
         </div>
       </div>
 
+      {/* Still in progress → let participants jump back in to finish it */}
+      {!decided && isParticipant && (
+        <div style={{ padding: '16px 16px 0' }}>
+          <Button variant="forest" full size="lg" onClick={() => go({ screen: 'match', matchId })}>
+            Continue match <Icon.ArrowRight size={16}/>
+          </Button>
+        </div>
+      )}
+
       {/* Your hole record */}
       <div style={{ padding: '12px 16px 0' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
