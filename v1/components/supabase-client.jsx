@@ -81,7 +81,10 @@ function useSession() {
 function useProfile(userId) {
   const [profile, setProfile] = React.useState(undefined);
   const load = React.useCallback(async () => {
-    if (!userId) { setProfile(null); return; }
+    // No user yet (session still resolving) = still LOADING, not "no profile
+    // row". Returning null here flashed the ProfileSetup screen for one render
+    // the instant the session resolved, before the real profile loaded.
+    if (!userId) { setProfile(undefined); return; }
     const { data } = await sbx
       .from('profiles')
       .select('*')
