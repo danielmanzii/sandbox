@@ -614,9 +614,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
   const cardDone = (pid) => {
     const c = card[pid]; if (!c) return false;
     if (fairwayTee) return !!c.fairway;                 // drive: just need a fairway result
-    if (c.reached == null) return false;                // approach: on/off green required
-    if (c.reached === true && !c.zone) return false;    // on green: pick a position (bonus pts)
-    return true;
+    return c.reached != null;                            // approach: on/off green is enough
   };
   const allDone = yourTeam.every(p => cardDone(p.id));
   const suggestion = (isMember && p2 && card[p1.id] && card[p2.id] && card[p1.id].zone && card[p2.id].zone)
@@ -869,22 +867,6 @@ function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onRea
         <div style={{ display: 'flex', gap: 6 }}>
           <XoButton kind="x"     active={data.reached === false} onClick={() => onReached(false)}/>
           <XoButton kind="check" active={data.reached === true}  onClick={() => onReached(true)}/>
-        </div>
-      )}
-
-      {showGreen && data.reached === true && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700, marginBottom: 5 }}>Where on the green?</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
-            {GREEN_ZONES.map(z => (
-              <button key={z} onClick={() => onZone(z)} style={{
-                padding: '8px 2px', borderRadius: 8, fontSize: 10, fontWeight: 700,
-                background: data.zone === z ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
-                color: data.zone === z ? 'var(--forest)' : 'var(--cream)',
-                border: data.zone === z ? 'none' : '1px solid rgba(234,226,206,0.2)',
-              }}>{z}</button>
-            ))}
-          </div>
         </div>
       )}
     </div>
