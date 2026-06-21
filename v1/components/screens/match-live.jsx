@@ -160,12 +160,17 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const yourTeamIds = is2v2
     ? (youAreA ? [match.player_a, match.player_a2] : [match.player_b, match.player_b2])
     : [];
-  const yourTeam = yourTeamIds.filter(Boolean).map(id => ({
+  const toPlayer = (id) => ({
     id,
     name: (players[id] && (players[id].first_name || players[id].handle)) || 'Player',
     handle: players[id] && players[id].handle,
     avatar: players[id] && players[id].avatar_url,
-  }));
+  });
+  const yourTeam = yourTeamIds.filter(Boolean).map(toPlayer);
+  const theirTeamIds = is2v2
+    ? (youAreA ? [match.player_b, match.player_b2] : [match.player_a, match.player_a2])
+    : [];
+  const theirTeam = theirTeamIds.filter(Boolean).map(toPlayer);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -208,6 +213,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             isRegular={match.format === 'regular'}
             initialMode={scoreMode}
             yourTeam={yourTeam}
+            theirTeam={theirTeam}
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
             liveOpp={liveOpp}
@@ -307,7 +313,7 @@ function ScoreModeChooser({ onPick, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, yourTeamLabel, theirTeamLabel, liveOpp, flowKey, onLiveScore, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, theirTeam, yourTeamLabel, theirTeamLabel, liveOpp, flowKey, onLiveScore, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
@@ -387,10 +393,10 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
           </div>
         ) : (
           <div style={{ marginTop: 20 }}>
-            <ScoreWheel label={yourTeamLabel || 'Your score'} value={yourScore} par={hole.par || 3}
+            <ScoreWheel label={yourTeamLabel || 'Your score'} labelPlayers={yourTeam} value={yourScore} par={hole.par || 3}
               onChange={(n) => { onYourScore(n); onLiveScore && onLiveScore(n, true); }}/>
             <div style={{ height: 12 }}/>
-            <OppReadout label={theirTeamLabel || 'Opponent'} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
+            <OppReadout label={theirTeamLabel || 'Opponent'} labelPlayers={theirTeam} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
           </div>
         )}
 
@@ -823,6 +829,26 @@ function Avatar({ player, size = 24 }) {
   );
 }
 
+// Team header label with each player's avatar 9px before their name.
+function TeamLabel({ players, fallback }) {
+  if (!players || !players.length) {
+    return <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{fallback}</span>;
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>
+      {players.map((p, i) => (
+        <React.Fragment key={p.id}>
+          {i > 0 && <span style={{ opacity: 0.55 }}>+</span>}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+            <Avatar player={p} size={18}/>
+            <span>{p.name}</span>
+          </span>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 // Player name row with avatar to the left.
 function PlayerTag({ player }) {
   const handle = player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : '';
@@ -937,7 +963,7 @@ function parShape(score, par) {
 }
 const SHAPE_LABEL = { eagle: 'Eagle or better', birdie: 'Birdie', par: 'Par', bogey: 'Bogey', double: 'Double bogey+' };
 
-function ScoreWheel({ label, value, par, onChange }) {
+function ScoreWheel({ label, labelPlayers, value, par, onChange }) {
   const p = par || 3;
   const nums = Array.from({ length: p + 5 }, (_, i) => i + 1); // 1 … par+5
   const sel = value;
@@ -947,8 +973,8 @@ function ScoreWheel({ label, value, par, onChange }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <TeamLabel players={labelPlayers} fallback={label}/>
         {sel != null && shape && shape !== 'par' && (
           <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
         )}
@@ -977,7 +1003,7 @@ function ScoreWheel({ label, value, par, onChange }) {
 // ─── Opponent score — READ ONLY ──────────────────────────────
 // You never enter the other team's score; it appears here as they log it on
 // their own device (realtime), so you always know what you're up against.
-function OppReadout({ label, value, par, live, holeNumber }) {
+function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
   const p = par || 3;
   const shape = parShape(value, p);
   // A live running count for THIS hole, only while no final score is in yet.
@@ -988,8 +1014,8 @@ function OppReadout({ label, value, par, live, holeNumber }) {
             : 'Waiting for their score…';
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <TeamLabel players={labelPlayers} fallback={label}/>
         {value != null ? (
           shape && shape !== 'par'
             ? <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
