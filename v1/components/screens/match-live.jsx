@@ -485,10 +485,10 @@ function TeamCapture({ onTrackStats }) {
         border: '1px solid var(--clay)', borderRadius: 12, padding: '12px 14px',
         color: 'var(--cream)', display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <span style={{ fontSize: 18 }}>🎁</span>
+        <img src="assets/monogram-forest.svg" alt="" style={{ height: 26, width: 'auto', display: 'block', flexShrink: 0 }}/>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--clay)' }}>Bonus points up for grabs</div>
-          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>Track your shots this hole to earn bonus points</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--clay)' }}>Bonus Sandbox Points</div>
+          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>Track your stats to earn bonus Sandbox points</div>
         </div>
         <span style={{ fontSize: 16, opacity: 0.7 }}>→</span>
       </button>
@@ -835,13 +835,13 @@ function TeamLabel({ players, fallback }) {
     return <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{fallback}</span>;
   }
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 }}>
       {players.map((p, i) => (
         <React.Fragment key={p.id}>
-          {i > 0 && <span style={{ opacity: 0.55 }}>+</span>}
+          {i > 0 && <span style={{ opacity: 0.45 }}>+</span>}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
             <Avatar player={p} size={18}/>
-            <span>{p.name}</span>
+            <span style={{ opacity: 0.7 }}>{p.name}</span>
           </span>
         </React.Fragment>
       ))}
