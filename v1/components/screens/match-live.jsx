@@ -338,8 +338,8 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 60, lineHeight: 0.9, letterSpacing: '-0.02em' }}>
                 <span style={{ fontSize: 26, verticalAlign: 'top', lineHeight: 1, position: 'relative', top: '7px', marginRight: '10px' }}>Hole</span>{hole.hole_number}
               </span>
-              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.08em' }}>PAR</span>
-              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.08em' }}>{hole.par || 3}</span>
+              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 700, opacity: 0.75, letterSpacing: '0.14em' }}>PAR</span>
+              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 700, opacity: 0.75, letterSpacing: '0.14em' }}>{hole.par || 3}</span>
             </div>
           </div>
           {hole.result != null && (
@@ -450,10 +450,9 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
           </div>
         )}
 
-        {/* 2v2 ball-selection capture — one tap, optional zone. Feeds shot
-            usage, the clutch stat, and the future "whose ball" AI. */}
+        {/* Quick Score → nudge toward Track Stats for bonus points. */}
         {!statsMode && is2v2 && yourScore != null && (yourTeam || []).length === 2 && (
-          <TeamCapture hole={hole} yourTeam={yourTeam} isMember={isMember} onSaveStat={onSaveStat}/>
+          <TeamCapture onTrackStats={() => setMode('stats')}/>
         )}
 
         {yourScore != null && oppScore != null && (
@@ -469,58 +468,24 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
 // ─── 2v2 per-hole capture: whose ball + who holed + optional zone ──────
 const GREEN_ZONES = ['Long L', 'Long', 'Long R', 'Left', 'Pin high', 'Right', 'Short L', 'Short', 'Short R'];
 
-function TeamCapture({ hole, yourTeam, isMember, onSaveStat }) {
-  const [showZone, setShowZone] = React.useState(false);
-  const [p1, p2] = yourTeam;
-  const ball  = hole.ball_player;
-  const holed = hole.holed_by;
-  const zone  = hole.zone;
-
+// Quick Score callout: the bonus-points reward now drives players to
+// "+ Track Stats" (where the detailed shot/ball/putt capture lives).
+function TeamCapture({ onTrackStats }) {
   return (
-    <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(14,28,19,0.25)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div>
-        <CaptureRow label="Whose ball did the team play?">
-          {[p1, p2].map(p => (
-            <StatChoice key={p.id} active={ball === p.id} onClick={() => onSaveStat('ball_player', ball === p.id ? null : p.id)}>{p.name}</StatChoice>
-          ))}
-        </CaptureRow>
-        {/* AI caddie — a subtle suggestion that hovers under the ball pick */}
-        <CaddieTip players={yourTeam} isMember={isMember}/>
-      </div>
-
-      <CaptureRow label="Who holed it?">
-        {[p1, p2].map(p => (
-          <StatChoice key={p.id} active={holed === p.id} onClick={() => onSaveStat('holed_by', holed === p.id ? null : p.id)}>{p.name}</StatChoice>
-        ))}
-      </CaptureRow>
-
-      <div>
-        {/* Bonus-points callout — make the reward obvious */}
-        <button onClick={() => setShowZone(s => !s)} style={{
-          width: '100%', textAlign: 'left',
-          background: zone ? 'rgba(212,165,116,0.18)' : 'rgba(212,165,116,0.25)',
-          border: '1px solid var(--clay)', borderRadius: 12, padding: '10px 12px',
-          color: 'var(--cream)', display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: 18 }}>🎁</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--clay)' }}>
-              {zone ? `✓ Ball position: ${zone}` : 'Bonus points up for grabs'}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>
-              {zone ? '+10 pts earned this hole' : 'Log your ball position to earn +10 pts'}
-            </div>
-          </div>
-          <span style={{ fontSize: 16, opacity: 0.7 }}>{showZone ? '–' : '+'}</span>
-        </button>
-        {showZone && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
-            {GREEN_ZONES.map(z => (
-              <StatChoice key={z} active={zone === z} onClick={() => onSaveStat('zone', zone === z ? null : z)}>{z}</StatChoice>
-            ))}
-          </div>
-        )}
-      </div>
+    <div style={{ marginTop: 12 }}>
+      <button onClick={onTrackStats} style={{
+        width: '100%', textAlign: 'left',
+        background: 'rgba(212,165,116,0.25)',
+        border: '1px solid var(--clay)', borderRadius: 12, padding: '12px 14px',
+        color: 'var(--cream)', display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 18 }}>🎁</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--clay)' }}>Bonus points up for grabs</div>
+          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>Track your shots this hole to earn bonus points</div>
+        </div>
+        <span style={{ fontSize: 16, opacity: 0.7 }}>→</span>
+      </button>
     </div>
   );
 }
