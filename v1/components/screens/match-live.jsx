@@ -834,7 +834,7 @@ function PlayerTag({ player }) {
   const handle = player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : '';
   const initial = (player.name || player.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
       <div style={{ width: 24, height: 24, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
         background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
@@ -852,7 +852,7 @@ function PlayerTag({ player }) {
 // Per-player putt card (@handle) — each teammate logs their own putt.
 function PuttCard({ player, result, onMade, onMissed }) {
   return (
-    <div style={{ padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
+    <div style={{ padding: '9px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
       <PlayerTag player={player}/>
       <div style={{ display: 'flex', gap: 6 }}>
         <XoButton kind="x"     active={result === 'missed'} onClick={onMissed}/>
@@ -896,7 +896,7 @@ function XoButton({ kind, active, onClick }) {
 // par-3 tee / approach shows ONLY the on/off-green answer (+ position).
 function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onZone }) {
   return (
-    <div style={{ padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
+    <div style={{ padding: '9px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
       <PlayerTag player={player}/>
 
       {showFairway && (
