@@ -9,6 +9,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const [players, setPlayers] = React.useState({}); // id → { first_name, handle }
   const [currentHole, setCurrentHole] = React.useState(1);
   const [err, setErr] = React.useState('');
+  const [ready, setReady] = React.useState(false); // all data loaded + hole seeded
   // Ephemeral live running scores broadcast by each side as they tap through a
   // hole (NOT persisted — the authoritative score lands in the DB on finish).
   // { a: { holeNumber, strokes, done }, b: { … } }
@@ -57,7 +58,11 @@ function MatchLive({ matchId, profile, tier, onExit }) {
         const next = hs.find(h => h.result == null);
         if (next) setCurrentHole(next.hole_number);
       }
+      // Everything (match, holes, players, current hole) is in place — only now
+      // reveal the match so we never flash the wrong hole or generic names.
+      if (!cancelled) setReady(true);
     }
+    setReady(false);
     load();
 
     const ch = sbx.channel(`match-live:${matchId}`)
@@ -115,7 +120,13 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   }
 
   if (err) return <FullScreenMessage title="Something went wrong" detail={err} onBack={onExit}/>;
-  if (!hasData) return <FullScreenMessage title="Loading match…"/>;
+  // Same look as the app-level LoadingScreen so launch → match is one seamless
+  // "Loading…" instead of a chain of different screens.
+  if (!ready || !hasData) return (
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, opacity: 0.6, color: 'var(--forest)' }}>Loading…</div>
+    </div>
+  );
   if (match.status === 'abandoned') {
     return <FullScreenMessage title="Match cancelled" detail="This match was abandoned." onBack={onExit}/>;
   }

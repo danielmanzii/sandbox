@@ -275,8 +275,14 @@ function LoadingScreen() {
 // ─── Phone stage: scales a 402×874 "phone" to viewport; fullbleed on mobile ───
 function PhoneStage({ children }) {
   const W = 402, H = 874;
-  const [scale, setScale] = React.useState(1);
-  const [isMobile, setIsMobile] = React.useState(false);
+  // Detect mobile vs desktop SYNCHRONOUSLY on first render so we never flash
+  // the desktop phone frame (with its 9:41 chrome) before switching to mobile.
+  const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 640);
+  const [scale, setScale] = React.useState(() => {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (vw < 640) return 1;
+    return Math.min((vw - 40) / W, (vh - 40) / H, 1.1);
+  });
 
   React.useEffect(() => {
     const update = () => {
