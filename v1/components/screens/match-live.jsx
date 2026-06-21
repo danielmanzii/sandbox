@@ -823,10 +823,10 @@ function SfPick({ options, onPick }) {
         <button key={o.id} onClick={() => onPick(o.id)} style={{
           flex: 1, padding: '12px 8px', borderRadius: 12, background: 'rgba(255,255,255,0.08)',
           border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)', fontWeight: 700, fontSize: 13,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, overflow: 'hidden',
         }}>
           <Avatar player={o} size={22}/>
-          <span>{o.name}</span>
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.name}</span>
         </button>
       ))}
     </div>
