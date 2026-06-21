@@ -768,7 +768,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
       {bothDone && (
         <div style={{ marginTop: 12 }}>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700, marginBottom: 6 }}>Whose ball did the team take?</div>
-          <SfPick options={[{ k: p1.id, label: p1.name }, { k: p2.id, label: p2.name }]} onPick={pickBall}/>
+          <SfPick options={[p1, p2]} onPick={pickBall}/>
         </div>
       )}
     </SfWrap>
@@ -820,11 +820,29 @@ function SfPick({ options, onPick }) {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
       {options.map(o => (
-        <button key={o.k} onClick={() => onPick(o.k)} style={{
+        <button key={o.id} onClick={() => onPick(o.id)} style={{
           flex: 1, padding: '12px 8px', borderRadius: 12, background: 'rgba(255,255,255,0.08)',
           border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)', fontWeight: 700, fontSize: 13,
-        }}>{o.label}</button>
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+        }}>
+          <Avatar player={o} size={22}/>
+          <span>{o.name}</span>
+        </button>
       ))}
+    </div>
+  );
+}
+
+// Circular avatar (falls back to the player's initial).
+function Avatar({ player, size = 24 }) {
+  const initial = (player.name || player.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  return (
+    <div style={{ width: size, height: size, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
+      background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.46), fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+      {player.avatar
+        ? <img src={player.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+        : initial}
     </div>
   );
 }
@@ -832,16 +850,9 @@ function SfPick({ options, onPick }) {
 // Player name row with avatar to the left.
 function PlayerTag({ player }) {
   const handle = player.handle ? (player.handle.startsWith('@') ? player.handle : '@' + player.handle) : '';
-  const initial = (player.name || player.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
-      <div style={{ width: 24, height: 24, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
-        background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 800, fontFamily: 'var(--font-display)' }}>
-        {player.avatar
-          ? <img src={player.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
-          : initial}
-      </div>
+      <Avatar player={player} size={24}/>
       <div style={{ fontSize: 13, fontWeight: 800 }}>
         {player.name} <span style={{ opacity: 0.6, fontWeight: 600 }}>{handle}</span>
       </div>
