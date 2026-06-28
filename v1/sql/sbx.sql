@@ -23,13 +23,18 @@ alter table public.profiles
 
 create or replace function public.recompute_sbx()
 returns void language plpgsql security definer as $$
-declare pass int; spread numeric := 1.5;  -- logistic spread on the 2–8 scale
+declare pass int; spread numeric := 1.5; kstep numeric := 0.5;  -- logistic spread + Elo step (2–8 scale)
 begin
-  -- 20 passes fully converges our graph (info propagates far past the
-  -- network's diameter at current scale) → this IS the global-solve answer.
-  -- A faster solver would yield the same numbers; only needed at huge scale.
-  for pass in 1..20 loop
-    -- ===== 2v2 fixed-point pass =====
+  -- STABLE Elo-style global solve. Each pass nudges every player toward
+  -- (actual − expected): you played 4 vs an opponent team rated opp_r, your
+  -- "actual" = your side's share of decisive holes, your "expected" comes from
+  -- (team_r − opp_r) through a logistic. Win ⇒ actual > expected ⇒ rating UP;
+  -- lose ⇒ DOWN — always, by construction. Repeated passes converge to the
+  -- rating where each player's predicted results match their real results
+  -- (a contraction, so it can't diverge/invert the way a full-replacement
+  -- fixed point did). 40 passes converges our graph at current scale.
+  for pass in 1..40 loop
+    -- ===== 2v2 pass =====
     update public.profiles pr set sbx_2v2 = x.new_r from (
       with mp as (
         select mh.match_id,
@@ -56,30 +61,34 @@ begin
         select p.uid, p.confirmed_at, p.ranked,
           case when p.is_a then (p.aw+0.5*p.hw) else (p.bw+0.5*p.hw) end as mypts,
           case when p.is_a then (p.bw+0.5*p.hw) else (p.aw+0.5*p.hw) end as opppts,
-          (coalesce(po1.sbx_2v2,4)+coalesce(po2.sbx_2v2,4))/2.0 as opp_team,
-          coalesce(ppart.sbx_2v2,4) as partner_r,
+          coalesce(pself.sbx_2v2,4) as self_r,
+          (coalesce(pself.sbx_2v2,4)+coalesce(ppart.sbx_2v2,4))/2.0 as team_r,
+          (coalesce(po1.sbx_2v2,4)+coalesce(po2.sbx_2v2,4))/2.0 as opp_r,
           row_number() over (partition by p.uid order by p.confirmed_at desc) as rn
         from persp p
+        left join public.profiles pself on pself.id = p.uid
+        left join public.profiles ppart on ppart.id = p.partner
         left join public.profiles po1   on po1.id   = p.opp1
         left join public.profiles po2   on po2.id   = p.opp2
-        left join public.profiles ppart on ppart.id = p.partner
       ),
       calc as (
-        select uid,
-          (2*(opp_team + spread*ln(a/(1-a))) - partner_r) as implied_r,
+        select uid, self_r,
+          (a - 1.0/(1.0 + exp((opp_r - team_r)/spread))) as delta,  -- actual − expected
           (case when ranked then 1.0 else 0.5 end)
             * exp(- extract(epoch from (now()-confirmed_at))/(86400*180)) as w
         from (
-          select uid, confirmed_at, ranked, opp_team, partner_r,
+          select uid, confirmed_at, ranked, self_r, team_r, opp_r,
                  greatest(0.05, least(0.95, mypts/nullif(mypts+opppts,0))) as a
           from scored where (mypts+opppts) > 0 and rn <= 60
         ) s
       )
-      select uid, round(greatest(2.0, least(8.0, sum(implied_r*w)/nullif(sum(w),0))), 3) as new_r
+      select uid, round(greatest(2.0, least(8.0,
+               max(self_r) + kstep * sum(delta*w)/nullif(sum(w),0)
+             )), 3) as new_r
       from calc group by uid
     ) x where pr.id = x.uid;
 
-    -- ===== 1v1 fixed-point pass =====
+    -- ===== 1v1 pass (team_r = your own rating; no partner) =====
     update public.profiles pr set sbx_1v1 = x.new_r from (
       with mp as (
         select mh.match_id,
@@ -104,23 +113,27 @@ begin
         select p.uid, p.confirmed_at, p.ranked,
           case when p.is_a then (p.aw+0.5*p.hw) else (p.bw+0.5*p.hw) end as mypts,
           case when p.is_a then (p.bw+0.5*p.hw) else (p.aw+0.5*p.hw) end as opppts,
+          coalesce(pself.sbx_1v1,4) as self_r,
           coalesce(po.sbx_1v1,4) as opp_r,
           row_number() over (partition by p.uid order by p.confirmed_at desc) as rn
         from persp p
-        left join public.profiles po on po.id = p.opp
+        left join public.profiles pself on pself.id = p.uid
+        left join public.profiles po    on po.id    = p.opp
       ),
       calc as (
-        select uid,
-          (opp_r + spread*ln(a/(1-a))) as implied_r,
+        select uid, self_r,
+          (a - 1.0/(1.0 + exp((opp_r - self_r)/spread))) as delta,
           (case when ranked then 1.0 else 0.5 end)
             * exp(- extract(epoch from (now()-confirmed_at))/(86400*180)) as w
         from (
-          select uid, confirmed_at, ranked, opp_r,
+          select uid, confirmed_at, ranked, self_r, opp_r,
                  greatest(0.05, least(0.95, mypts/nullif(mypts+opppts,0))) as a
           from scored where (mypts+opppts) > 0 and rn <= 30
         ) s
       )
-      select uid, round(greatest(2.0, least(8.0, sum(implied_r*w)/nullif(sum(w),0))), 3) as new_r
+      select uid, round(greatest(2.0, least(8.0,
+               max(self_r) + kstep * sum(delta*w)/nullif(sum(w),0)
+             )), 3) as new_r
       from calc group by uid
     ) x where pr.id = x.uid;
   end loop;

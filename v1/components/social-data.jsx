@@ -484,9 +484,30 @@ async function updateProfile({ userId, first_name, last_name, handle, bio, home_
   try { if (typeof window.reloadProfile === 'function') window.reloadProfile(); } catch (_) {}
 }
 
+// ─── Real SBX leaderboard ─────────────────────────────────────────────
+// Ranks real players by their headline SBX. No fabricated rows — returns
+// null while loading, [] when nobody is rated yet.
+function useSbxLeaderboard(limit = 50) {
+  const [rows, setRows] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await sbx
+        .from('profiles')
+        .select('id, handle, first_name, last_name, avatar_url, sbx, sbx_2v2, sbx_1v1, sbx_2v2_n, sbx_1v1_n')
+        .not('sbx', 'is', null)
+        .order('sbx', { ascending: false })
+        .limit(limit);
+      if (!cancelled) setRows(data || []);
+    })();
+    return () => { cancelled = true; };
+  }, [limit]);
+  return rows;
+}
+
 Object.assign(window, {
   useFollowCounts, useIsFollowing, useFollowing, useFollowers,
-  useUserSearch, useProfileByHandle,
+  useUserSearch, useProfileByHandle, useSbxLeaderboard,
   useFriendFeed, useNewFollowers, useFriendsRegisteredForEvents,
   followUser, unfollowUser, uploadAvatar, updateProfile,
 });
