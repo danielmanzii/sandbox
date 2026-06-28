@@ -1,7 +1,7 @@
 /* global React, Button, Chip, Eyebrow, Wordmark, Icon, sbx, signOut, useMatchInvitesForMatch, sendInviteByHandle, cancelInvite, formatHandle */
 // Post-auth home: Start a match, join a match, or open one of your recent matches.
 
-function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', format = 'pp', initialJoinCode }) {
+function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', format = 'pp', holes, initialJoinCode }) {
   // If we received a deep-link ?join=CODE, jump straight to the join
   // view with the code pre-filled.
   const [mode, setMode] = React.useState(initialJoinCode ? 'join' : 'home'); // home | start | join | code | handle
@@ -21,7 +21,7 @@ function MatchHub({ profile, onOpenMatch, onExit, mode: matchType = '1v1', forma
 
   React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
-  if (mode === 'start') return <StartMatchView profile={profile} matchType={matchType} format={format} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
+  if (mode === 'start') return <StartMatchView profile={profile} matchType={matchType} format={format} presetHoles={holes} onCancel={() => setMode('home')} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
   if (mode === 'join')  return <JoinMatchView  profile={profile} initialCode={initialJoinCode} onCancel={() => setMode('home')} onJoined={(id) => onOpenMatch(id)}/>;
   if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} profile={profile} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onReady={(id) => onOpenMatch(id)}/>;
   if (mode === 'handle' && window.DisplayNameScreen) {
@@ -181,10 +181,10 @@ function StatusChip({ match, youAreA }) {
 }
 
 // ─── Start Match view ────────────────────────────────────────
-function StartMatchView({ profile, matchType = '1v1', format = 'pp', onCancel, onCreated }) {
+function StartMatchView({ profile, matchType = '1v1', format = 'pp', presetHoles, onCancel, onCreated }) {
   const isRegular = format === 'regular';
   const [course, setCourse] = React.useState('Killian Greens'); // pp: free text
-  const [holes, setHoles]   = React.useState(isRegular ? 18 : 9);
+  const [holes, setHoles]   = React.useState(presetHoles || (isRegular ? 18 : 9));
   const [busy, setBusy]     = React.useState(false);
   const [err, setErr]       = React.useState('');
 
@@ -306,20 +306,23 @@ function StartMatchView({ profile, matchType = '1v1', format = 'pp', onCancel, o
           </label>
         )}
 
-        <label style={{ display: 'block' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Holes</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[9, 18].map(n => (
-              <button key={n} onClick={() => setHoles(n)} style={{
-                flex: 1, padding: '14px', borderRadius: 12,
-                background: holes === n ? 'var(--forest)' : 'var(--paper)',
-                color: holes === n ? 'var(--cream)' : 'var(--forest)',
-                border: holes === n ? 'none' : 'var(--hairline-strong)',
-                fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
-              }}>{n} HOLES{isRegular && n === 9 ? ' (FRONT)' : ''}</button>
-            ))}
-          </div>
-        </label>
+        {/* Holes — hidden when already chosen upstream (Challenge Friends step 2) */}
+        {!presetHoles && (
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Holes</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[9, 18].map(n => (
+                <button key={n} onClick={() => setHoles(n)} style={{
+                  flex: 1, padding: '14px', borderRadius: 12,
+                  background: holes === n ? 'var(--forest)' : 'var(--paper)',
+                  color: holes === n ? 'var(--cream)' : 'var(--forest)',
+                  border: holes === n ? 'none' : 'var(--hairline-strong)',
+                  fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                }}>{n} HOLES{isRegular && n === 9 ? ' (FRONT)' : ''}</button>
+              ))}
+            </div>
+          </label>
+        )}
       </div>
 
       {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
