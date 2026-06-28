@@ -533,23 +533,26 @@ function ShareCodeButton({ code, mode }) {
   // Deep-link so the recipient lands directly in the Join flow with
   // the code pre-filled. The URL handler is in App (root) below.
   const url = `${window.location.origin}/?join=${encodeURIComponent(code)}`;
-  const text = `Match me at Sandbox Pitch & Putt (${mode}). Code: ${code}\n${url}`;
+  const text = `Match me at Sandbox Pitch & Putt (${mode}). Code: ${code}`;
 
   async function onShare() {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Sandbox Pitch & Putt', text });
+        // `url` MUST be its own field — if the link is only inside `text`,
+        // AirDrop treats the whole thing as plain text and drops it into Notes
+        // instead of opening the link. With `url` set, AirDrop shares a tappable
+        // link that opens the app.
+        await navigator.share({ title: 'Sandbox Pitch & Putt', text, url });
         return;
       }
     } catch (_) { /* user cancelled — no-op */ }
-    // Fallback: copy to clipboard
+    // Fallback: copy link + message to clipboard
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(`${text}\n${url}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch (_) {
-      // Last-resort fallback: prompt
-      window.prompt('Copy this:', text);
+      window.prompt('Copy this:', `${text}\n${url}`);
     }
   }
 
