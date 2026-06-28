@@ -561,13 +561,14 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
     try { return JSON.parse((flowKey && localStorage.getItem(flowKey)) || 'null') || {}; } catch (_) { return {}; }
   })();
   const [stroke, setStroke] = React.useState(saved.stroke || 0);     // 0-based stroke (0 = tee)
-  const [card, setCard]     = React.useState(saved.card || {});      // { pid: { fairway, reached, zone } }
+  const [card, setCard]     = React.useState(saved.card || {});      // { pid: { fairway, reached, ob, zone } }
   // 'cards' | 'putt' | 'done'. A finalized hole opens straight to the summary.
   const [phase, setPhase]   = React.useState(saved.phase || (savedScore != null ? 'done' : 'cards'));
   const [putts, setPutts]   = React.useState(saved.putts || 0);      // completed missed putt rounds
   const [puttCard, setPuttCard] = React.useState(saved.puttCard || {}); // this round: { pid: 'made'|'missed' }
   const [chosen, setChosen] = React.useState(saved.chosen || null);  // { ball, zone, strokesToGreen }
   const [doneScore, setDoneScore] = React.useState(null); // shown instantly on finish, before DB echoes back
+  const [history, setHistory] = React.useState(saved.history || []); // prior states for one-step "Go Back"
 
   // Running strokes so far: full swings to the green, plus putt rounds.
   const count = (phase === 'putt' && chosen) ? chosen.strokesToGreen + putts : stroke;
@@ -582,12 +583,23 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
     if (!flowKey) return;
     try {
       if (phase === 'done') localStorage.removeItem(flowKey);
-      else localStorage.setItem(flowKey, JSON.stringify({ stroke, card, phase, putts, puttCard, chosen }));
+      else localStorage.setItem(flowKey, JSON.stringify({ stroke, card, phase, putts, puttCard, chosen, history }));
     } catch (_) {}
-  }, [flowKey, stroke, card, phase, putts, puttCard, chosen]);
+  }, [flowKey, stroke, card, phase, putts, puttCard, chosen, history]);
+
+  // Snapshot the current state before any forward move so "Go Back" undoes
+  // exactly one shot / putt-round (not the whole hole).
+  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen }]);
+  const goBack = () => {
+    if (!history.length) return;
+    const prev = history[history.length - 1];
+    setStroke(prev.stroke); setCard(prev.card); setPhase(prev.phase);
+    setPutts(prev.putts); setPuttCard(prev.puttCard); setChosen(prev.chosen);
+    setDoneScore(null); setHistory(history.slice(0, -1));
+  };
 
   function reset() {
-    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null);
+    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]);
     try { if (flowKey) localStorage.removeItem(flowKey); } catch (_) {}
   }
 
@@ -610,28 +622,41 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
   // a par-3 tee, a pitch & putt hole, or any approach shot thereafter — asks
   // "is the ball on the green?".
   const fairwayTee = isTee && isRegular && (par || 3) >= 4;
-  const setField = (pid, key, val) => setCard(c => ({ ...c, [pid]: { ...(c[pid] || {}), [key]: val } }));
+  const setOutcome = (pid, patch) => setCard(c => ({ ...c, [pid]: { ...(c[pid] || {}), ...patch } }));
   const cardDone = (pid) => {
     const c = card[pid]; if (!c) return false;
-    if (fairwayTee) return !!c.fairway;                 // drive: just need a fairway result
-    return c.reached != null;                            // approach: on/off green is enough
+    if (c.ob) return true;                               // OB / penalty marked
+    if (fairwayTee) return !!c.fairway;                  // drive: a fairway result
+    return c.reached != null;                            // approach: off / on / holed out
   };
   const allDone = yourTeam.every(p => cardDone(p.id));
   const suggestion = (isMember && p2 && card[p1.id] && card[p2.id] && card[p1.id].zone && card[p2.id].zone)
     ? suggestBall(yourTeam, { [p1.id]: card[p1.id].zone, [p2.id]: card[p2.id].zone }) : null;
 
+  // Finish the hole immediately (used by a hole-out from off the green).
+  function finishHole(score, holedBy, zone) {
+    setDoneScore(score); setPhase('done');
+    onComplete({ score, putts: 0, gir: false, zone, ballPlayer: holedBy, holedBy });
+  }
+
   function pickBall(pid) {
+    pushHistory();
     yourTeam.forEach(p => {
       const c = card[p.id] || {}; const patch = {};
-      if (fairwayTee && c.fairway) patch.fairway = c.fairway;
-      if (!fairwayTee && c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
+      if (c.fairway) patch.fairway = c.fairway;
+      if (c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
       if (Object.keys(patch).length) onSavePlayerStat(p.id, patch);
     });
     const c = card[pid] || {};
-    // Off the tee (drive) you never reach the green → always advance to the
-    // approach. Otherwise, if the chosen ball is on the green, go putt.
-    if (!fairwayTee && c.reached) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); }
-    else { setStroke(stroke + 1); setCard({}); }
+    // OB/penalty: the shot counts AND adds a 1-stroke penalty (skip one),
+    // then re-hit — so shot 2 OB makes the next tracked shot #4.
+    if (c.ob) { setStroke(stroke + 2); setCard({}); return; }
+    // Holed out from off the green → hole done now, no putt.
+    if (!fairwayTee && c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone); return; }
+    // On the green → go to putting.
+    if (!fairwayTee && c.reached === true) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); return; }
+    // Off the green / a drive → next shot.
+    setStroke(stroke + 1); setCard({});
   }
 
   // Putting — both teammates putt the chosen ball each round. The first to
@@ -650,13 +675,13 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
       });
     };
-    const missed = (pid) => setPuttCard(pc => {
-      const next = { ...pc, [pid]: 'missed' };
-      if (yourTeam.every(p => next[p.id] === 'missed')) { setPutts(putts + 1); return {}; } // new round
-      return next;
-    });
+    const missed = (pid) => {
+      const next = { ...puttCard, [pid]: 'missed' };
+      if (yourTeam.every(p => next[p.id] === 'missed')) { pushHistory(); setPutts(putts + 1); setPuttCard({}); } // new round
+      else setPuttCard(next);
+    };
     return (
-      <SfWrap count={count} onReset={reset} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
+      <SfWrap count={count} onBack={goBack} canBack={history.length > 0} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {yourTeam.map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
@@ -669,15 +694,15 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
 
   // Cards phase — both teammates log this stroke
   return (
-    <SfWrap count={count} onReset={reset} label={yourTeamLabel} labelPlayers={yourTeam}
+    <SfWrap count={count} onBack={goBack} canBack={history.length > 0} label={yourTeamLabel} labelPlayers={yourTeam}
       title={`Shot ${stroke + 1} — ${fairwayTee ? 'Fairway hit?' : 'Reached the green?'}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {yourTeam.map(p => (
           <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}}
             showFairway={fairwayTee} showGreen={!fairwayTee}
-            onFairway={(v) => setField(p.id, 'fairway', v)}
-            onReached={(v) => setField(p.id, 'reached', v)}
-            onZone={(z) => setField(p.id, 'zone', z)}/>
+            onFairway={(v) => setOutcome(p.id, { fairway: v, ob: false })}
+            onReached={(v) => setOutcome(p.id, { reached: v, ob: false })}
+            onOb={() => setOutcome(p.id, { ob: true, reached: null, fairway: null })}/>
         ))}
       </div>
 
@@ -704,7 +729,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
   );
 }
 
-function SfWrap({ title, count, label, labelPlayers, onReset, children }) {
+function SfWrap({ title, count, label, labelPlayers, onBack, canBack, children }) {
   return (
     <div>
       {/* Your team's running score — mirrors the opponent scoreboard */}
@@ -713,9 +738,9 @@ function SfWrap({ title, count, label, labelPlayers, onReset, children }) {
       <div style={{ padding: 14, borderRadius: 14, background: 'rgba(14,28,19,0.25)' }}>
         <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700, marginBottom: 10 }}>{title}</div>
         {children}
-        {count > 0 && (
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={onReset} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>Start over</button>
+        {canBack && (
+          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-start' }}>
+            <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', opacity: 0.7, fontSize: 11, fontWeight: 700 }}>← Go Back</button>
           </div>
         )}
       </div>
@@ -852,9 +877,9 @@ function XoButton({ kind, active, onClick }) {
   );
 }
 
-// Per-player card (@handle). A tee drive shows ONLY the fairway cross; a
-// par-3 tee / approach shows ONLY the on/off-green answer (+ position).
-function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onZone }) {
+// Per-player card (@handle). A tee drive shows the fairway cross; an approach
+// shows off/on green + Holed out. Both also offer Penalty / OB.
+function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onOb }) {
   return (
     <div style={{ padding: '9px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
       <PlayerTag player={player}/>
@@ -869,6 +894,14 @@ function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onRea
           <XoButton kind="check" active={data.reached === true}  onClick={() => onReached(true)}/>
         </div>
       )}
+
+      {/* Holed out (approach only) + Penalty / OB (any shot) */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        {showGreen && (
+          <button onClick={() => onReached('holed')} style={{ ...pillStyle(data.reached === 'holed'), fontSize: 11 }}>Holed out</button>
+        )}
+        <button onClick={onOb} style={{ ...pillStyle(!!data.ob), fontSize: 11 }}>Penalty / OB</button>
+      </div>
     </div>
   );
 }
