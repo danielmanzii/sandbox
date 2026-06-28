@@ -1,14 +1,39 @@
 /* global React, Icon, LiveDot, Button, MOCK, sbx, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useSbxLeaderboard, formatHandle */
-// Explore: prominent player search + top 10 by SBX + your band rank + stat leaders.
-// (Tab is labelled "Explore" in the shell; the route id stays `social`.)
+// Explore: player search + your-band top 10 (tap → full band leaderboard with
+// a band switcher) + stat leaders. (Tab is labelled "Explore"; route id = social.)
 
 function SocialScreen({ go }) {
   const [liveEvent] = useLiveEvent();
-  const data        = useSbxLeaderboard(200); // null = loading, [] = nobody rated yet
+  const data        = useSbxLeaderboard(500); // null = loading, [] = nobody rated yet
   const meId        = MOCK.USER && MOCK.USER.id;
+  const [bandView, setBandView] = React.useState(null); // null = home, else a band int
 
-  const rated = data || [];
-  const top10 = rated.slice(0, 10);
+  const rated  = data || [];
+  const myRow  = rated.find(p => p.id === meId);
+  const bandsPresent = React.useMemo(
+    () => [...new Set(rated.filter(p => p.sbx != null).map(p => Math.floor(Number(p.sbx))))].sort((a, b) => a - b),
+    [data]
+  );
+  const highestBand = bandsPresent.length ? bandsPresent[bandsPresent.length - 1] : null;
+  const myBand = (myRow && myRow.sbx != null) ? Math.floor(Number(myRow.sbx)) : highestBand;
+
+  // Full band leaderboard view (with switcher).
+  if (bandView != null) {
+    return (
+      <BandLeaderboard
+        band={bandView}
+        data={data}
+        meId={meId}
+        go={go}
+        bands={bandsPresent}
+        onBack={() => setBandView(null)}
+        onChangeBand={setBandView}
+      />
+    );
+  }
+
+  const myBandRows = (myBand != null) ? rated.filter(p => p.sbx != null && Math.floor(Number(p.sbx)) === myBand) : [];
+  const top10 = myBandRows.slice(0, 10);
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
@@ -20,10 +45,8 @@ function SocialScreen({ go }) {
         </div>
       </div>
 
-      {/* Prominent search */}
       <ExploreSearch go={go}/>
 
-      {/* Live now banner (only when a match is in progress) */}
       {liveEvent && (
         <div style={{ padding: '0 16px 16px' }}>
           <button onClick={() => go({ screen: 'live' })} style={{
@@ -44,14 +67,22 @@ function SocialScreen({ go }) {
         </div>
       )}
 
-      {/* Your rank within your SBX band */}
-      <BandRankCard data={data} meId={meId}/>
+      {/* Your rank within your band — tap to open the full band board */}
+      <BandRankCard data={data} meId={meId} onOpen={(b) => setBandView(b)}/>
 
-      {/* Top 10 by SBX */}
-      <TopTen rows={top10} loading={data === null} meId={meId} go={go}/>
+      {/* Top 10 of MY band — tap to open all players in the band */}
+      <BandTopTen
+        band={myBand}
+        rows={top10}
+        total={myBandRows.length}
+        loading={data === null}
+        meId={meId}
+        go={go}
+        onOpenBoard={() => myBand != null && setBandView(myBand)}
+      />
 
-      {/* Stat leaders across all players */}
-      <StatLeaders data={data} go={go}/>
+      {/* Stat leaders */}
+      <StatLeaders data={data} go={go} openBand={(b) => setBandView(b)} highestBand={highestBand}/>
     </div>
   );
 }
@@ -180,12 +211,17 @@ function SearchResultRow({ row, viewerId, last, onOpen }) {
   );
 }
 
-// ─── Your rank within your SBX band (e.g. 3rd in the 3.000–3.999 band) ──
-function BandRankCard({ data, meId }) {
+const bandLabel = (b) => `${b}.000–${b}.999`;
+const ordinal = (n) => {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+// ─── Your rank within your SBX band (tap → full band board) ──────────
+function BandRankCard({ data, meId, onOpen }) {
   if (data === null) return null; // loading — stay quiet
   const myRow = data.find(p => p.id === meId);
 
-  // Unrated / not in the ranked set yet.
   if (!myRow || myRow.sbx == null) {
     return (
       <div style={{ padding: '0 16px 18px' }}>
@@ -202,26 +238,27 @@ function BandRankCard({ data, meId }) {
     );
   }
 
-  const band      = Math.floor(Number(myRow.sbx));
-  const bandLabel = `${band}.000–${band}.999`;
+  const band        = Math.floor(Number(myRow.sbx));
   const bandPlayers = data.filter(p => p.sbx != null && Math.floor(Number(p.sbx)) === band); // already SBX-desc
   const myBandRank  = bandPlayers.findIndex(p => p.id === meId) + 1;
-  const ordinal = (n) => {
-    const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  };
 
   return (
     <div style={{ padding: '0 16px 18px' }}>
-      <div style={{
+      <button onClick={() => onOpen && onOpen(band)} style={{
+        width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
         background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
         color: 'var(--cream)', borderRadius: 20, padding: '20px 22px',
         position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)',
       }}>
         <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
         <div style={{ position: 'relative' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-            Your rank · {bandLabel} band
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              Your rank · {bandLabel(band)} band
+            </div>
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              VIEW BAND <Icon.ArrowRight size={11} color="var(--cream)"/>
+            </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 10 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -240,19 +277,65 @@ function BandRankCard({ data, meId }) {
             </div>
           </div>
         </div>
-      </div>
+      </button>
     </div>
   );
 }
 
-// ─── Top 10 by Sandbox Rating ────────────────────────────────────────
-function TopTen({ rows, loading, meId, go }) {
+// ─── Shared leaderboard row ──────────────────────────────────────────
+function LeaderRow({ rank, player, meId, go, last }) {
+  const name    = [player.first_name, player.last_name].filter(Boolean).join(' ') || formatHandle(player.handle);
+  const isYou   = player.id === meId;
+  const matches = (player.sbx_2v2_n || 0) + (player.sbx_1v1_n || 0);
+  return (
+    <button onClick={() => go && go({ screen: 'profile', viewingHandle: player.handle })} style={{
+      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+      padding: '12px 14px', textAlign: 'left',
+      borderBottom: last ? 'none' : '1px dashed rgba(14,28,19,0.08)',
+      background: isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
+      cursor: 'pointer', border: 'none',
+    }}>
+      <div style={{
+        width: 26, textAlign: 'center',
+        fontFamily: 'var(--font-display)', fontSize: 14,
+        color: 'var(--forest)', opacity: rank <= 3 ? 1 : 0.4,
+        fontWeight: rank <= 3 ? 700 : 400,
+      }}>{rank}</div>
+      <LbAvatar player={{ name, handle: player.handle, avatar: player.avatar_url }} size={30}/>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isYou && ' · you'}</div>
+        <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{formatHandle(player.handle)} · {matches} {matches === 1 ? 'match' : 'matches'}</div>
+      </div>
+      <div style={{ width: 56, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
+        {player.sbx != null ? Number(player.sbx).toFixed(3) : '—'}
+      </div>
+    </button>
+  );
+}
+
+// ─── Top 10 of a band (Explore home) ─────────────────────────────────
+function BandTopTen({ band, rows, total, loading, meId, go, onOpenBoard }) {
   return (
     <div style={{ padding: '0 16px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, padding: '0 4px' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Top 10</div>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.45, letterSpacing: '0.06em' }}>BY SANDBOX RATING™</div>
-      </div>
+      <button
+        onClick={onOpenBoard}
+        disabled={!onOpenBoard || band == null}
+        style={{
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+          width: '100%', marginBottom: 10, padding: '0 4px',
+          background: 'transparent', border: 'none',
+          cursor: (onOpenBoard && band != null) ? 'pointer' : 'default',
+        }}
+      >
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          Top 10 · {band != null ? `${bandLabel(band)} band` : 'your band'}
+        </div>
+        {band != null && (
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.06em', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            VIEW ALL <Icon.ArrowRight size={11} color="var(--forest)"/>
+          </div>
+        )}
+      </button>
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', padding: '10px 14px', fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.5, borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
           <span style={{ width: 26, textAlign: 'center' }}>#</span>
@@ -265,36 +348,96 @@ function TopTen({ rows, loading, meId, go }) {
           <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
             No rated players yet — play and confirm a few matches to appear here.
           </div>
-        ) : rows.map((p, i) => {
-          const name   = [p.first_name, p.last_name].filter(Boolean).join(' ') || formatHandle(p.handle);
-          const isYou  = p.id === meId;
-          const matches = (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
-          return (
-            <button key={p.id} onClick={() => go && go({ screen: 'profile', viewingHandle: p.handle })} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '12px 14px', textAlign: 'left',
-              borderBottom: i < rows.length - 1 ? '1px dashed rgba(14,28,19,0.08)' : 'none',
-              background: isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
-              cursor: 'pointer', border: 'none',
-            }}>
-              <div style={{
-                width: 26, textAlign: 'center',
-                fontFamily: 'var(--font-display)', fontSize: 14,
-                color: 'var(--forest)', opacity: i < 3 ? 1 : 0.4,
-                fontWeight: i < 3 ? 700 : 400,
-              }}>{i + 1}</div>
-              <LbAvatar player={{ name, handle: p.handle, avatar: p.avatar_url }} size={30}/>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isYou && ' · you'}</div>
-                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{formatHandle(p.handle)} · {matches} {matches === 1 ? 'match' : 'matches'}</div>
-              </div>
-              <div style={{ width: 56, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
-                {p.sbx != null ? Number(p.sbx).toFixed(3) : '—'}
-              </div>
-            </button>
-          );
-        })}
+        ) : (
+          <>
+            {rows.map((p, i) => (
+              <LeaderRow key={p.id} rank={i + 1} player={p} meId={meId} go={go} last={false}/>
+            ))}
+            {total > rows.length && (
+              <button onClick={onOpenBoard} style={{
+                width: '100%', padding: '13px 14px',
+                background: 'transparent', border: 'none',
+                color: 'var(--forest)', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', textAlign: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                View all {total} in band <Icon.ArrowRight size={12}/>
+              </button>
+            )}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── Full band leaderboard with a band switcher ──────────────────────
+function BandLeaderboard({ band, data, meId, go, bands, onBack, onChangeBand }) {
+  const rated = data || [];
+  const rows  = rated.filter(p => p.sbx != null && Math.floor(Number(p.sbx)) === band); // SBX-desc
+
+  return (
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
+      <div style={{ padding: '58px 20px 14px', background: 'var(--canvas)', color: 'var(--forest)' }}>
+        <button onClick={onBack} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          color: 'var(--forest)', fontSize: 12, fontWeight: 700, padding: 0, marginBottom: 12, opacity: 0.7,
+        }}>
+          <Icon.ArrowLeft size={14}/> Explore
+        </button>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Band leaderboard</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 0.95, marginTop: 6, letterSpacing: '-0.02em' }}>
+          {bandLabel(band)}
+        </div>
+      </div>
+
+      {/* Band switcher (slide across bands) */}
+      <BandSwitcher bands={bands} active={band} onChange={onChangeBand}/>
+
+      <div style={{ padding: '4px 16px 0' }}>
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ display: 'flex', padding: '10px 14px', fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.5, borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
+            <span style={{ width: 26, textAlign: 'center' }}>#</span>
+            <span style={{ flex: 1, paddingLeft: 8 }}>Player</span>
+            <span style={{ width: 56, textAlign: 'right' }}>SBX</span>
+          </div>
+          {data === null ? (
+            <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+          ) : rows.length === 0 ? (
+            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
+              No players in the {bandLabel(band)} band yet.
+            </div>
+          ) : rows.map((p, i) => (
+            <LeaderRow key={p.id} rank={i + 1} player={p} meId={meId} go={go} last={i === rows.length - 1}/>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.5, textAlign: 'center', marginTop: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+          {rows.length} {rows.length === 1 ? 'player' : 'players'} in this band
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BandSwitcher({ bands, active, onChange }) {
+  if (!bands || bands.length === 0) return null;
+  return (
+    <div className="scroll-hide" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 16px 16px' }}>
+      {bands.map(b => {
+        const on = b === active;
+        return (
+          <button key={b} onClick={() => onChange(b)} style={{
+            flexShrink: 0, padding: '9px 16px', borderRadius: 999,
+            background: on ? 'var(--forest)' : 'var(--paper)',
+            color: on ? 'var(--cream)' : 'var(--forest)',
+            border: on ? 'none' : '1px solid rgba(14,28,19,0.12)',
+            boxShadow: on ? 'var(--shadow-sm)' : 'none',
+            fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 12, letterSpacing: '0.04em',
+            cursor: 'pointer',
+          }}>{b}.0–{b}.9</button>
+        );
+      })}
     </div>
   );
 }
@@ -313,53 +456,64 @@ function LbAvatar({ player, size = 30 }) {
   );
 }
 
-// Holes-up from a final_margin string ("7&6" → 7, "2 UP" → 2, "AS" → 0).
-function marginUp(s) {
-  if (!s) return -1;
-  const amp = String(s).match(/^(\d+)\s*&/);
-  if (amp) return parseInt(amp[1], 10);
-  const up = String(s).match(/^(\d+)\s*UP/i);
-  if (up) return parseInt(up[1], 10);
-  return 0;
-}
-
-// Biggest winning margin in a given format ('2v2' | '1v1') across all
-// completed matches. Returns { margin, holderHandle } or null.
-function useBiggestWin(matchType) {
-  const [best, setBest] = React.useState(null);
+// ─── Win-streak leaders across all players (computed from matches) ───
+// Streak = consecutive WINS (a loss or halve breaks it), per player, over
+// their completed matches in chronological order.
+//   longest = best run ever;  active = trailing run up to the latest match.
+// Returns { longest: {handle, value}, active: {handle, value} } | null.
+function useStreakLeaders() {
+  const [res, setRes] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data: ms } = await sbx
         .from('matches')
-        .select('id, final_margin, result, match_type, player_a, player_b')
+        .select('player_a, player_a2, player_b, player_b2, result, completed_at, created_at')
         .eq('status', 'completed')
-        .eq('match_type', matchType)
-        .in('result', ['A', 'B']);
+        .in('result', ['A', 'B', 'H']);
       if (cancelled) return;
-      let top = null, topUp = -1;
+
+      const tsOf = (m) => new Date(m.completed_at || m.created_at || 0).getTime();
+      const byUser = {};
+      const add = (id, won, t) => { if (id) (byUser[id] = byUser[id] || []).push({ t, won }); };
       for (const m of (ms || [])) {
-        const u = marginUp(m.final_margin);
-        if (u > topUp) { topUp = u; top = m; }
+        const t = tsOf(m);
+        add(m.player_a,  m.result === 'A', t);
+        add(m.player_a2, m.result === 'A', t);
+        add(m.player_b,  m.result === 'B', t);
+        add(m.player_b2, m.result === 'B', t);
       }
-      if (!top) { setBest(null); return; }
-      const winnerId = top.result === 'A' ? top.player_a : top.player_b;
-      let handle = null;
-      if (winnerId) {
-        const { data: p } = await sbx.from('profiles').select('handle').eq('id', winnerId).maybeSingle();
-        handle = p && p.handle;
+
+      let longestId = null, longestVal = 0, activeId = null, activeVal = 0;
+      for (const id in byUser) {
+        const arr = byUser[id].sort((x, y) => x.t - y.t);
+        let cur = 0, best = 0;
+        for (const e of arr) { if (e.won) { cur++; if (cur > best) best = cur; } else cur = 0; }
+        let act = 0;
+        for (let i = arr.length - 1; i >= 0; i--) { if (arr[i].won) act++; else break; }
+        if (best > longestVal) { longestVal = best; longestId = id; }
+        if (act  > activeVal)  { activeVal  = act;  activeId  = id; }
       }
-      if (!cancelled) setBest({ margin: top.final_margin, holderHandle: handle });
+
+      const ids = [...new Set([longestId, activeId].filter(Boolean))];
+      const map = {};
+      if (ids.length) {
+        const { data: ps } = await sbx.from('profiles').select('id, handle').in('id', ids);
+        for (const p of (ps || [])) map[p.id] = p.handle;
+      }
+      if (!cancelled) setRes({
+        longest: longestId && longestVal > 0 ? { handle: map[longestId], value: longestVal } : null,
+        active:  activeId  && activeVal  > 0 ? { handle: map[activeId],  value: activeVal  } : null,
+      });
     })();
     return () => { cancelled = true; };
-  }, [matchType]);
-  return best;
+  }, []);
+  return res;
 }
 
-// ─── Stat leaders across all rated players ───────────────────────────
-function StatLeaders({ data, go }) {
-  const big2 = useBiggestWin('2v2');
-  const big1 = useBiggestWin('1v1');
+// ─── Stat leaders ────────────────────────────────────────────────────
+function StatLeaders({ data, go, openBand, highestBand }) {
+  const streaks = useStreakLeaders();
 
   if (data === null) {
     return <div style={{ padding: '6px 16px 0', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
@@ -367,16 +521,36 @@ function StatLeaders({ data, go }) {
   if (!data.length) return null;
 
   const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
-
   const topSbx     = data[0]; // already SBX-desc
   const mostActive = data.reduce((a, b) => (matchesOf(b) > matchesOf(a) ? b : a), data[0]);
 
   const cards = [
-    { title: 'Highest SBX',  holderHandle: topSbx.handle,     value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—' },
-    { title: 'Most matches', holderHandle: mostActive.handle, value: String(matchesOf(mostActive)) },
-    big2 && { title: 'Best 2v2 win', holderHandle: big2.holderHandle, value: big2.margin },
-    big1 && { title: 'Best 1v1 win', holderHandle: big1.holderHandle, value: big1.margin },
-  ].filter(Boolean);
+    {
+      title: 'Highest SBX',
+      holderHandle: topSbx.handle,
+      value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—',
+      // Opens the band board on the top band rather than a profile.
+      onOpen: (highestBand != null && openBand) ? () => openBand(highestBand) : null,
+    },
+    {
+      title: 'Most matches',
+      holderHandle: mostActive.handle,
+      value: String(matchesOf(mostActive)),
+      onOpen: () => go && go({ screen: 'profile', viewingHandle: mostActive.handle }),
+    },
+    {
+      title: 'Longest win streak',
+      holderHandle: streaks && streaks.longest ? streaks.longest.handle : null,
+      value: streaks ? (streaks.longest ? String(streaks.longest.value) : '—') : '…',
+      onOpen: (streaks && streaks.longest) ? () => go && go({ screen: 'profile', viewingHandle: streaks.longest.handle }) : null,
+    },
+    {
+      title: 'Active win streak',
+      holderHandle: streaks && streaks.active ? streaks.active.handle : null,
+      value: streaks ? (streaks.active ? String(streaks.active.value) : '—') : '…',
+      onOpen: (streaks && streaks.active) ? () => go && go({ screen: 'profile', viewingHandle: streaks.active.handle }) : null,
+    },
+  ];
 
   return (
     <div style={{ padding: '0 16px' }}>
@@ -388,7 +562,7 @@ function StatLeaders({ data, go }) {
             title={c.title}
             holder={c.holderHandle ? formatHandle(c.holderHandle) : '—'}
             value={c.value}
-            onOpen={c.holderHandle ? () => go && go({ screen: 'profile', viewingHandle: c.holderHandle }) : null}
+            onOpen={c.onOpen}
           />
         ))}
       </div>
