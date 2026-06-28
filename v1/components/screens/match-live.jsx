@@ -134,10 +134,8 @@ function MatchLive({ matchId, profile, tier, onExit }) {
   const hole = holes.find(h => h.hole_number === currentHole) || holes[0];
   const matchDecided = match.status === 'completed' || state.decided;
 
-  // Ask how to score this match — once, before play begins.
-  if (!scoreMode && !matchDecided) {
-    return <ScoreModeChooser onPick={chooseMode} onExit={onExit}/>;
-  }
+  // (No up-front score-mode chooser — Quick Score / + Track Stats are
+  //  interchangeable from the toggle inside the match.)
 
   // Team label helpers
   const teamAName = is2v2
@@ -898,7 +896,7 @@ function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onRea
       {/* Holed out (approach only) + Penalty / OB (any shot) */}
       <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
         {showGreen && (
-          <button onClick={() => onReached('holed')} style={{ ...pillStyle(data.reached === 'holed'), fontSize: 11 }}>Holed out</button>
+          <button onClick={() => onReached('holed')} style={{ ...pillStyle(data.reached === 'holed'), fontSize: 11 }}>Holed Out</button>
         )}
         <button onClick={onOb} style={{ ...pillStyle(!!data.ob), fontSize: 11 }}>Penalty / OB</button>
       </div>

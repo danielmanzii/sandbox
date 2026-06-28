@@ -53,9 +53,9 @@ function SegmentButton({ active, onClick, children }) {
   );
 }
 
-// ─── Challenge Friends: format → mode → challenge ─────────────────────
+// ─── Challenge Friends: match type → holes → challenge (always a real course) ──
 function ChallengeFriendsView({ go, profile }) {
-  const [format, setFormat] = React.useState(null); // 'pp' | 'regular'
+  const [mode, setMode] = React.useState(null); // '1v1' | '2v2'
 
   return (
     <div style={{ padding: '10px 16px 0' }}>
@@ -63,54 +63,54 @@ function ChallengeFriendsView({ go, profile }) {
         Casual matches still move your Sandbox Rating (at casual weight) — they just don't count for the season ladder or prizes.
       </div>
 
-      {!format ? (
+      {!mode ? (
         <>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 4px 10px' }}>
-            Step 1 · Where are you playing?
+            Step 1 · Match type
           </div>
           <ModeCard
-            onClick={() => setFormat('pp')}
-            eyebrow="⛳ Sandbox format"
-            title="Pitch & Putt"
-            subtitle="Nine sub-100yd holes, 2-man scramble or 1v1. The Sandbox 9."
+            onClick={() => setMode('1v1')}
+            eyebrow="1v1 · You vs them"
+            title="Head-to-head"
+            subtitle="Hole-by-hole match play. Live W/L/H scoring."
             accent="forest"
             available
           />
           <div style={{ height: 12 }}/>
           <ModeCard
-            onClick={() => setFormat('regular')}
-            eyebrow="🏌 Full course"
-            title="Regular course"
-            subtitle="9 or 18 on a real course — real pars, with fairway + GIR tracking."
+            onClick={() => setMode('2v2')}
+            eyebrow="2v2 · Scramble"
+            title="Partner up"
+            subtitle="Grab a teammate, face off against another duo. Team score per hole."
             accent="moss"
             available
           />
         </>
       ) : (
         <>
-          <button onClick={() => setFormat(null)} style={{
+          <button onClick={() => setMode(null)} style={{
             background: 'transparent', border: 'none', color: 'var(--forest)', fontSize: 13, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 0 12px', opacity: 0.75,
           }}>
-            <Icon.ArrowLeft size={14}/> {format === 'regular' ? 'Regular course' : 'Pitch & Putt'}
+            <Icon.ArrowLeft size={14}/> {mode === '2v2' ? '2v2 · Scramble' : '1v1 · Head-to-head'}
           </button>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 4px 10px' }}>
-            Step 2 · Pick your format
+            Step 2 · How many holes?
           </div>
           <ModeCard
-            onClick={() => go({ screen: 'challenge', mode: '1v1', format })}
-            eyebrow="1v1 · You vs them"
-            title="Head-to-head"
-            subtitle="Hole-by-hole match play. Shared scorecard, live W/L/H scoring."
+            onClick={() => go({ screen: 'challenge', mode, format: 'regular', holes: 9 })}
+            eyebrow="⛳ Quick nine"
+            title="9-hole match"
+            subtitle="Front nine of a real course — real pars, fairway + GIR tracking."
             accent="forest"
             available
           />
           <div style={{ height: 12 }}/>
           <ModeCard
-            onClick={() => go({ screen: 'challenge', mode: '2v2', format })}
-            eyebrow="2v2 · Scramble"
-            title="Partner up"
-            subtitle="Grab a teammate, face off against another duo. Team score per hole."
+            onClick={() => go({ screen: 'challenge', mode, format: 'regular', holes: 18 })}
+            eyebrow="🏌 Full round"
+            title="18-hole match"
+            subtitle="The full eighteen on a real course."
             accent="moss"
             available
           />

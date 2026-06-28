@@ -198,6 +198,7 @@ function App({ profile }) {
         profile={profile}
         mode={route.mode || '1v1'}
         format={route.format || 'pp'}
+        holes={route.holes}
         initialJoinCode={route.joinCode}
         onExit={() => go({ screen: 'events', playTab: 'unranked' })}
         onOpenMatch={(id) => go({ screen: 'match', matchId: id })}
