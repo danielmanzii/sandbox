@@ -51,7 +51,7 @@ function SocialScreen({ go }) {
       <TopTen rows={top10} loading={data === null} meId={meId} go={go}/>
 
       {/* Stat leaders across all players */}
-      <StatLeaders data={data}/>
+      <StatLeaders data={data} go={go}/>
     </div>
   );
 }
@@ -314,7 +314,7 @@ function LbAvatar({ player, size = 30 }) {
 }
 
 // ─── Stat leaders across all rated players ───────────────────────────
-function StatLeaders({ data }) {
+function StatLeaders({ data, go }) {
   if (data === null) {
     return <div style={{ padding: '6px 16px 0', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
   }
@@ -344,20 +344,37 @@ function StatLeaders({ data }) {
       <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12, padding: '0 4px' }}>Stat leaders</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {cards.map(c => (
-          <RecordCard key={c.title} title={c.title} holder={formatHandle(c.holder.handle)} value={c.value}/>
+          <RecordCard
+            key={c.title}
+            title={c.title}
+            holder={formatHandle(c.holder.handle)}
+            value={c.value}
+            onOpen={c.holder.handle ? () => go && go({ screen: 'profile', viewingHandle: c.holder.handle }) : null}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function RecordCard({ title, holder, value }) {
+function RecordCard({ title, holder, value, onOpen }) {
   return (
-    <div className="card" style={{ padding: 16 }}>
+    <button
+      onClick={onOpen || undefined}
+      disabled={!onOpen}
+      className="card"
+      style={{
+        padding: 16, textAlign: 'left', width: '100%', border: 'none',
+        background: 'var(--paper)', cursor: onOpen ? 'pointer' : 'default',
+      }}
+    >
       <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{title}</div>
       <div className="display-num" style={{ fontSize: 32, color: 'var(--forest)', marginTop: 10 }}>{value}</div>
-      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}>{holder}</div>
-    </div>
+      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 4 }}>
+        {holder}
+        {onOpen && <Icon.ArrowRight size={10} color="var(--forest)"/>}
+      </div>
+    </button>
   );
 }
 

@@ -42,6 +42,23 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
     ? (MOCK.HISTORY || [])
     : (targetStats && realTarget ? buildHistoryFromMatches(realTarget, targetStats.recentMatches) : []);
 
+  // For another user, fill the view object with their REAL aggregates so the
+  // SBX card record / "events attended" / joined date show actual data
+  // instead of the old hardcoded placeholders.
+  if (!isSelf && user) {
+    if (targetStats) {
+      user.matchesW    = targetStats.matchesW;
+      user.matchesL    = targetStats.matchesL;
+      user.matchesH    = targetStats.matchesH;
+      user.eventsPlayed = targetStats.matchesTotal;
+      user.seasonPoints = targetStats.seasonPoints;
+      user.streak      = targetStats.streak;
+    }
+    user.joined = (realTarget && realTarget.created_at)
+      ? new Date(realTarget.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      : null;
+  }
+
   // Real follow state + counts
   const viewerId = signedInProfile && signedInProfile.id;
   const [counts] = useFollowCounts(targetId);
@@ -161,7 +178,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
             {user.name}
           </div>
           <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4, fontWeight: 600 }}>{formatHandle(user.handle)}</div>
-          {isSelf && (
+          {user.bio && (
             <div className="caption-serif" style={{ fontSize: 15, marginTop: 8, color: 'var(--ink)', opacity: 0.85 }}>
               "{user.bio}"
             </div>
@@ -172,9 +189,9 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
             <FollowStat label="Following" value={counts.following} onClick={() => setFollowListOpen('following')}/>
           </div>
           <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
-            <Mini label="Home" value={isSelf ? user.homeCourse : 'Melreese'}/>
-            <Mini label="Joined" value={isSelf ? user.joined : 'Jan 2026'}/>
-            <Mini label="Events attended" value={isSelf ? user.eventsPlayed : '—'}/>
+            <Mini label="Home" value={user.homeCourse || '—'}/>
+            <Mini label="Joined" value={user.joined || '—'}/>
+            <Mini label="Events attended" value={user.eventsPlayed != null ? user.eventsPlayed : '—'}/>
           </div>
         </div>
       </div>
