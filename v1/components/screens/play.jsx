@@ -53,69 +53,32 @@ function SegmentButton({ active, onClick, children }) {
   );
 }
 
-// ─── Challenge Friends: match type → holes → challenge (always a real course) ──
+// ─── Challenge Friends: Start a Match / Join. Setup (course → holes → type)
+// happens inside Start a Match; joining jumps to picking a team. ─────────
 function ChallengeFriendsView({ go, profile }) {
-  const [mode, setMode] = React.useState(null); // '1v1' | '2v2'
-
   return (
     <div style={{ padding: '10px 16px 0' }}>
       <div className="caption-serif" style={{ fontSize: 15, color: 'var(--forest)', opacity: 0.7, padding: '0 4px 16px', lineHeight: 1.4 }}>
         Casual matches still move your Sandbox Rating (at casual weight) — they just don't count for the season ladder or prizes.
       </div>
 
-      {!mode ? (
-        <>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 4px 10px' }}>
-            Step 1 · Match type
-          </div>
-          <ModeCard
-            onClick={() => setMode('1v1')}
-            eyebrow="1v1 · You vs them"
-            title="Head-to-head"
-            subtitle="Hole-by-hole match play. Live W/L/H scoring."
-            accent="forest"
-            available
-          />
-          <div style={{ height: 12 }}/>
-          <ModeCard
-            onClick={() => setMode('2v2')}
-            eyebrow="2v2 · Scramble"
-            title="Partner up"
-            subtitle="Grab a teammate, face off against another duo. Team score per hole."
-            accent="moss"
-            available
-          />
-        </>
-      ) : (
-        <>
-          <button onClick={() => setMode(null)} style={{
-            background: 'transparent', border: 'none', color: 'var(--forest)', fontSize: 13, fontWeight: 700,
-            display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 0 12px', opacity: 0.75,
-          }}>
-            <Icon.ArrowLeft size={14}/> {mode === '2v2' ? '2v2 · Scramble' : '1v1 · Head-to-head'}
-          </button>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 4px 10px' }}>
-            Step 2 · How many holes?
-          </div>
-          <ModeCard
-            onClick={() => go({ screen: 'challenge', mode, format: 'regular', holes: 9 })}
-            eyebrow="⛳ Quick nine"
-            title="9-hole match"
-            subtitle="Front nine of a real course — real pars, fairway + GIR tracking."
-            accent="forest"
-            available
-          />
-          <div style={{ height: 12 }}/>
-          <ModeCard
-            onClick={() => go({ screen: 'challenge', mode, format: 'regular', holes: 18 })}
-            eyebrow="🏌 Full round"
-            title="18-hole match"
-            subtitle="The full eighteen on a real course."
-            accent="moss"
-            available
-          />
-        </>
-      )}
+      <ModeCard
+        onClick={() => go({ screen: 'challenge', initialMode: 'start', format: 'regular' })}
+        eyebrow="⛳ New match"
+        title="Start a Match"
+        subtitle="Pick a course & tees, the holes, and 1v1 or 2v2 — then share the code."
+        accent="forest"
+        available
+      />
+      <div style={{ height: 12 }}/>
+      <ModeCard
+        onClick={() => go({ screen: 'challenge', initialMode: 'join', format: 'regular' })}
+        eyebrow="Got a code?"
+        title="Joining Someone Else?"
+        subtitle="Enter a match code and pick your team."
+        accent="moss"
+        available
+      />
 
       <div style={{ marginTop: 24, padding: '16px 16px', borderRadius: 16, background: 'rgba(14,28,19,0.04)' }}>
         <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.55, fontWeight: 700 }}>

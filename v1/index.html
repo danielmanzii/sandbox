@@ -196,11 +196,10 @@ function App({ profile }) {
     case 'challenge':
       screen = <MatchHub
         profile={profile}
-        mode={route.mode || '1v1'}
-        format={route.format || 'pp'}
-        holes={route.holes}
+        format={route.format || 'regular'}
+        initialMode={route.initialMode}
         initialJoinCode={route.joinCode}
-        onExit={() => go({ screen: 'events', playTab: 'unranked' })}
+        onExit={() => go({ screen: 'events', playTab: 'challenge' })}
         onOpenMatch={(id) => go({ screen: 'match', matchId: id })}
       />;
       break;
