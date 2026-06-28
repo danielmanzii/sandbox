@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, buildHistoryFromMatches, signOut */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -35,24 +35,36 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const userInitial = ((user && (user.name || user.handle)) || '?').replace(/^@/, '').charAt(0).toUpperCase();
   const targetId    = (realTarget && realTarget.id) || (isSelf ? MOCK.USER.id : null);
 
-  // Match history: for self use the globally-synced MOCK.HISTORY; for another
-  // user fetch THEIR matches by id and shape them from their perspective.
-  const targetStats = useUserStats(isSelf ? null : targetId);
-  const history = isSelf
-    ? (MOCK.HISTORY || [])
-    : (targetStats && realTarget ? buildHistoryFromMatches(realTarget, targetStats.recentMatches) : []);
+  // Match history: pull THIS profile's matches (self or other) and shape them
+  // as full teams (you + partner vs both opponents). Partner/opponent handles
+  // that aren't in the joined rows (player_a2 / player_b2) are resolved by id
+  // via a single directory lookup, so every @ in a row is clickable.
+  const stats      = useUserStats(targetId);
+  const rawMatches = stats ? stats.recentMatches : null;
+  const dirIds = React.useMemo(() => {
+    const s = new Set();
+    for (const m of (rawMatches || [])) {
+      [m.player_a, m.player_a2, m.player_b, m.player_b2].forEach(x => x && s.add(x));
+    }
+    return [...s];
+  }, [rawMatches]);
+  const dir = usePlayerDirectory(dirIds);
+  const history = React.useMemo(
+    () => buildTeamHistory(targetId, rawMatches, dir),
+    [targetId, rawMatches, dir]
+  );
 
   // For another user, fill the view object with their REAL aggregates so the
   // SBX card record / "events attended" / joined date show actual data
   // instead of the old hardcoded placeholders.
   if (!isSelf && user) {
-    if (targetStats) {
-      user.matchesW    = targetStats.matchesW;
-      user.matchesL    = targetStats.matchesL;
-      user.matchesH    = targetStats.matchesH;
-      user.eventsPlayed = targetStats.matchesTotal;
-      user.seasonPoints = targetStats.seasonPoints;
-      user.streak      = targetStats.streak;
+    if (stats) {
+      user.matchesW    = stats.matchesW;
+      user.matchesL    = stats.matchesL;
+      user.matchesH    = stats.matchesH;
+      user.eventsPlayed = stats.matchesTotal;
+      user.seasonPoints = stats.seasonPoints;
+      user.streak      = stats.streak;
     }
     user.joined = (realTarget && realTarget.created_at)
       ? new Date(realTarget.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -209,40 +221,23 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
       <div style={{ padding: '20px 16px 0' }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
         <div className="card" style={{ overflow: 'hidden' }}>
-          {history.length === 0 ? (
+          {rawMatches === null ? (
+            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+          ) : history.length === 0 ? (
             <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
               <div style={{ fontSize: 14 }}>No matches yet.</div>
             </div>
           ) : (
             <>
-              {history.slice(0, 4).map((r, i) => {
-                const isW = r.result === 'W', isL = r.result === 'L';
-                const badgeStyle = isW
-                  ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
-                  : isL
-                  ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
-                  : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
-                const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
-                const marginOpacity = isL ? 0.55 : 1;
-                return (
-                  <button key={r.id} onClick={() => go({ screen: 'matchDetail', matchId: r.id })} style={{
-                    display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-                    padding: '13px 14px', background: 'transparent',
-                    borderBottom: '1px solid rgba(14,28,19,0.05)', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
-                    cursor: 'pointer',
-                  }}>
-                    <div style={{
-                      width: 24, height: 24, borderRadius: 6,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontFamily: 'var(--font-display)', fontSize: 13,
-                      ...badgeStyle,
-                    }}>{r.result}</div>
-                    <div style={{ flex: 1, fontSize: 12 }}>vs {formatHandle(r.opp)}</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{r.margin}</div>
-                    <Icon.Chevron dir="right" size={12} color="var(--forest)"/>
-                  </button>
-                );
-              })}
+              {history.slice(0, 4).map((r, i) => (
+                <MatchHistoryRow
+                  key={r.id}
+                  row={r}
+                  last={i === Math.min(history.length, 4) - 1}
+                  onOpenProfile={(h) => go({ screen: 'profile', viewingHandle: h })}
+                  onOpenCard={() => go({ screen: 'matchDetail', matchId: r.id })}
+                />
+              ))}
               {history.length > 4 && (
                 <button onClick={() => setMatchHistoryOpen(true)} style={{
                   width: '100%', padding: '13px 14px',
@@ -299,6 +294,8 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
       {matchHistoryOpen && (
         <MatchHistorySheet
           history={history}
+          ownerId={targetId}
+          go={go}
           onClose={() => setMatchHistoryOpen(false)}
         />
       )}
@@ -1019,8 +1016,138 @@ function GuestPassesSheet({ tier, go, onClose }) {
   );
 }
 
+// ─── Player directory: resolve {id -> {handle, name}} for a set of ids ──
+// Used so partner / opponent handles that aren't in the joined match rows
+// (player_a2 / player_b2) can still be shown and made clickable.
+function usePlayerDirectory(ids) {
+  const [map, setMap] = React.useState({});
+  const key = (ids || []).filter(Boolean).slice().sort().join(',');
+  React.useEffect(() => {
+    let cancelled = false;
+    const list = key ? key.split(',') : [];
+    if (!list.length) { setMap({}); return; }
+    (async () => {
+      const { data } = await sbx.from('profiles').select('id, handle, first_name, last_name').in('id', list);
+      if (cancelled) return;
+      const m = {};
+      for (const p of (data || [])) {
+        m[p.id] = { handle: p.handle, name: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.handle };
+      }
+      setMap(m);
+    })();
+    return () => { cancelled = true; };
+  }, [key]);
+  return map;
+}
+
+// Shape raw matches into team-aware history rows from `ownerId`'s perspective.
+function buildTeamHistory(ownerId, matches, dir) {
+  if (!matches || !ownerId) return [];
+  return matches.slice(0, 12).map(m => {
+    const ownerIsA = m.player_a === ownerId || m.player_a2 === ownerId;
+    const aIds = [m.player_a, m.player_a2].filter(Boolean);
+    const bIds = [m.player_b, m.player_b2].filter(Boolean);
+    const ourIds = ownerIsA ? aIds : bIds;
+    const oppIds = ownerIsA ? bIds : aIds;
+
+    const handleOf = (id) => {
+      if (id === m.player_a && m.player_a_profile) return m.player_a_profile.handle;
+      if (id === m.player_b && m.player_b_profile) return m.player_b_profile.handle;
+      return (dir[id] && dir[id].handle) || null;
+    };
+    const mk = (ids) => ids.map(id => ({ id, handle: handleOf(id) }));
+
+    let result;
+    if (m.status !== 'completed') result = m.status === 'active' ? 'W' : 'H';
+    else if (m.result === 'H') result = 'H';
+    else result = ((m.result === 'A' && ownerIsA) || (m.result === 'B' && !ownerIsA)) ? 'W' : 'L';
+
+    const oppTeam = mk(oppIds);
+    return {
+      id: m.id,
+      is2v2: m.match_type === '2v2',
+      ourTeam: mk(ourIds),
+      oppTeam,
+      // Joined string kept for the scorecard hero ("vs …").
+      opp: oppTeam.map(x => (x.handle ? formatHandle(x.handle) : '?')).join(' + '),
+      result,
+      margin: m.final_margin || (m.status === 'active' ? 'Live' : m.status === 'waiting' ? 'Waiting' : 'AS'),
+      week: '',
+    };
+  });
+}
+
+// One clickable @handle. stopPropagation so it never triggers the row.
+function HandleChip({ member, onOpenProfile }) {
+  if (!member.handle) return <span style={{ opacity: 0.5 }}>…</span>;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onOpenProfile(member.handle); }}
+      style={{
+        background: 'transparent', border: 'none', padding: 0, margin: 0,
+        color: 'var(--forest)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+      }}
+    >
+      {formatHandle(member.handle)}
+    </button>
+  );
+}
+
+function TeamHandles({ members, onOpenProfile }) {
+  return (
+    <>
+      {members.map((mem, i) => (
+        <React.Fragment key={mem.id || i}>
+          {i > 0 && <span style={{ opacity: 0.45 }}> + </span>}
+          <HandleChip member={mem} onOpenProfile={onOpenProfile}/>
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
+// A single match-history row: clickable handles + a score that opens the card.
+function MatchHistoryRow({ row, last, onOpenProfile, onOpenCard }) {
+  const isW = row.result === 'W', isL = row.result === 'L';
+  const badgeStyle = isW
+    ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
+    : isL
+    ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
+    : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
+  const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
+  const marginOpacity = isL ? 0.55 : 1;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '13px 14px',
+      borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',
+    }}>
+      <div style={{
+        width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--font-display)', fontSize: 13, ...badgeStyle,
+      }}>{row.result}</div>
+
+      <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--ink)', lineHeight: 1.45 }}>
+        <TeamHandles members={row.ourTeam} onOpenProfile={onOpenProfile}/>
+        <span style={{ opacity: 0.5, margin: '0 6px' }}>vs</span>
+        <TeamHandles members={row.oppTeam} onOpenProfile={onOpenProfile}/>
+      </div>
+
+      <button onClick={(e) => { e.stopPropagation(); onOpenCard(); }} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+        background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 2px',
+      }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{row.margin}</span>
+        <Icon.Chevron dir="right" size={12} color="var(--forest)"/>
+      </button>
+    </div>
+  );
+}
+
 // ─── Match History Sheet ─────────────────────────────────────────────
-function MatchHistorySheet({ history, onClose }) {
+function MatchHistorySheet({ history, ownerId, go, onClose }) {
   const [selectedMatch, setSelectedMatch] = React.useState(null);
 
   return (
@@ -1039,34 +1166,15 @@ function MatchHistorySheet({ history, onClose }) {
             </div>
           ) : (
             <div className="card" style={{ overflow: 'hidden' }}>
-              {history.map((r, i) => {
-                const isW = r.result === 'W', isL = r.result === 'L';
-                const badgeStyle = isW
-                  ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
-                  : isL
-                  ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
-                  : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
-                const marginColor = isW ? 'var(--forest)' : isL ? 'var(--forest)' : '#8A6A4A';
-                const marginOpacity = isL ? 0.55 : 1;
-                return (
-                  <button key={r.id} onClick={() => setSelectedMatch(r)} style={{
-                    display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-                    padding: '13px 14px', border: 'none', cursor: 'pointer', background: 'transparent',
-                    borderBottom: i < history.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
-                  }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
-                    <div style={{
-                      width: 24, height: 24, borderRadius: 6, flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontFamily: 'var(--font-display)', fontSize: 13,
-                      ...badgeStyle,
-                    }}>{r.result}</div>
-                    <div style={{ flex: 1, fontSize: 12, color: 'var(--ink)' }}>vs {r.opp}</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{r.margin}</div>
-                    <Icon.Chevron dir="right" size={10} color="var(--forest)"/>
-                  </button>
-                );
-              })}
+              {history.map((r, i) => (
+                <MatchHistoryRow
+                  key={r.id}
+                  row={r}
+                  last={i === history.length - 1}
+                  onOpenProfile={(h) => { onClose(); go && go({ screen: 'profile', viewingHandle: h }); }}
+                  onOpenCard={() => setSelectedMatch(r)}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -1075,6 +1183,7 @@ function MatchHistorySheet({ history, onClose }) {
       {selectedMatch && (
         <MatchScorecardSheet
           match={selectedMatch}
+          ownerId={ownerId}
           onClose={() => setSelectedMatch(null)}
         />
       )}
@@ -1083,15 +1192,22 @@ function MatchHistorySheet({ history, onClose }) {
 }
 
 // ─── Match Scorecard Sheet ────────────────────────────────────────────
-function MatchScorecardSheet({ match, onClose }) {
+function MatchScorecardSheet({ match, ownerId, onClose }) {
   const [detail, loading] = useCompletedMatchDetail(match.id);
 
   const isW = match.result === 'W';
   const isL = match.result === 'L';
-  const userId = MOCK.USER && MOCK.USER.id;
+  // Perspective = the profile being viewed (self or another player).
+  const userId = ownerId || (MOCK.USER && MOCK.USER.id);
 
-  // Determine user's side from detail (A or B) to translate hole results
-  const youSide = detail ? (detail.player_a === userId ? 'A' : 'B') : null;
+  // Determine the viewed player's side from detail (A or B) to translate
+  // hole results. detail.player_a is only the primary; fall back to the
+  // match row's team membership for 2v2 where the owner is player_a2/b2.
+  const youSide = detail
+    ? (detail.player_a === userId
+        ? 'A'
+        : ((match.ourTeam || []).some(m => m.id === detail.player_a) ? 'A' : 'B'))
+    : null;
 
   // Map hole result (A/B/H) to user's perspective (W/L/H)
   function holeResult(h) {
