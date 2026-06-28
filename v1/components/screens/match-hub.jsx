@@ -245,9 +245,9 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   }
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px' }}>
       <button onClick={onCancel} style={{
-        position: 'absolute', top: 20, left: 20, width: 38, height: 38, borderRadius: 999,
+        position: 'absolute', top: 52, left: 16, zIndex: 5, width: 38, height: 38, borderRadius: 999,
         background: 'var(--paper)', border: 'var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)',
       }}>
         <Icon.ArrowLeft size={16} color="currentColor"/>
@@ -395,11 +395,11 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-      color: 'var(--cream)', display: 'flex', flexDirection: 'column', padding: '60px 24px 24px',
+      color: 'var(--cream)', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <button onClick={onCancel} style={{
-        position: 'absolute', top: 20, left: 20,
+        position: 'absolute', top: 52, left: 16, zIndex: 5,
         width: 38, height: 38, borderRadius: 999,
         background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(234,226,206,0.2)',
         color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -637,9 +637,9 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
   }
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px' }}>
       <button onClick={onCancel} style={{
-        position: 'absolute', top: 20, left: 20,
+        position: 'absolute', top: 52, left: 16, zIndex: 5,
         width: 38, height: 38, borderRadius: 999,
         background: 'var(--paper)', border: 'var(--hairline)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
