@@ -118,15 +118,20 @@ function useUserStats(profileId) {
 
   React.useEffect(() => { load(); }, [load]);
 
-  // Keep stats fresh when matches change.
+  // Keep stats fresh when matches change. UNIQUE channel name per hook instance:
+  // this hook runs both in the App shell (useRealUserSync) and on the You tab, so
+  // a fixed name made the second mount reuse the already-subscribed cached channel
+  // → "cannot add postgres_changes callbacks ... after subscribe()". A random name
+  // per instance avoids the collision.
+  const matchesChan = React.useRef(`user-matches-${Math.random().toString(36).slice(2, 10)}`).current;
   React.useEffect(() => {
     if (!profileId) return;
-    const ch = sbx.channel(`user-matches:${profileId}`)
+    const ch = sbx.channel(matchesChan)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_holes' }, () => load())
       .subscribe();
     return () => sbx.removeChannel(ch);
-  }, [profileId, load]);
+  }, [profileId, load, matchesChan]);
 
   return stats;
 }
