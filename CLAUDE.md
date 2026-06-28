@@ -1,4 +1,10 @@
 > Working principles for all Claude sessions in this repo: **[CLAUDE_PRINCIPLES.md](CLAUDE_PRINCIPLES.md)** — read before coding.
+>
+> **Two people work on this repo (Daniel + Rob).** `main` is protected — **never push to `main`
+> directly.** Make a branch, push it, open a PR, check the Vercel preview, then merge. The full
+> workflow + which files belong to which tab is in **[COLLABORATION.md](COLLABORATION.md)** —
+> read it before committing. New here / catching up? Start with the latest
+> **[docs/handoff/](docs/handoff/)** note.
 
 # For AI coding agents (Claude Code, Cursor, etc.)
 
