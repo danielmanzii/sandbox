@@ -37,7 +37,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
 
   // Match history: for self use the globally-synced MOCK.HISTORY; for another
   // user fetch THEIR matches by id and shape them from their perspective.
-  const [targetStats] = useUserStats(isSelf ? null : targetId);
+  const targetStats = useUserStats(isSelf ? null : targetId);
   const history = isSelf
     ? (MOCK.HISTORY || [])
     : (targetStats && realTarget ? buildHistoryFromMatches(realTarget, targetStats.recentMatches) : []);
