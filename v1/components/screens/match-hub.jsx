@@ -244,8 +244,19 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
     setBusy(false); onCreated(data);
   }
 
+  const Label = ({ children }) => (
+    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.55, color: 'var(--forest)', marginBottom: 10 }}>{children}</div>
+  );
+  const segStyle = (on) => ({
+    flex: 1, padding: '14px', borderRadius: 12,
+    background: on ? 'var(--forest)' : 'rgba(14,28,19,0.04)',
+    color: on ? 'var(--cream)' : 'var(--forest)',
+    border: on ? 'none' : '1px solid rgba(14,28,19,0.08)',
+    fontSize: 14, fontWeight: 800, lineHeight: 1.1,
+  });
+
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px' }}>
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 16px 24px' }}>
       <button onClick={onCancel} style={{
         position: 'absolute', top: 52, left: 16, zIndex: 5, width: 38, height: 38, borderRadius: 999,
         background: 'var(--paper)', border: 'var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)',
@@ -253,98 +264,108 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <Eyebrow color="var(--forest)">New {matchType} · {isRegular ? 'regular course' : 'pitch & putt'}</Eyebrow>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-        Set it up.
-      </div>
-      {matchType === '2v2' && (
-        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--forest)', opacity: 0.7, marginTop: 10, lineHeight: 1.4 }}>
-          Share the code with your partner first, then with your opponents. Match starts when 4 players are in.
+      <div style={{ padding: '0 4px' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>New match</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
+          Set it up.
         </div>
-      )}
+        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--forest)', opacity: 0.7, marginTop: 6, lineHeight: 1.4 }}>
+          {matchType === '2v2'
+            ? 'Course, holes, format — then share the code with your partner and opponents.'
+            : 'Course, holes, format — then share the code with your opponent.'}
+        </div>
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 24 }}>
-        {isRegular ? (
-          <>
-            {/* Course */}
-            <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Course</div>
-              <select value={courseId || ''} onChange={e => { setCourseId(e.target.value); const c = rcCourses.find(x => x.id === e.target.value); setTeeId(c && c.tees[0] ? c.tees[0].id : null); }} style={{
-                width: '100%', padding: '13px 14px', borderRadius: 12, background: 'var(--paper)',
-                border: 'var(--hairline-strong)', color: 'var(--ink)', fontSize: 15, outline: 'none',
-              }}>
-                {rcCourses.length === 0 && <option>Loading…</option>}
-                {rcCourses.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` · ${c.city}` : ''}</option>)}
-              </select>
-            </label>
-            {/* Tees */}
-            <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Tees</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {selCourse && selCourse.tees.map(t => (
-                  <button key={t.id} onClick={() => setTeeId(t.id)} style={{
-                    flex: 1, minWidth: 90, padding: '12px 10px', borderRadius: 12,
-                    background: teeId === t.id ? 'var(--forest)' : 'var(--paper)',
-                    color: teeId === t.id ? 'var(--cream)' : 'var(--forest)',
-                    border: teeId === t.id ? 'none' : 'var(--hairline-strong)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || 'var(--forest)', display: 'inline-block' }}/>
-                      {t.name}
-                    </span>
-                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
-                  </button>
-                ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20 }}>
+        {/* Course & tees */}
+        <div className="card" style={{ padding: 16 }}>
+          <Label>Course</Label>
+          {isRegular ? (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {rcCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.5 }}>Loading courses…</div>}
+                {rcCourses.map(c => {
+                  const on = courseId === c.id;
+                  return (
+                    <button key={c.id} onClick={() => { setCourseId(c.id); setTeeId(c.tees[0] ? c.tees[0].id : null); }} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left',
+                      padding: '12px 14px', borderRadius: 12,
+                      background: on ? 'var(--forest)' : 'rgba(14,28,19,0.04)',
+                      color: on ? 'var(--cream)' : 'var(--forest)', border: 'none',
+                    }}>
+                      <span>
+                        <span style={{ display: 'block', fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>{c.name}</span>
+                        {c.city && <span style={{ display: 'block', fontSize: 11, opacity: 0.7, marginTop: 2 }}>{c.city}</span>}
+                      </span>
+                      {on && <Icon.ArrowRight size={15} color="var(--cream)"/>}
+                    </button>
+                  );
+                })}
               </div>
-            </label>
-          </>
-        ) : (
-          <label style={{ display: 'block' }}>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Course</div>
+              {selCourse && selCourse.tees.length > 0 && (
+                <>
+                  <div style={{ height: 14 }}/>
+                  <Label>Tees</Label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {selCourse.tees.map(t => (
+                      <button key={t.id} onClick={() => setTeeId(t.id)} style={{
+                        flex: 1, minWidth: 90, padding: '12px 10px', borderRadius: 12,
+                        background: teeId === t.id ? 'var(--forest)' : 'rgba(14,28,19,0.04)',
+                        color: teeId === t.id ? 'var(--cream)' : 'var(--forest)',
+                        border: teeId === t.id ? 'none' : '1px solid rgba(14,28,19,0.08)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                      }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || 'var(--forest)', display: 'inline-block' }}/>
+                          {t.name}
+                        </span>
+                        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
             <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Killian Greens" style={{
-              width: '100%', padding: '13px 14px', borderRadius: 12, background: 'var(--paper)',
-              border: 'var(--hairline-strong)', color: 'var(--ink)', fontSize: 15, outline: 'none',
+              width: '100%', padding: '13px 14px', borderRadius: 12, background: 'rgba(14,28,19,0.04)',
+              border: '1px solid rgba(14,28,19,0.08)', color: 'var(--ink)', fontSize: 15, outline: 'none',
             }}/>
-          </label>
-        )}
+          )}
+        </div>
 
         {/* Holes */}
-        <label style={{ display: 'block' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Holes</div>
+        <div className="card" style={{ padding: 16 }}>
+          <Label>Holes</Label>
           <div style={{ display: 'flex', gap: 8 }}>
             {[9, 18].map(n => (
-              <button key={n} onClick={() => setHoles(n)} style={{
-                flex: 1, padding: '14px', borderRadius: 12,
-                background: holes === n ? 'var(--forest)' : 'var(--paper)',
-                color: holes === n ? 'var(--cream)' : 'var(--forest)',
-                border: holes === n ? 'none' : 'var(--hairline-strong)',
-                fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
-              }}>{n} HOLES{isRegular && n === 9 ? ' (FRONT)' : ''}</button>
+              <button key={n} onClick={() => setHoles(n)} style={segStyle(holes === n)}>
+                {n}-hole{isRegular && n === 9 ? ' (front)' : ''}
+              </button>
             ))}
           </div>
-        </label>
+        </div>
 
         {/* Match type */}
-        <label style={{ display: 'block' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.65, marginBottom: 6, color: 'var(--forest)' }}>Match type</div>
+        <div className="card" style={{ padding: 16 }}>
+          <Label>Match type</Label>
           <div style={{ display: 'flex', gap: 8 }}>
             {[['1v1', '1v1'], ['2v2', '2v2 · Scramble']].map(([v, l]) => (
-              <button key={v} onClick={() => setMatchType(v)} style={{
-                flex: 1, padding: '14px', borderRadius: 12,
-                background: matchType === v ? 'var(--forest)' : 'var(--paper)',
-                color: matchType === v ? 'var(--cream)' : 'var(--forest)',
-                border: matchType === v ? 'none' : 'var(--hairline-strong)',
-                fontSize: 14, fontWeight: 800,
-              }}>{l}</button>
+              <button key={v} onClick={() => setMatchType(v)} style={segStyle(matchType === v)}>{l}</button>
             ))}
           </div>
-        </label>
+        </div>
+
+        {/* Playing as */}
+        <div style={{ padding: '14px 16px', borderRadius: 16, background: 'rgba(14,28,19,0.04)' }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.55, fontWeight: 700 }}>Playing as</div>
+          <div style={{ marginTop: 4, fontSize: 14, color: 'var(--forest)', fontWeight: 700 }}>{formatHandle(profile.handle)}</div>
+        </div>
       </div>
 
       {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
 
-      <div style={{ flex: 1 }}/>
+      <div style={{ flex: 1, minHeight: 16 }}/>
 
       <Button variant="forest" size="lg" full disabled={busy} onClick={create}>
         {busy ? 'Creating…' : 'Create match'}
