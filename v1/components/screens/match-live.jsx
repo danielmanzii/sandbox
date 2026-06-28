@@ -370,6 +370,11 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
           </div>
         )}
 
+        {/* Track-stats callout — directly under the toggle, in quick mode (1v1 + 2v2) */}
+        {!statsMode && hasTeam && (
+          <TeamCapture onTrackStats={() => setMode('stats')}/>
+        )}
+
         {statsMode ? (
           <div style={{ marginTop: 16 }}>
             <ShotFlow
@@ -397,11 +402,6 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
             <div style={{ height: 12 }}/>
             <OppReadout label={theirTeamLabel || 'Opponent'} labelPlayers={theirTeam} value={oppScore} par={hole.par || 3} live={liveOpp} holeNumber={hole.hole_number}/>
           </div>
-        )}
-
-        {/* Quick Score → nudge toward Track Stats for bonus points. */}
-        {!statsMode && hasTeam && yourScore != null && (
-          <TeamCapture onTrackStats={() => setMode('stats')}/>
         )}
 
         {yourScore != null && oppScore != null && (
@@ -656,7 +656,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
       return next;
     });
     return (
-      <SfWrap count={count} onReset={reset} label={yourTeamLabel} labelPlayers={yourTeam} title={`Putt ${roundNo} — Putt made?`}>
+      <SfWrap count={count} onReset={reset} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {yourTeam.map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
@@ -941,7 +941,7 @@ function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
   const liveOn = value == null && live && live.holeNumber === holeNumber && !live.done && live.strokes > 0;
   const big = value != null ? value : (liveOn ? live.strokes : '–');
   const sub = value != null ? 'Logged by their team'
-            : liveOn ? 'Playing this hole…'
+            : liveOn ? `Currently playing Shot ${live.strokes + 1}`
             : 'Waiting for their score…';
   return (
     <div>
@@ -952,15 +952,17 @@ function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
             ? <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
             : <span/>
         ) : (
-          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, color: liveOn ? '#7BD389' : 'inherit', opacity: liveOn ? 1 : 0.55 }}>
-            {liveOn && <span style={{ width: 6, height: 6, borderRadius: 999, background: '#7BD389', display: 'inline-block' }}/>}
+          <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: liveOn ? '#7BD389' : 'inherit', opacity: liveOn ? 1 : 0.55 }}>
             Strokes so far
           </span>
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
-          {big}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {liveOn && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#7BD389', flexShrink: 0 }}/>}
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
+            {big}
+          </div>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, opacity: 0.6, lineHeight: 1.3 }}>{sub}</div>
       </div>
@@ -1040,7 +1042,7 @@ function ResultBadge({ result, youAreA }) {
     return <div style={{ width: 16, height: 16, borderRadius: 999, border: '1px dashed currentColor', opacity: 0.3 }}/>;
   }
   if (result === 'H') {
-    return <div style={{ width: 16, height: 16, borderRadius: 999, background: 'transparent', border: '1.5px solid currentColor' }}/>;
+    return <div style={{ width: 18, height: 18, borderRadius: 999, background: 'transparent', border: '1.5px solid currentColor', color: 'currentColor', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>H</div>;
   }
   const youWon = (result === 'A' && youAreA) || (result === 'B' && !youAreA);
   return (
