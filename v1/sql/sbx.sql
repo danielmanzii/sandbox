@@ -143,8 +143,10 @@ begin
     sbx_2v2_n   = coalesce(s.n, 0),
     sbx_2v2_rel = round(least(1.0, coalesce(s.n,0)/10.0) * least(1.0, coalesce(s.opps,0)/5.0), 2)
   from (
-    select uid, count(*) as n, count(distinct opp) as opps from (
-      select pl.uid, unnest(array[o1,o2]) as opp from (
+    -- n = distinct MATCHES. A 2v2 has 2 opponents per player, so counting rows
+    -- would read one match as 2 — count distinct match ids instead.
+    select uid, count(distinct match_id) as n, count(distinct opp) as opps from (
+      select z.id as match_id, pl.uid, unnest(array[o1,o2]) as opp from (
         select m.id,
                unnest(array[m.player_a,m.player_a2,m.player_b,m.player_b2]) as uid_all,
                m.player_a as a1, m.player_a2 as a2, m.player_b as b1, m.player_b2 as b2
