@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useNextMajor, useUpcomingEvents */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useNextMajor, useUpcomingEvents, useSbxLeaderboard, formatHandle */
 // Social: people search + leaderboards + member directory-lite
 
 function SocialScreen({ go, tier }) {
@@ -252,79 +252,74 @@ function MatchBoardRow({ m, last }) {
 }
 
 function SeasonLeaderboard({ go }) {
-  const u = MOCK.USER;
-  const [selectedPlayer, setSelectedPlayer] = React.useState(null);
-
-  const userRow = {
-    name: u.handle,
-    W: u.matchesW, L: u.matchesL, H: u.matchesH,
-    holesW: u.holesWonTotal || 0,
-    events: u.eventsPlayed || u.matchesTotal || 0,
-    sbx: u.sbx,
-    isYou: true,
-  };
-  const rows = [
-    { name: '@dukes',    W: 9, L: 2, H: 0, holesW: 58, events: 11, sbx: 6.712 },
-    { name: '@bigleo',   W: 8, L: 2, H: 1, holesW: 55, events: 11, sbx: 6.201 },
-    { name: '@jaybird',  W: 7, L: 2, H: 1, holesW: 51, events: 10, sbx: 5.988 },
-    { name: '@riv',      W: 7, L: 4, H: 0, holesW: 48, events: 11, sbx: 5.544 },
-    userRow,
-    { name: '@theo.m',   W: 5, L: 4, H: 1, holesW: 38, events: 10, sbx: 4.821 },
-    { name: '@maria.cg', W: 4, L: 4, H: 1, holesW: 34, events:  9, sbx: 4.503 },
-    { name: '@camicu',   W: 3, L: 6, H: 1, holesW: 31, events: 10, sbx: 4.012 },
-  ];
+  const meId = MOCK.USER && MOCK.USER.id;
+  const data = useSbxLeaderboard(50); // null = loading, [] = nobody rated yet
+  const rows = (data || []).map(p => ({
+    id: p.id,
+    name: [p.first_name, p.last_name].filter(Boolean).join(' ') || formatHandle(p.handle),
+    handle: p.handle,
+    avatar: p.avatar_url,
+    sbx: p.sbx,
+    matches: (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0),
+    isYou: p.id === meId,
+  }));
 
   return (
     <div style={{ padding: '18px 16px' }}>
       <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 12, padding: '0 4px', lineHeight: 1.45, fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
-        Match wins primary. Halved = 0.5. Holes won is the tiebreak. Top 16 make the season championship.
+        Ranked by Sandbox Rating™. Play and confirm matches to climb.
       </div>
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', padding: '10px 14px', fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.5, borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
           <span style={{ width: 26, textAlign: 'center' }}>#</span>
           <span style={{ flex: 1, paddingLeft: 8 }}>Player</span>
-          <span style={{ width: 64, textAlign: 'right' }}>W–L–H</span>
-          <span style={{ width: 44, textAlign: 'right' }}>Holes</span>
+          <span style={{ width: 56, textAlign: 'right' }}>SBX</span>
         </div>
-        {rows.map((r, i) => {
-          const pts = r.W + r.H * 0.5;
-          return (
-            <button key={r.name} onClick={() => setSelectedPlayer(r)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '12px 14px', textAlign: 'left',
-              borderBottom: i < rows.length - 1 ? '1px dashed rgba(14,28,19,0.08)' : 'none',
-              background: r.isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
-              cursor: 'pointer', border: 'none',
-            }}>
-              <div style={{
-                width: 26, textAlign: 'center',
-                fontFamily: 'var(--font-display)', fontSize: 14,
-                color: 'var(--forest)', opacity: i < 3 ? 1 : 0.4,
-                fontWeight: i < 3 ? 700 : 400,
-              }}>{i + 1}</div>
-              <AvatarBy name={r.name} size={30}/>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{r.name}{r.isYou && ' · you'}</div>
-                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{pts} pts · {r.events} events</div>
-              </div>
-              <div style={{ width: 64, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 15, color: 'var(--forest)' }}>
-                {r.W}–{r.L}–{r.H}
-              </div>
-              <div style={{ width: 44, textAlign: 'right', fontSize: 12, opacity: 0.65, fontWeight: 700 }}>
-                {r.holesW}
-              </div>
-            </button>
-          );
-        })}
+        {data === null ? (
+          <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+        ) : rows.length === 0 ? (
+          <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
+            No rated players yet — play and confirm a few matches to appear here.
+          </div>
+        ) : rows.map((r, i) => (
+          <button key={r.id} onClick={() => go && go({ screen: 'profile', viewingHandle: r.handle })} style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+            padding: '12px 14px', textAlign: 'left',
+            borderBottom: i < rows.length - 1 ? '1px dashed rgba(14,28,19,0.08)' : 'none',
+            background: r.isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
+            cursor: 'pointer', border: 'none',
+          }}>
+            <div style={{
+              width: 26, textAlign: 'center',
+              fontFamily: 'var(--font-display)', fontSize: 14,
+              color: 'var(--forest)', opacity: i < 3 ? 1 : 0.4,
+              fontWeight: i < 3 ? 700 : 400,
+            }}>{i + 1}</div>
+            <LbAvatar player={r} size={30}/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}{r.isYou && ' · you'}</div>
+              <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{formatHandle(r.handle)} · {r.matches} {r.matches === 1 ? 'match' : 'matches'}</div>
+            </div>
+            <div style={{ width: 56, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
+              {r.sbx != null ? Number(r.sbx).toFixed(3) : '—'}
+            </div>
+          </button>
+        ))}
       </div>
+    </div>
+  );
+}
 
-      {selectedPlayer && (
-        <PlayerStatsSheet
-          player={selectedPlayer}
-          go={go}
-          onClose={() => setSelectedPlayer(null)}
-        />
-      )}
+// Leaderboard avatar — real picture if set, else the player's initial.
+function LbAvatar({ player, size = 30 }) {
+  const initial = (player.name || player.handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  return (
+    <div style={{ width: size, height: size, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
+      background: 'var(--forest)', color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontSize: Math.round(size * 0.42) }}>
+      {player.avatar
+        ? <img src={player.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+        : initial}
     </div>
   );
 }
@@ -433,14 +428,24 @@ function PlayerStatsSheet({ player, go, onClose }) {
 }
 
 function AllTimeLeaderboard() {
+  const data = useSbxLeaderboard(100);
+  const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
+
+  if (data === null) {
+    return <div style={{ padding: '24px 16px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
+  }
+  if (!data.length) {
+    return <div style={{ padding: '24px 16px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>No records yet — play and confirm matches to set the first ones.</div>;
+  }
+  const top = data[0]; // ordered by SBX desc
+  const mostActive = data.reduce((a, b) => (matchesOf(b) > matchesOf(a) ? b : a), data[0]);
+
   return (
     <div style={{ padding: '18px 16px' }}>
       <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>Records</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <RecordCard title="Highest SBX ever" holder="@dukes" value="6.712"/>
-        <RecordCard title="Longest unbeaten" holder="@jaybird" value="11 m"/>
-        <RecordCard title="Biggest win" holder="@dukes + @bigleo" value="7&6"/>
-        <RecordCard title="Partner chemistry" holder="Dukes + Leo" value="96"/>
+        <RecordCard title="Highest SBX" holder={formatHandle(top.handle)} value={top.sbx != null ? Number(top.sbx).toFixed(3) : '—'}/>
+        <RecordCard title="Most matches" holder={formatHandle(mostActive.handle)} value={String(matchesOf(mostActive))}/>
       </div>
     </div>
   );
