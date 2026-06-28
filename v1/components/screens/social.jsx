@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, MOCK, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useSbxLeaderboard, formatHandle */
+/* global React, Icon, LiveDot, Button, MOCK, sbx, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useSbxLeaderboard, formatHandle */
 // Explore: prominent player search + top 10 by SBX + your band rank + stat leaders.
 // (Tab is labelled "Explore" in the shell; the route id stays `social`.)
 
@@ -313,30 +313,69 @@ function LbAvatar({ player, size = 30 }) {
   );
 }
 
+// Holes-up from a final_margin string ("7&6" → 7, "2 UP" → 2, "AS" → 0).
+function marginUp(s) {
+  if (!s) return -1;
+  const amp = String(s).match(/^(\d+)\s*&/);
+  if (amp) return parseInt(amp[1], 10);
+  const up = String(s).match(/^(\d+)\s*UP/i);
+  if (up) return parseInt(up[1], 10);
+  return 0;
+}
+
+// Biggest winning margin in a given format ('2v2' | '1v1') across all
+// completed matches. Returns { margin, holderHandle } or null.
+function useBiggestWin(matchType) {
+  const [best, setBest] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: ms } = await sbx
+        .from('matches')
+        .select('id, final_margin, result, match_type, player_a, player_b')
+        .eq('status', 'completed')
+        .eq('match_type', matchType)
+        .in('result', ['A', 'B']);
+      if (cancelled) return;
+      let top = null, topUp = -1;
+      for (const m of (ms || [])) {
+        const u = marginUp(m.final_margin);
+        if (u > topUp) { topUp = u; top = m; }
+      }
+      if (!top) { setBest(null); return; }
+      const winnerId = top.result === 'A' ? top.player_a : top.player_b;
+      let handle = null;
+      if (winnerId) {
+        const { data: p } = await sbx.from('profiles').select('handle').eq('id', winnerId).maybeSingle();
+        handle = p && p.handle;
+      }
+      if (!cancelled) setBest({ margin: top.final_margin, holderHandle: handle });
+    })();
+    return () => { cancelled = true; };
+  }, [matchType]);
+  return best;
+}
+
 // ─── Stat leaders across all rated players ───────────────────────────
 function StatLeaders({ data, go }) {
+  const big2 = useBiggestWin('2v2');
+  const big1 = useBiggestWin('1v1');
+
   if (data === null) {
     return <div style={{ padding: '6px 16px 0', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
   }
   if (!data.length) return null;
 
   const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
-  const maxBy = (key) => {
-    const pool = data.filter(p => p[key] != null);
-    if (!pool.length) return null;
-    return pool.reduce((a, b) => (Number(b[key]) > Number(a[key]) ? b : a));
-  };
 
   const topSbx     = data[0]; // already SBX-desc
   const mostActive = data.reduce((a, b) => (matchesOf(b) > matchesOf(a) ? b : a), data[0]);
-  const best1v1    = maxBy('sbx_1v1');
-  const best2v2    = maxBy('sbx_2v2');
 
   const cards = [
-    { title: 'Highest SBX',  holder: topSbx,     value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—' },
-    { title: 'Most matches', holder: mostActive, value: String(matchesOf(mostActive)) },
-    best2v2 && { title: 'Best 2v2', holder: best2v2, value: Number(best2v2.sbx_2v2).toFixed(3) },
-    best1v1 && { title: 'Best 1v1', holder: best1v1, value: Number(best1v1.sbx_1v1).toFixed(3) },
+    { title: 'Highest SBX',  holderHandle: topSbx.handle,     value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—' },
+    { title: 'Most matches', holderHandle: mostActive.handle, value: String(matchesOf(mostActive)) },
+    big2 && { title: 'Best 2v2 win', holderHandle: big2.holderHandle, value: big2.margin },
+    big1 && { title: 'Best 1v1 win', holderHandle: big1.holderHandle, value: big1.margin },
   ].filter(Boolean);
 
   return (
@@ -347,9 +386,9 @@ function StatLeaders({ data, go }) {
           <RecordCard
             key={c.title}
             title={c.title}
-            holder={formatHandle(c.holder.handle)}
+            holder={c.holderHandle ? formatHandle(c.holderHandle) : '—'}
             value={c.value}
-            onOpen={c.holder.handle ? () => go && go({ screen: 'profile', viewingHandle: c.holder.handle }) : null}
+            onOpen={c.holderHandle ? () => go && go({ screen: 'profile', viewingHandle: c.holderHandle }) : null}
           />
         ))}
       </div>
