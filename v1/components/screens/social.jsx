@@ -1,78 +1,99 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, MOCK, AvatarBy, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useNextMajor, useUpcomingEvents, useSbxLeaderboard, formatHandle */
-// Social: people search + leaderboards + member directory-lite
+/* global React, Icon, LiveDot, Button, MOCK, useUserSearch, useIsFollowing, followUser, unfollowUser, useLiveEvent, useSbxLeaderboard, formatHandle */
+// Explore: prominent player search + top 10 by SBX + your band rank + stat leaders.
+// (Tab is labelled "Explore" in the shell; the route id stays `social`.)
 
-function SocialScreen({ go, tier }) {
-  const [tab, setTab] = React.useState('live');
-  const [liveEvent]   = useLiveEvent();
-  const [nextMajor]   = useNextMajor();
-  const [upcoming]    = useUpcomingEvents(1);
-  const nextEvent     = nextMajor || (upcoming && upcoming[0]) || null;
+function SocialScreen({ go }) {
+  const [liveEvent] = useLiveEvent();
+  const data        = useSbxLeaderboard(200); // null = loading, [] = nobody rated yet
+  const meId        = MOCK.USER && MOCK.USER.id;
+
+  const rated = data || [];
+  const top10 = rated.slice(0, 10);
+
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <div style={{ padding: '58px 20px 20px', background: 'var(--canvas)', color: 'var(--forest)' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>The Board</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.9, marginTop: 8, letterSpacing: '-0.02em' }}>Leaderboards.</div>
+      <div style={{ padding: '58px 20px 16px', background: 'var(--canvas)', color: 'var(--forest)' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Explore</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.9, marginTop: 8, letterSpacing: '-0.02em' }}>Who's hot.</div>
         <div className="caption-serif" style={{ fontSize: 16, opacity: 0.65, marginTop: 6 }}>
-          Talk less. Shoot lower.
+          Find players. Track the ladder.
         </div>
       </div>
 
-      <FindPlayers go={go}/>
+      {/* Prominent search */}
+      <ExploreSearch go={go}/>
 
-      <div style={{ display: 'flex', gap: 4, margin: '0 16px 0', background: 'rgba(14,28,19,0.05)', borderRadius: 14, padding: 4 }}>
-        {[['live', 'Live'], ['season', 'Season'], ['alltime', 'All-time']].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            flex: 1, padding: '10px 12px', borderRadius: 11,
-            background: tab === k ? 'var(--paper)' : 'transparent',
-            color: 'var(--forest)', fontWeight: 700, fontSize: 12,
-            boxShadow: tab === k ? 'var(--shadow-sm)' : 'none',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.04em',
+      {/* Live now banner (only when a match is in progress) */}
+      {liveEvent && (
+        <div style={{ padding: '0 16px 16px' }}>
+          <button onClick={() => go({ screen: 'live' })} style={{
+            width: '100%', textAlign: 'left',
+            background: 'linear-gradient(135deg, var(--forest-dark), var(--forest))',
+            color: 'var(--cream)', padding: 16, borderRadius: 18, border: 'none',
+            display: 'flex', alignItems: 'center', gap: 12, boxShadow: 'var(--shadow-md)',
           }}>
-            {k === 'live' && <LiveDot/>}
-            {l}
+            <LiveDot/>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1, letterSpacing: '-0.01em' }}>{liveEvent.courseShort}</div>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, marginTop: 5, letterSpacing: '0.06em' }}>
+                {(liveEvent.dateFull || '').toUpperCase()} · LIVE NOW
+              </div>
+            </div>
+            <Icon.ArrowRight size={14} color="var(--cream)"/>
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {tab === 'live' && <LiveLeaderboard go={go} liveEvent={liveEvent} nextEvent={nextEvent}/>}
-      {tab === 'season' && <SeasonLeaderboard go={go}/>}
-      {tab === 'alltime' && <AllTimeLeaderboard/>}
+      {/* Your rank within your SBX band */}
+      <BandRankCard data={data} meId={meId}/>
+
+      {/* Top 10 by SBX */}
+      <TopTen rows={top10} loading={data === null} meId={meId} go={go}/>
+
+      {/* Stat leaders across all players */}
+      <StatLeaders data={data}/>
     </div>
   );
 }
 
-// ─── Find players: live search + inline follow ───────────────────────
-function FindPlayers({ go }) {
+// ─── Prominent search: tap-to-focus bar + live results ───────────────
+function ExploreSearch({ go }) {
   const [q, setQ] = React.useState('');
   const [results, loading] = useUserSearch(q, 8);
   const viewerId = MOCK.USER && MOCK.USER.id;
+  const inputRef = React.useRef(null);
 
   return (
     <div style={{ padding: '0 16px 18px' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: 'var(--paper)', borderRadius: 14,
-        padding: '12px 14px',
-        border: '1px solid rgba(14,28,19,0.06)',
-      }}>
-        <Icon.Search size={16} color="var(--forest)"/>
+      <div
+        onClick={() => inputRef.current && inputRef.current.focus()}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: 'var(--forest)', borderRadius: 16,
+          padding: '15px 18px', cursor: 'text',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <Icon.Search size={18} color="var(--cream)"/>
         <input
+          ref={inputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Find players by handle or name…"
+          placeholder="Search players by name or @handle…"
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            fontSize: 14, color: 'var(--ink)', fontWeight: 600,
+            fontSize: 15, color: 'var(--cream)', fontWeight: 600,
           }}
+          className="explore-search-input"
         />
         {q && (
-          <button onClick={() => setQ('')} style={{
-            background: 'transparent', border: 'none', color: 'var(--forest)',
-            fontSize: 12, opacity: 0.6, cursor: 'pointer', padding: 0,
+          <button onClick={(e) => { e.stopPropagation(); setQ(''); }} style={{
+            background: 'rgba(234,226,206,0.18)', border: 'none', color: 'var(--cream)',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '4px 10px', borderRadius: 999,
           }}>Clear</button>
         )}
       </div>
+      <style>{`.explore-search-input::placeholder { color: rgba(234,226,206,0.6); }`}</style>
 
       {q.trim().length > 0 && (
         <div className="card" style={{ marginTop: 10, overflow: 'hidden' }}>
@@ -159,115 +180,78 @@ function SearchResultRow({ row, viewerId, last, onOpen }) {
   );
 }
 
-function LiveLeaderboard({ go, liveEvent, nextEvent }) {
-  if (!liveEvent) {
+// ─── Your rank within your SBX band (e.g. 3rd in the 3.000–3.999 band) ──
+function BandRankCard({ data, meId }) {
+  if (data === null) return null; // loading — stay quiet
+  const myRow = data.find(p => p.id === meId);
+
+  // Unrated / not in the ranked set yet.
+  if (!myRow || myRow.sbx == null) {
     return (
-      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1, marginBottom: 6 }}>
-          No live leaderboard available.
-        </div>
-        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--ink)', opacity: 0.6, marginBottom: 24 }}>
-          Check back when a match is in progress.
-        </div>
-        {nextEvent ? (
-          <div className="card" style={{ padding: '18px 20px', textAlign: 'left' }}>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
-              Next match
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>
-              {nextEvent.courseShort}
-            </div>
-            <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, marginTop: 6, letterSpacing: '0.04em' }}>
-              {(nextEvent.dateFull || '').toUpperCase()} · {nextEvent.time}
-            </div>
+      <div style={{ padding: '0 16px 18px' }}>
+        <div className="card" style={{ padding: '18px 20px' }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Your band</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1.05, marginTop: 8 }}>
+            Not rated yet.
           </div>
-        ) : (
-          <div style={{ fontSize: 13, color: 'var(--ink)', opacity: 0.4 }}>No upcoming events scheduled.</div>
-        )}
+          <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>
+            Play and confirm 3 matches to earn your Sandbox Rating and see where you rank.
+          </div>
+        </div>
       </div>
     );
   }
 
+  const band      = Math.floor(Number(myRow.sbx));
+  const bandLabel = `${band}.000–${band}.999`;
+  const bandPlayers = data.filter(p => p.sbx != null && Math.floor(Number(p.sbx)) === band); // already SBX-desc
+  const myBandRank  = bandPlayers.findIndex(p => p.id === meId) + 1;
+  const ordinal = (n) => {
+    const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
   return (
-    <div style={{ padding: '18px 16px' }}>
-      <button onClick={() => go({ screen: 'live' })} style={{
-        width: '100%', textAlign: 'left',
-        background: `linear-gradient(135deg, var(--forest-dark), var(--forest))`,
-        color: 'var(--cream)',
-        padding: 16, borderRadius: 18, marginBottom: 14,
-        border: 'none',
-        display: 'flex', alignItems: 'center', gap: 12,
-        boxShadow: 'var(--shadow-md)',
+    <div style={{ padding: '0 16px 18px' }}>
+      <div style={{
+        background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+        color: 'var(--cream)', borderRadius: 20, padding: '20px 22px',
+        position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)',
       }}>
-        <LiveDot/>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1, letterSpacing: '-0.01em' }}>{liveEvent.courseShort}</div>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, marginTop: 5, letterSpacing: '0.06em' }}>
-            {(liveEvent.dateFull || '').toUpperCase()} · LIVE NOW
+        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+        <div style={{ position: 'relative' }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            Your rank · {bandLabel} band
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, lineHeight: 0.8, letterSpacing: '-0.03em' }}>
+                {ordinal(myBandRank)}
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.8, fontFamily: 'var(--font-mono)' }}>
+                of {bandPlayers.length}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', opacity: 0.85 }}>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.7 }}>Your SBX</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, marginTop: 4 }}>
+                {Number(myRow.sbx).toFixed(3)}
+              </div>
+            </div>
           </div>
         </div>
-        <Icon.ArrowRight size={14} color="var(--cream)"/>
-      </button>
-      <div style={{ padding: '20px', textAlign: 'center', opacity: 0.45 }}>
-        <div style={{ fontSize: 13 }}>Live match board coming soon.</div>
       </div>
     </div>
   );
 }
 
-function MatchBoardRow({ m, last }) {
-  const statusColor = m.status === 'AS' ? '#8A6A4A' : m.status === 'DORMIE' ? 'var(--clay-deep)' : 'var(--forest)';
-  const [teamA, teamB] = m.teams.split(' vs ');
+// ─── Top 10 by Sandbox Rating ────────────────────────────────────────
+function TopTen({ rows, loading, meId, go }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '12px 14px',
-      borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',
-      background: m.isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
-    }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{
-            color: m.leader === 'A' ? 'var(--forest)' : 'var(--ink)',
-            fontWeight: m.leader === 'A' ? 800 : 600,
-          }}>{teamA}</span>
-          {m.isYou && <Chip variant="forest" style={{ fontSize: 9, padding: '1px 6px' }}>YOU</Chip>}
-        </div>
-        <div style={{
-          fontSize: 12, marginTop: 2,
-          color: m.leader === 'B' ? 'var(--forest)' : 'rgba(14,28,19,0.55)',
-          fontWeight: m.leader === 'B' ? 800 : 600,
-        }}>{teamB}</div>
-      </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, lineHeight: 1, color: statusColor, letterSpacing: '-0.01em' }}>
-          {m.status}
-        </div>
-        <div style={{ fontSize: 9, opacity: 0.55, marginTop: 3, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          THRU {m.thru}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SeasonLeaderboard({ go }) {
-  const meId = MOCK.USER && MOCK.USER.id;
-  const data = useSbxLeaderboard(50); // null = loading, [] = nobody rated yet
-  const rows = (data || []).map(p => ({
-    id: p.id,
-    name: [p.first_name, p.last_name].filter(Boolean).join(' ') || formatHandle(p.handle),
-    handle: p.handle,
-    avatar: p.avatar_url,
-    sbx: p.sbx,
-    matches: (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0),
-    isYou: p.id === meId,
-  }));
-
-  return (
-    <div style={{ padding: '18px 16px' }}>
-      <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 12, padding: '0 4px', lineHeight: 1.45, fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
-        Ranked by Sandbox Rating™. Play and confirm matches to climb.
+    <div style={{ padding: '0 16px 18px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, padding: '0 4px' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Top 10</div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.45, letterSpacing: '0.06em' }}>BY SANDBOX RATING™</div>
       </div>
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', padding: '10px 14px', fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.5, borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
@@ -275,36 +259,41 @@ function SeasonLeaderboard({ go }) {
           <span style={{ flex: 1, paddingLeft: 8 }}>Player</span>
           <span style={{ width: 56, textAlign: 'right' }}>SBX</span>
         </div>
-        {data === null ? (
+        {loading ? (
           <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
         ) : rows.length === 0 ? (
           <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
             No rated players yet — play and confirm a few matches to appear here.
           </div>
-        ) : rows.map((r, i) => (
-          <button key={r.id} onClick={() => go && go({ screen: 'profile', viewingHandle: r.handle })} style={{
-            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-            padding: '12px 14px', textAlign: 'left',
-            borderBottom: i < rows.length - 1 ? '1px dashed rgba(14,28,19,0.08)' : 'none',
-            background: r.isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
-            cursor: 'pointer', border: 'none',
-          }}>
-            <div style={{
-              width: 26, textAlign: 'center',
-              fontFamily: 'var(--font-display)', fontSize: 14,
-              color: 'var(--forest)', opacity: i < 3 ? 1 : 0.4,
-              fontWeight: i < 3 ? 700 : 400,
-            }}>{i + 1}</div>
-            <LbAvatar player={r} size={30}/>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}{r.isYou && ' · you'}</div>
-              <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{formatHandle(r.handle)} · {r.matches} {r.matches === 1 ? 'match' : 'matches'}</div>
-            </div>
-            <div style={{ width: 56, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
-              {r.sbx != null ? Number(r.sbx).toFixed(3) : '—'}
-            </div>
-          </button>
-        ))}
+        ) : rows.map((p, i) => {
+          const name   = [p.first_name, p.last_name].filter(Boolean).join(' ') || formatHandle(p.handle);
+          const isYou  = p.id === meId;
+          const matches = (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
+          return (
+            <button key={p.id} onClick={() => go && go({ screen: 'profile', viewingHandle: p.handle })} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              padding: '12px 14px', textAlign: 'left',
+              borderBottom: i < rows.length - 1 ? '1px dashed rgba(14,28,19,0.08)' : 'none',
+              background: isYou ? 'rgba(28,73,42,0.07)' : 'transparent',
+              cursor: 'pointer', border: 'none',
+            }}>
+              <div style={{
+                width: 26, textAlign: 'center',
+                fontFamily: 'var(--font-display)', fontSize: 14,
+                color: 'var(--forest)', opacity: i < 3 ? 1 : 0.4,
+                fontWeight: i < 3 ? 700 : 400,
+              }}>{i + 1}</div>
+              <LbAvatar player={{ name, handle: p.handle, avatar: p.avatar_url }} size={30}/>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isYou && ' · you'}</div>
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{formatHandle(p.handle)} · {matches} {matches === 1 ? 'match' : 'matches'}</div>
+              </div>
+              <div style={{ width: 56, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
+                {p.sbx != null ? Number(p.sbx).toFixed(3) : '—'}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -324,128 +313,39 @@ function LbAvatar({ player, size = 30 }) {
   );
 }
 
-function PlayerStatsSheet({ player, go, onClose }) {
-  const isYou = player.isYou;
-  const pts = player.W + player.H * 0.5;
-  const history = isYou ? (MOCK.HISTORY || []) : [];
-  const badges = isYou ? (MOCK.BADGES || []).filter(b => !b.locked) : [];
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }}/>
-      <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 0' }}/>
-        <div style={{ padding: '14px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(14,28,19,0.07)' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1 }}>{player.name}</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {!isYou && (
-              <button onClick={() => { onClose(); go({ screen: 'profile', viewingHandle: player.handle || player.name }); }} style={{
-                padding: '6px 12px', borderRadius: 999, background: 'var(--forest)', border: 'none',
-                color: 'var(--cream)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              }}>View profile</button>
-            )}
-            <button onClick={onClose} style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(14,28,19,0.07)', border: 'none', fontSize: 12, fontWeight: 700, color: 'var(--forest)', cursor: 'pointer' }}>Done</button>
-          </div>
-        </div>
-
-        <div style={{ overflowY: 'auto', flex: 1, padding: '20px 16px 32px' }}>
-          {/* SBX Rating */}
-          <div style={{
-            background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
-            color: 'var(--cream)', borderRadius: 18, padding: '18px 20px',
-            marginBottom: 16, position: 'relative', overflow: 'hidden',
-          }}>
-            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 8, position: 'relative' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.85, letterSpacing: '-0.03em' }}>
-                {player.sbx ? Number(player.sbx).toFixed(3) : '—'}
-              </div>
-              <div style={{ textAlign: 'right', opacity: 0.75 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1 }}>{player.W}–{player.L}–{player.H}</div>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', marginTop: 4, letterSpacing: '0.04em' }}>{pts} pts · {player.events} events</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent matches */}
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
-            Recent matches
-          </div>
-          <div className="card" style={{ overflow: 'hidden', marginBottom: 16 }}>
-            {history.length === 0 ? (
-              <div style={{ padding: '16px 14px', textAlign: 'center', opacity: 0.4, fontSize: 13 }}>
-                {isYou ? 'No matches yet.' : 'Match history is private.'}
-              </div>
-            ) : history.slice(0, 4).map((r, i) => {
-              const isW = r.result === 'W', isL = r.result === 'L';
-              const badgeStyle = isW
-                ? { background: 'var(--forest)', color: 'var(--cream)', border: 'none' }
-                : isL
-                ? { background: '#C44536', color: '#FFFFFF', border: 'none' }
-                : { background: 'var(--paper)', color: 'var(--forest)', border: '1px solid rgba(28,73,42,0.25)' };
-              return (
-                <div key={r.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
-                  borderBottom: i < Math.min(history.length, 4) - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none',
-                }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--forest)', width: 30, opacity: 0.7 }}>{r.week}</div>
-                  <div style={{ width: 24, height: 24, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, ...badgeStyle }}>{r.result}</div>
-                  <div style={{ flex: 1, fontSize: 12 }}>vs {r.opp}</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: 'var(--forest)', opacity: isL ? 0.55 : 1 }}>{r.margin}</div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Badges */}
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
-            Badges earned
-          </div>
-          {badges.length === 0 ? (
-            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', opacity: 0.4, fontSize: 13 }}>
-              {isYou ? 'No badges earned yet.' : 'Badges are private.'}
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {badges.map(b => (
-                <div key={b.id} className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 999, background: b.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon.Trophy size={14} color="var(--cream)"/>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--forest)', lineHeight: 1.2 }}>{b.name}</div>
-                    <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{b.rarity}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AllTimeLeaderboard() {
-  const data = useSbxLeaderboard(100);
-  const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
-
+// ─── Stat leaders across all rated players ───────────────────────────
+function StatLeaders({ data }) {
   if (data === null) {
-    return <div style={{ padding: '24px 16px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
+    return <div style={{ padding: '6px 16px 0', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
   }
-  if (!data.length) {
-    return <div style={{ padding: '24px 16px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>No records yet — play and confirm matches to set the first ones.</div>;
-  }
-  const top = data[0]; // ordered by SBX desc
+  if (!data.length) return null;
+
+  const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
+  const maxBy = (key) => {
+    const pool = data.filter(p => p[key] != null);
+    if (!pool.length) return null;
+    return pool.reduce((a, b) => (Number(b[key]) > Number(a[key]) ? b : a));
+  };
+
+  const topSbx     = data[0]; // already SBX-desc
   const mostActive = data.reduce((a, b) => (matchesOf(b) > matchesOf(a) ? b : a), data[0]);
+  const best1v1    = maxBy('sbx_1v1');
+  const best2v2    = maxBy('sbx_2v2');
+
+  const cards = [
+    { title: 'Highest SBX',  holder: topSbx,     value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—' },
+    { title: 'Most matches', holder: mostActive, value: String(matchesOf(mostActive)) },
+    best2v2 && { title: 'Best 2v2', holder: best2v2, value: Number(best2v2.sbx_2v2).toFixed(3) },
+    best1v1 && { title: 'Best 1v1', holder: best1v1, value: Number(best1v1.sbx_1v1).toFixed(3) },
+  ].filter(Boolean);
 
   return (
-    <div style={{ padding: '18px 16px' }}>
-      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>Records</div>
+    <div style={{ padding: '0 16px' }}>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12, padding: '0 4px' }}>Stat leaders</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <RecordCard title="Highest SBX" holder={formatHandle(top.handle)} value={top.sbx != null ? Number(top.sbx).toFixed(3) : '—'}/>
-        <RecordCard title="Most matches" holder={formatHandle(mostActive.handle)} value={String(matchesOf(mostActive))}/>
+        {cards.map(c => (
+          <RecordCard key={c.title} title={c.title} holder={formatHandle(c.holder.handle)} value={c.value}/>
+        ))}
       </div>
     </div>
   );
