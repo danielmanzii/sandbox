@@ -5,8 +5,10 @@
 function SocialScreen({ go }) {
   const [liveEvent] = useLiveEvent();
   const data        = useSbxLeaderboard(500); // null = loading, [] = nobody rated yet
+  const streaks     = useStreaks();           // null = loading, else per-user array
   const meId        = MOCK.USER && MOCK.USER.id;
   const [bandView, setBandView] = React.useState(null); // null = home, else a band int
+  const [statView, setStatView] = React.useState(null); // null = home, else 'sbx'|'matches'|'longest'|'active'
 
   const rated  = data || [];
   const myRow  = rated.find(p => p.id === meId);
@@ -16,6 +18,20 @@ function SocialScreen({ go }) {
   );
   const highestBand = bandsPresent.length ? bandsPresent[bandsPresent.length - 1] : null;
   const myBand = (myRow && myRow.sbx != null) ? Math.floor(Number(myRow.sbx)) : highestBand;
+
+  // Full stat leaderboard view (all users, ranked by one stat).
+  if (statView != null) {
+    return (
+      <StatLeaderboard
+        kind={statView}
+        data={data}
+        streaks={streaks}
+        meId={meId}
+        go={go}
+        onBack={() => setStatView(null)}
+      />
+    );
+  }
 
   // Full band leaderboard view (with switcher).
   if (bandView != null) {
@@ -82,7 +98,7 @@ function SocialScreen({ go }) {
       />
 
       {/* Stat leaders */}
-      <StatLeaders data={data} go={go} openBand={(b) => setBandView(b)} highestBand={highestBand}/>
+      <StatLeaders data={data} streaks={streaks} openStat={setStatView}/>
     </div>
   );
 }
@@ -216,6 +232,7 @@ const ordinal = (n) => {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
+const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
 
 // ─── Your rank within your SBX band (tap → full band board) ──────────
 function BandRankCard({ data, meId, onOpen }) {
@@ -283,10 +300,14 @@ function BandRankCard({ data, meId, onOpen }) {
 }
 
 // ─── Shared leaderboard row ──────────────────────────────────────────
-function LeaderRow({ rank, player, meId, go, last }) {
+// valueText overrides the right-hand number (defaults to SBX).
+// subText overrides the secondary line (defaults to "@handle · N matches").
+function LeaderRow({ rank, player, meId, go, last, valueText, subText }) {
   const name    = [player.first_name, player.last_name].filter(Boolean).join(' ') || formatHandle(player.handle);
   const isYou   = player.id === meId;
-  const matches = (player.sbx_2v2_n || 0) + (player.sbx_1v1_n || 0);
+  const matches = matchesOf(player);
+  const sub     = subText != null ? subText : `${formatHandle(player.handle)} · ${matches} ${matches === 1 ? 'match' : 'matches'}`;
+  const val     = valueText != null ? valueText : (player.sbx != null ? Number(player.sbx).toFixed(3) : '—');
   return (
     <button onClick={() => go && go({ screen: 'profile', viewingHandle: player.handle })} style={{
       display: 'flex', alignItems: 'center', gap: 10, width: '100%',
@@ -304,10 +325,10 @@ function LeaderRow({ rank, player, meId, go, last }) {
       <LbAvatar player={{ name, handle: player.handle, avatar: player.avatar_url }} size={30}/>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isYou && ' · you'}</div>
-        <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{formatHandle(player.handle)} · {matches} {matches === 1 ? 'match' : 'matches'}</div>
+        <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{sub}</div>
       </div>
-      <div style={{ width: 56, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
-        {player.sbx != null ? Number(player.sbx).toFixed(3) : '—'}
+      <div style={{ width: 64, textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, color: 'var(--forest)' }}>
+        {val}
       </div>
     </button>
   );
@@ -456,13 +477,15 @@ function LbAvatar({ player, size = 30 }) {
   );
 }
 
-// ─── Win-streak leaders across all players (computed from matches) ───
+// ─── Per-user win streaks across all players (computed from matches) ─
 // Streak = consecutive WINS (a loss or halve breaks it), per player, over
 // their completed matches in chronological order.
 //   longest = best run ever;  active = trailing run up to the latest match.
-// Returns { longest: {handle, value}, active: {handle, value} } | null.
-function useStreakLeaders() {
-  const [res, setRes] = React.useState(null);
+// Returns an array of { id, handle, first_name, last_name, avatar_url,
+// longest, active, played } (all players with ≥1 completed match), or null
+// while loading.
+function useStreaks() {
+  const [rows, setRows] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -484,72 +507,57 @@ function useStreakLeaders() {
         add(m.player_b2, m.result === 'B', t);
       }
 
-      let longestId = null, longestVal = 0, activeId = null, activeVal = 0;
+      const stats = {}; // id -> { longest, active, played }
       for (const id in byUser) {
         const arr = byUser[id].sort((x, y) => x.t - y.t);
         let cur = 0, best = 0;
         for (const e of arr) { if (e.won) { cur++; if (cur > best) best = cur; } else cur = 0; }
         let act = 0;
         for (let i = arr.length - 1; i >= 0; i--) { if (arr[i].won) act++; else break; }
-        if (best > longestVal) { longestVal = best; longestId = id; }
-        if (act  > activeVal)  { activeVal  = act;  activeId  = id; }
+        stats[id] = { longest: best, active: act, played: arr.length };
       }
 
-      const ids = [...new Set([longestId, activeId].filter(Boolean))];
-      const map = {};
+      const ids = Object.keys(stats);
+      let profiles = [];
       if (ids.length) {
-        const { data: ps } = await sbx.from('profiles').select('id, handle').in('id', ids);
-        for (const p of (ps || [])) map[p.id] = p.handle;
+        const { data: ps } = await sbx
+          .from('profiles')
+          .select('id, handle, first_name, last_name, avatar_url')
+          .in('id', ids);
+        profiles = ps || [];
       }
-      if (!cancelled) setRes({
-        longest: longestId && longestVal > 0 ? { handle: map[longestId], value: longestVal } : null,
-        active:  activeId  && activeVal  > 0 ? { handle: map[activeId],  value: activeVal  } : null,
-      });
+      const out = profiles.map(p => ({ ...p, ...stats[p.id] }));
+      if (!cancelled) setRows(out);
     })();
     return () => { cancelled = true; };
   }, []);
-  return res;
+  return rows;
 }
 
-// ─── Stat leaders ────────────────────────────────────────────────────
-function StatLeaders({ data, go, openBand, highestBand }) {
-  const streaks = useStreakLeaders();
-
+// ─── Stat leaders (cards) — tap a card to open that stat's full board ─
+function StatLeaders({ data, streaks, openStat }) {
   if (data === null) {
     return <div style={{ padding: '6px 16px 0', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
   }
   if (!data.length) return null;
 
-  const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
   const topSbx     = data[0]; // already SBX-desc
   const mostActive = data.reduce((a, b) => (matchesOf(b) > matchesOf(a) ? b : a), data[0]);
+  const maxBy = (key) => (streaks && streaks.length)
+    ? streaks.reduce((a, b) => (b[key] > a[key] ? b : a))
+    : null;
+  const longestLeader = maxBy('longest');
+  const activeLeader  = maxBy('active');
+  const streakVal = (leader, key) =>
+    streaks === null ? '…' : (leader && leader[key] > 0 ? String(leader[key]) : '—');
+  const streakHolder = (leader, key) =>
+    (leader && leader[key] > 0) ? leader.handle : null;
 
   const cards = [
-    {
-      title: 'Highest SBX',
-      holderHandle: topSbx.handle,
-      value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—',
-      // Opens the band board on the top band rather than a profile.
-      onOpen: (highestBand != null && openBand) ? () => openBand(highestBand) : null,
-    },
-    {
-      title: 'Most matches',
-      holderHandle: mostActive.handle,
-      value: String(matchesOf(mostActive)),
-      onOpen: () => go && go({ screen: 'profile', viewingHandle: mostActive.handle }),
-    },
-    {
-      title: 'Longest win streak',
-      holderHandle: streaks && streaks.longest ? streaks.longest.handle : null,
-      value: streaks ? (streaks.longest ? String(streaks.longest.value) : '—') : '…',
-      onOpen: (streaks && streaks.longest) ? () => go && go({ screen: 'profile', viewingHandle: streaks.longest.handle }) : null,
-    },
-    {
-      title: 'Active win streak',
-      holderHandle: streaks && streaks.active ? streaks.active.handle : null,
-      value: streaks ? (streaks.active ? String(streaks.active.value) : '—') : '…',
-      onOpen: (streaks && streaks.active) ? () => go && go({ screen: 'profile', viewingHandle: streaks.active.handle }) : null,
-    },
+    { title: 'Highest SBX',       holderHandle: topSbx.handle,                    value: topSbx.sbx != null ? Number(topSbx.sbx).toFixed(3) : '—', kind: 'sbx' },
+    { title: 'Most matches',      holderHandle: mostActive.handle,                value: String(matchesOf(mostActive)),                            kind: 'matches' },
+    { title: 'Longest win streak', holderHandle: streakHolder(longestLeader, 'longest'), value: streakVal(longestLeader, 'longest'),               kind: 'longest' },
+    { title: 'Active win streak',  holderHandle: streakHolder(activeLeader, 'active'),   value: streakVal(activeLeader, 'active'),                 kind: 'active' },
   ];
 
   return (
@@ -562,9 +570,90 @@ function StatLeaders({ data, go, openBand, highestBand }) {
             title={c.title}
             holder={c.holderHandle ? formatHandle(c.holderHandle) : '—'}
             value={c.value}
-            onOpen={c.onOpen}
+            onOpen={() => openStat(c.kind)}
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Full leaderboard for a single stat (all users) ──────────────────
+function StatLeaderboard({ kind, data, streaks, meId, go, onBack }) {
+  const META = {
+    sbx:     { title: 'Highest SBX',       head: 'SBX',     blurb: 'All players, ranked by Sandbox Rating™.' },
+    matches: { title: 'Most matches',      head: 'PLAYED',  blurb: 'All players, ranked by matches played.' },
+    longest: { title: 'Longest win streak', head: 'STREAK', blurb: 'Best run of consecutive wins, all-time.' },
+    active:  { title: 'Active win streak',  head: 'STREAK', blurb: 'Current run of consecutive wins.' },
+  };
+  const meta = META[kind] || META.sbx;
+
+  let loading, rows, valueOf, subOf;
+  if (kind === 'sbx') {
+    loading = data === null;
+    rows    = (data || []); // already SBX-desc
+    valueOf = (p) => (p.sbx != null ? Number(p.sbx).toFixed(3) : '—');
+  } else if (kind === 'matches') {
+    loading = data === null;
+    rows    = [...(data || [])].sort((a, b) => matchesOf(b) - matchesOf(a));
+    valueOf = (p) => String(matchesOf(p));
+    subOf   = (p) => formatHandle(p.handle);
+  } else {
+    loading = streaks === null;
+    const k = kind; // 'longest' | 'active'
+    rows    = (streaks || []).filter(s => s[k] > 0).sort((a, b) => b[k] - a[k]);
+    valueOf = (s) => String(s[k]);
+    subOf   = (s) => `${formatHandle(s.handle)} · ${s.played} ${s.played === 1 ? 'match' : 'matches'}`;
+  }
+
+  return (
+    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
+      <div style={{ padding: '58px 20px 14px', background: 'var(--canvas)', color: 'var(--forest)' }}>
+        <button onClick={onBack} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          color: 'var(--forest)', fontSize: 12, fontWeight: 700, padding: 0, marginBottom: 12, opacity: 0.7,
+        }}>
+          <Icon.ArrowLeft size={14}/> Explore
+        </button>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Leaderboard</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 0.95, marginTop: 6, letterSpacing: '-0.02em' }}>
+          {meta.title}
+        </div>
+        <div className="caption-serif" style={{ fontSize: 15, opacity: 0.65, marginTop: 6 }}>
+          {meta.blurb}
+        </div>
+      </div>
+
+      <div style={{ padding: '4px 16px 0' }}>
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ display: 'flex', padding: '10px 14px', fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.5, borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
+            <span style={{ width: 26, textAlign: 'center' }}>#</span>
+            <span style={{ flex: 1, paddingLeft: 8 }}>Player</span>
+            <span style={{ width: 64, textAlign: 'right' }}>{meta.head}</span>
+          </div>
+          {loading ? (
+            <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+          ) : rows.length === 0 ? (
+            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
+              Nothing here yet — play and confirm matches to appear.
+            </div>
+          ) : rows.map((p, i) => (
+            <LeaderRow
+              key={p.id}
+              rank={i + 1}
+              player={p}
+              meId={meId}
+              go={go}
+              last={i === rows.length - 1}
+              valueText={valueOf(p)}
+              subText={subOf ? subOf(p) : null}
+            />
+          ))}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.5, textAlign: 'center', marginTop: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+          {loading ? '' : `${rows.length} ${rows.length === 1 ? 'player' : 'players'}`}
+        </div>
       </div>
     </div>
   );
