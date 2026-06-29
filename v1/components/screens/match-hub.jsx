@@ -185,9 +185,10 @@ function StatusChip({ match, youAreA }) {
 // ─── Start Match view ────────────────────────────────────────
 function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   const isRegular = format === 'regular';
-  const [course, setCourse] = React.useState('Killian Greens'); // pp: free text
-  const [holes, setHoles]   = React.useState(isRegular ? 18 : 9);
-  const [matchType, setMatchType] = React.useState('1v1'); // chosen here now
+  // Nothing pre-selected — the form reveals one step at a time as you choose.
+  const [course, setCourse] = React.useState(''); // pp: free text
+  const [holes, setHoles]   = React.useState(null);
+  const [matchType, setMatchType] = React.useState(null);
   const [busy, setBusy]     = React.useState(false);
   const [err, setErr]       = React.useState('');
 
@@ -195,6 +196,7 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   const [rcCourses, setRcCourses] = React.useState([]);
   const [courseId, setCourseId]   = React.useState(null);
   const [teeId, setTeeId]         = React.useState(null);
+  const [q, setQ]                 = React.useState(''); // course search
 
   React.useEffect(() => {
     if (!isRegular) return;
@@ -205,12 +207,26 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
       ]);
       const list = (cs || []).map(c => ({ ...c, tees: (ts || []).filter(t => t.course_id === c.id) }));
       setRcCourses(list);
-      if (list[0]) { setCourseId(list[0].id); if (list[0].tees[0]) setTeeId(list[0].tees[0].id); }
     })();
   }, [isRegular]);
 
   const selCourse = rcCourses.find(c => c.id === courseId);
   const selTee    = selCourse && selCourse.tees.find(t => t.id === teeId);
+
+  // ── Step gating: each section appears only once the prior one is chosen. ──
+  const courseDone = isRegular ? !!courseId : !!course.trim();
+  const teeDone    = !isRegular ? true
+    : !courseId ? false
+    : (selCourse && selCourse.tees.length === 0) ? true
+    : !!teeId;
+  const showTees   = isRegular && !!courseId && selCourse && selCourse.tees.length > 0;
+  const showHoles  = courseDone && teeDone;
+  const showType   = showHoles && !!holes;
+  const showCreate = showType && !!matchType;
+
+  const filteredCourses = q.trim()
+    ? rcCourses.filter(c => `${c.name} ${c.city || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
+    : rcCourses;
 
   async function create() {
     if (busy) return;
@@ -244,15 +260,34 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
     setBusy(false); onCreated(data);
   }
 
-  const Label = ({ children }) => (
-    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.55, color: 'var(--forest)', marginBottom: 10 }}>{children}</div>
+  // Forest-gradient step card (Challenge Friends look): grain, pill eyebrow,
+  // display title, then the picker. `done` swaps the eyebrow to a ✓ chip.
+  const StepCard = ({ eyebrow, title, done, children }) => (
+    <div className="step-reveal" style={{
+      position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-card-lg)',
+      background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 45%, var(--moss) 100%)',
+      color: 'var(--cream)', padding: 20, boxShadow: 'var(--shadow-md)',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <div style={{ position: 'relative' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999,
+          background: 'var(--forest)', color: 'var(--cream)', fontSize: 10, fontWeight: 800,
+          letterSpacing: '0.16em', textTransform: 'uppercase',
+        }}>
+          {done && <span style={{ fontSize: 11, lineHeight: 1 }}>✓</span>}{eyebrow}
+        </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 0.95, marginTop: 10, marginBottom: 14, letterSpacing: '-0.01em' }}>{title}</div>
+        {children}
+      </div>
+    </div>
   );
-  const segStyle = (on) => ({
-    flex: 1, padding: '14px', borderRadius: 12,
-    background: on ? 'var(--forest)' : 'rgba(14,28,19,0.04)',
-    color: on ? 'var(--cream)' : 'var(--forest)',
-    border: on ? 'none' : '1px solid rgba(14,28,19,0.08)',
-    fontSize: 14, fontWeight: 800, lineHeight: 1.1,
+
+  // Selectable control on the forest gradient: cream when chosen, translucent otherwise.
+  const pick = (on) => ({
+    background: on ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
+    color: on ? 'var(--forest)' : 'var(--cream)',
+    border: on ? 'none' : '1px solid rgba(234,226,206,0.18)',
   });
 
   return (
@@ -270,91 +305,99 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
           Set it up.
         </div>
         <div className="caption-serif" style={{ fontSize: 15, color: 'var(--forest)', opacity: 0.7, marginTop: 6, lineHeight: 1.4 }}>
-          {matchType === '2v2'
-            ? 'Course, holes, format — then share the code with your partner and opponents.'
-            : 'Course, holes, format — then share the code with your opponent.'}
+          One step at a time — pick a course, then we’ll reveal the rest.
         </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20 }}>
-        {/* Course & tees */}
-        <div className="card" style={{ padding: 16 }}>
-          <Label>Course</Label>
+        {/* ── Step 1 · Course ── */}
+        <StepCard eyebrow="Course" title={courseDone ? (isRegular ? selCourse.name : course.trim()) : 'Where are you playing?'} done={courseDone}>
           {isRegular ? (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {rcCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.5 }}>Loading courses…</div>}
-                {rcCourses.map(c => {
+              {rcCourses.length > 5 && (
+                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search courses…" className="on-forest-input" style={{
+                  width: '100%', padding: '11px 14px', borderRadius: 10, marginBottom: 10,
+                  background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
+                  color: 'var(--cream)', fontSize: 14, outline: 'none',
+                }}/>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
+                {rcCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>Loading courses…</div>}
+                {rcCourses.length > 0 && filteredCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>No courses match “{q}”.</div>}
+                {filteredCourses.map(c => {
                   const on = courseId === c.id;
                   return (
                     <button key={c.id} onClick={() => { setCourseId(c.id); setTeeId(c.tees[0] ? c.tees[0].id : null); }} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left',
-                      padding: '12px 14px', borderRadius: 12,
-                      background: on ? 'var(--forest)' : 'rgba(14,28,19,0.04)',
-                      color: on ? 'var(--cream)' : 'var(--forest)', border: 'none',
+                      padding: '13px 14px', borderRadius: 12, ...pick(on),
                     }}>
                       <span>
                         <span style={{ display: 'block', fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>{c.name}</span>
                         {c.city && <span style={{ display: 'block', fontSize: 11, opacity: 0.7, marginTop: 2 }}>{c.city}</span>}
                       </span>
-                      {on && <Icon.ArrowRight size={15} color="var(--cream)"/>}
+                      {on && <Icon.ArrowRight size={15} color="var(--forest)"/>}
                     </button>
                   );
                 })}
               </div>
-              {selCourse && selCourse.tees.length > 0 && (
-                <>
-                  <div style={{ height: 14 }}/>
-                  <Label>Tees</Label>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {selCourse.tees.map(t => (
-                      <button key={t.id} onClick={() => setTeeId(t.id)} style={{
-                        flex: 1, minWidth: 90, padding: '12px 10px', borderRadius: 12,
-                        background: teeId === t.id ? 'var(--forest)' : 'rgba(14,28,19,0.04)',
-                        color: teeId === t.id ? 'var(--cream)' : 'var(--forest)',
-                        border: teeId === t.id ? 'none' : '1px solid rgba(14,28,19,0.08)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                      }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800 }}>
-                          <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || 'var(--forest)', display: 'inline-block' }}/>
-                          {t.name}
-                        </span>
-                        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
             </>
           ) : (
-            <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Killian Greens" style={{
-              width: '100%', padding: '13px 14px', borderRadius: 12, background: 'rgba(14,28,19,0.04)',
-              border: '1px solid rgba(14,28,19,0.08)', color: 'var(--ink)', fontSize: 15, outline: 'none',
+            <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Killian Greens" className="on-forest-input" style={{
+              width: '100%', padding: '13px 14px', borderRadius: 12,
+              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
+              color: 'var(--cream)', fontSize: 15, outline: 'none',
             }}/>
           )}
-        </div>
+        </StepCard>
 
-        {/* Holes */}
-        <div className="card" style={{ padding: 16 }}>
-          <Label>Holes</Label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[9, 18].map(n => (
-              <button key={n} onClick={() => setHoles(n)} style={segStyle(holes === n)}>
-                {n}-hole{isRegular && n === 9 ? ' (front)' : ''}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* ── Step 2 · Tees ── */}
+        {showTees && (
+          <StepCard eyebrow="Tees" title={teeId ? `${selTee.name} tees` : 'Which tees?'} done={!!teeId}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {selCourse.tees.map(t => {
+                const on = teeId === t.id;
+                return (
+                  <button key={t.id} onClick={() => setTeeId(t.id)} style={{
+                    flex: 1, minWidth: 90, padding: '12px 10px', borderRadius: 12,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ...pick(on),
+                  }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || '#999', display: 'inline-block' }}/>
+                      {t.name}
+                    </span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </StepCard>
+        )}
 
-        {/* Match type */}
-        <div className="card" style={{ padding: 16 }}>
-          <Label>Match type</Label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['1v1', '1v1'], ['2v2', '2v2 · Scramble']].map(([v, l]) => (
-              <button key={v} onClick={() => setMatchType(v)} style={segStyle(matchType === v)}>{l}</button>
-            ))}
-          </div>
-        </div>
+        {/* ── Step 3 · Holes ── */}
+        {showHoles && (
+          <StepCard eyebrow="Holes" title={holes ? `${holes} holes` : 'How many holes?'} done={!!holes}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[9, 18].map(n => (
+                <button key={n} onClick={() => setHoles(n)} style={{
+                  flex: 1, padding: '14px', borderRadius: 12, fontSize: 15, fontWeight: 800, lineHeight: 1.1, ...pick(holes === n),
+                }}>{n}-hole{isRegular && n === 9 ? ' (front)' : ''}</button>
+              ))}
+            </div>
+          </StepCard>
+        )}
+
+        {/* ── Step 4 · Match type ── */}
+        {showType && (
+          <StepCard eyebrow="Format" title={matchType ? (matchType === '2v2' ? '2v2 · Scramble' : '1v1 match') : '1v1 or 2v2?'} done={!!matchType}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['1v1', '1v1'], ['2v2', '2v2 · Scramble']].map(([v, l]) => (
+                <button key={v} onClick={() => setMatchType(v)} style={{
+                  flex: 1, padding: '14px', borderRadius: 12, fontSize: 14, fontWeight: 800, lineHeight: 1.1, ...pick(matchType === v),
+                }}>{l}</button>
+              ))}
+            </div>
+          </StepCard>
+        )}
 
         {/* Playing as */}
         <div style={{ padding: '14px 16px', borderRadius: 16, background: 'rgba(14,28,19,0.04)' }}>
@@ -367,10 +410,14 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
 
       <div style={{ flex: 1, minHeight: 16 }}/>
 
-      <Button variant="forest" size="lg" full disabled={busy} onClick={create}>
-        {busy ? 'Creating…' : 'Create match'}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
+      {showCreate && (
+        <div className="step-reveal">
+          <Button variant="forest" size="lg" full disabled={busy} onClick={create}>
+            {busy ? 'Creating…' : 'Create match'}
+            {!busy && <Icon.ArrowRight size={16}/>}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
