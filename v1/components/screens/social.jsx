@@ -62,10 +62,10 @@ function SocialScreen({ go }) {
         </div>
       </div>
 
+      <ExploreSearch go={go}/>
+
       {/* Gamified climb meter: progress to next band, or matches to get ranked */}
       <BandProgress rating={myRating}/>
-
-      <ExploreSearch go={go}/>
 
       {liveEvent && (
         <div style={{ padding: '0 16px 16px' }}>
@@ -336,21 +336,8 @@ function BandRankCard({ data, meId, onOpen }) {
   if (data === null) return null; // loading — stay quiet
   const myRow = data.find(p => p.id === meId);
 
-  if (!myRow || myRow.sbx == null) {
-    return (
-      <div style={{ padding: '0 16px 18px' }}>
-        <div className="card" style={{ padding: '18px 20px' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Your band</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1.05, marginTop: 8 }}>
-            Not rated yet.
-          </div>
-          <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>
-            Play and confirm 3 matches to earn your Sandbox Rating and see where you rank.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Unrated: the progress bar handles the "get ranked" messaging now.
+  if (!myRow || myRow.sbx == null) return null;
 
   const band        = Math.floor(Number(myRow.sbx));
   const bandPlayers = data.filter(p => p.sbx != null && Math.floor(Number(p.sbx)) === band); // already SBX-desc
