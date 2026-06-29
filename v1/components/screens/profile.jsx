@@ -397,7 +397,6 @@ function SbxFormatCard({ fmt, rating, n, rel, record }) {
       position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-      <div style={{ position: 'absolute', right: 16, top: 16, fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.55, letterSpacing: '0.24em', fontWeight: 700 }}>SBX · v1</div>
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™ · {fmt}</div>
 
       {stage === 'unranked' ? (
