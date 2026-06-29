@@ -15,23 +15,16 @@
 -- Coordinated change: adds RLS to shared tables. Run once; tell Daniel first.
 -- ============================================================================
 
--- ── 0. Helper functions (SECURITY DEFINER so RLS policies don't recurse) ────
--- is_admin(): current user is a Sandbox admin.
+-- ── 0a. is_admin() helper (SECURITY DEFINER so RLS policies don't recurse) ──
+-- Defined first; it only references profiles, which already exists.
 create or replace function public.is_admin()
 returns boolean language sql security definer stable set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and is_admin);
 $$;
 
--- manages_course(course): current user is assigned to manage that course.
-create or replace function public.manages_course(p_course uuid)
-returns boolean language sql security definer stable set search_path = public as $$
-  select exists (
-    select 1 from public.course_managers
-    where course_id = p_course and user_id = auth.uid()
-  );
-$$;
-
 -- ── 1. course_managers — who manages which course ───────────────────────────
+-- NOTE: the table MUST exist before manages_course() below — a `language sql`
+-- function is validated against its referenced tables at creation time.
 create table if not exists public.course_managers (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references public.profiles(id) on delete cascade,
@@ -45,6 +38,16 @@ create index if not exists course_managers_user_idx   on public.course_managers 
 create index if not exists course_managers_course_idx on public.course_managers (course_id);
 
 alter table public.course_managers enable row level security;
+
+-- ── 0b. manages_course() helper — now that course_managers exists ───────────
+-- current user is assigned to manage that course.
+create or replace function public.manages_course(p_course uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from public.course_managers
+    where course_id = p_course and user_id = auth.uid()
+  );
+$$;
 
 -- A manager reads their OWN assignments; admins read all.
 drop policy if exists "Read own or admin course managers" on public.course_managers;
