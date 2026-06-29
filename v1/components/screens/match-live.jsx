@@ -658,6 +658,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
   const cardDone = (pid) => {
     const c = card[pid]; if (!c) return false;
     if (c.ob) return true;                               // OB / penalty marked
+    if (c.reached === 'holed') return true;              // holed out (incl. a drivable par-4 ace)
     if (fairwayTee) return !!c.fairway;                  // drive: a fairway result
     return c.reached != null;                            // approach: off / on / holed out
   };
@@ -683,8 +684,8 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     // OB/penalty: the shot counts AND adds a 1-stroke penalty (skip one),
     // then re-hit — so shot 2 OB makes the next tracked shot #4.
     if (c.ob) { setStroke(stroke + 2); setCard({}); return; }
-    // Holed out from off the green → hole done now, no putt.
-    if (!fairwayTee && c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone); return; }
+    // Holed out (from off the green, or a drivable par-4 tee) → hole done now.
+    if (c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone); return; }
     // On the green → go to putting.
     if (!fairwayTee && c.reached === true) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); return; }
     // Off the green / a drive → next shot.
@@ -732,6 +733,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
         {yourTeam.map(p => (
           <PlayerShotCard key={p.id} player={p} data={card[p.id] || {}}
             showFairway={fairwayTee} showGreen={!fairwayTee}
+            showHoledOut={!fairwayTee || (par || 3) === 4}
             onFairway={(v) => setOutcome(p.id, { fairway: v, ob: false })}
             onReached={(v) => setOutcome(p.id, { reached: v, ob: false })}
             onOb={() => setOutcome(p.id, { ob: true, reached: null, fairway: null })}/>
@@ -910,8 +912,10 @@ function XoButton({ kind, active, onClick }) {
 }
 
 // Per-player card (@handle). A tee drive shows the fairway cross; an approach
-// shows off/on green + Holed out. Both also offer Penalty / OB.
-function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onReached, onOb }) {
+// shows off/on green. Holed Out shows on any shot that can plausibly find the
+// cup (par-3/4 tees + every approach — but never a par-5 tee). Penalty / OB
+// is always available.
+function PlayerShotCard({ player, data, showFairway, showGreen, showHoledOut, onFairway, onReached, onOb }) {
   return (
     <div style={{ padding: '9px', borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(234,226,206,0.16)' }}>
       <PlayerTag player={player}/>
@@ -927,9 +931,9 @@ function PlayerShotCard({ player, data, showFairway, showGreen, onFairway, onRea
         </div>
       )}
 
-      {/* Holed out (approach only) + Penalty / OB (any shot) */}
+      {/* Holed Out (par-3/4 tees + approaches) + Penalty / OB (always) */}
       <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-        {showGreen && (
+        {showHoledOut && (
           <button onClick={() => onReached('holed')} style={{ ...pillStyle(data.reached === 'holed'), fontSize: 11 }}>Holed Out</button>
         )}
         <button onClick={onOb} style={{ ...pillStyle(!!data.ob), fontSize: 11 }}>Penalty / OB</button>
