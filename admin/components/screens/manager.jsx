@@ -43,6 +43,12 @@ function slotHM(iso) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 function minutesOfDay(iso) { const d = new Date(iso); return d.getHours() * 60 + d.getMinutes(); }
+const toMin = (hm) => parseInt(hm.slice(0, 2), 10) * 60 + parseInt(hm.slice(3), 10);
+// Is a minutes-of-day value inside any of the selected windows?
+function inWindows(mins, keys) {
+  if (keys.has('all')) return true;
+  return [...keys].some(k => { const w = TIME_WINDOWS.find(x => x.key === k); return w && mins >= w.start && mins < w.end; });
+}
 
 const M_SECTIONS = [
   { id: 'live',    label: 'Live on course', icon: '📍', hint: 'Who’s out playing right now' },
@@ -202,9 +208,10 @@ function TeeTimesPanel({ course }) {
   const [dateStr, setDateStr] = React.useState(todayStr());
   const [intervalMin, setIntervalMin] = React.useState(5);
   const [includesCart, setIncludesCart] = React.useState(false);
-  const [price, setPrice] = React.useState(course.suggested_price || 22);
-  const [windowKey, setWindowKey] = React.useState('twilight');
+  const [price, setPrice] = React.useState(Math.min(75, course.suggested_price || 22));
+  const [windowKeys, setWindowKeys] = React.useState(() => new Set(['twilight']));
   const [excluded, setExcluded] = React.useState(() => new Set()); // 'HH:MM' the manager removed
+  const [showFormula, setShowFormula] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
   const [msg, setMsg] = React.useState('');
@@ -213,8 +220,16 @@ function TeeTimesPanel({ course }) {
   const [fields] = useDayFields(course.id, dateStr);
   const [fill] = useCourseFillRate(course.id);
 
-  const win = TIME_WINDOWS.find(w => w.key === windowKey) || TIME_WINDOWS[0];
-  const candidates = React.useMemo(() => genTimes(win.start, win.end, intervalMin), [win, intervalMin]);
+  // Candidate times = union of every selected window, at the chosen interval.
+  const candidates = React.useMemo(() => {
+    const keys = windowKeys.has('all') ? new Set(['all']) : windowKeys;
+    const set = new Set();
+    [...keys].forEach(k => {
+      const w = TIME_WINDOWS.find(x => x.key === k);
+      if (w) genTimes(w.start, w.end, intervalMin).forEach(t => set.add(t));
+    });
+    return [...set].sort((a, b) => toMin(a) - toMin(b));
+  }, [windowKeys, intervalMin]);
 
   // Map existing slots by their 'HH:MM' (only 'open' ones count as public).
   const openByHM = React.useMemo(() => {
@@ -226,14 +241,23 @@ function TeeTimesPanel({ course }) {
   const toOpen = candidates.filter(t => !excluded.has(t));
   const newCount = toOpen.filter(t => !openByHM[t]).length;
 
-  // Live revenue projection from this course's real fill rate.
+  // Live "expected daily revenue" from this course's real fill rate.
   const rate = (fill && fill.rate != null && fill.sampleSlots >= 4) ? fill.rate : null;
   const seats = toOpen.length * 4;
   const full = seats * (Number(price) || 0);
   const expected = rate != null ? Math.round(seats * rate * (Number(price) || 0)) : null;
+  const revenue = expected != null ? expected : full;
 
   function toggleTime(t) {
     setExcluded(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; });
+  }
+  function toggleWindow(k) {
+    setWindowKeys(prev => {
+      if (k === 'all') return new Set(['all']);
+      const n = new Set(prev); n.delete('all');
+      n.has(k) ? n.delete(k) : n.add(k);
+      return n.size ? n : new Set(['all']); // never empty
+    });
   }
 
   async function saveChanges() {
@@ -247,10 +271,11 @@ function TeeTimesPanel({ course }) {
     setBusy(false);
   }
 
-  const slotsInWindow = (slots || []).filter(s => {
-    const m = minutesOfDay(s.starts_at);
-    return m >= win.start && m < win.end;
-  });
+  const slotsInWindow = (slots || []).filter(s => inWindows(minutesOfDay(s.starts_at), windowKeys));
+
+  // Shared look for both sliders.
+  const sliderHeading = { fontWeight: 700, fontSize: 15, color: 'var(--ink)' };
+  const sliderBig = { fontFamily: 'var(--font-display)', fontSize: 40, color: 'var(--forest)', lineHeight: 1 };
 
   return (
     <div style={{ maxWidth: 880, margin: '0 auto' }}>
@@ -259,13 +284,13 @@ function TeeTimesPanel({ course }) {
       {/* Date strip */}
       <DateStrip value={dateStr} onChange={d => { setDateStr(d); setExcluded(new Set()); setMsg(''); }}/>
 
-      {/* Controls: intervalMin slider · cart + price · live revenue */}
+      {/* Controls: interval slider · price slider (+ cart above it) · revenue */}
       <div className="card" style={{ padding: 22, marginTop: 16, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'stretch' }}>
-        {/* Interval */}
-        <div style={{ flex: '2 1 280px', minWidth: 260 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>What do you want your tee time intervals to be?</div>
+        {/* Interval slider */}
+        <div style={{ flex: '2 1 260px', minWidth: 240 }}>
+          <div style={sliderHeading}>tee time interval?</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 6px' }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 40, color: 'var(--forest)', lineHeight: 1 }}>{intervalMin}</span>
+            <span style={sliderBig}>{intervalMin}</span>
             <span style={{ fontSize: 14, opacity: 0.6 }}>minutes apart</span>
           </div>
           <input type="range" min="3" max="15" step="1" value={intervalMin}
@@ -276,68 +301,78 @@ function TeeTimesPanel({ course }) {
           </div>
         </div>
 
-        {/* Cart + price */}
-        <div style={{ flex: '1 1 200px', minWidth: 190, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <div className="label" style={{ marginBottom: 6 }}>Golf cart</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['Includes cart', true], ['No cart', false]].map(([lbl, val]) => {
-                const on = includesCart === val;
-                return (
-                  <button key={lbl} onClick={() => setIncludesCart(val)} style={{
-                    flex: 1, padding: '9px 8px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                    border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
-                    background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
-                  }}>{lbl}</button>
-                );
-              })}
-            </div>
+        {/* Price slider, with the walk/cart toggle above it on the right */}
+        <div style={{ flex: '2 1 260px', minWidth: 240 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+            {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
+              const on = includesCart === val;
+              return (
+                <button key={lbl} onClick={() => setIncludesCart(val)} style={{
+                  padding: '8px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                  border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
+                  background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
+                }}>{lbl}</button>
+              );
+            })}
           </div>
-          <div>
-            <div className="label" style={{ marginBottom: 6 }}>Price per golfer</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 18, opacity: 0.6 }}>$</span>
-              <input className="input" type="number" min="0" value={price} onChange={e => setPrice(e.target.value)}/>
-            </div>
+          <div style={sliderHeading}>price per golfer?</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '10px 0 6px' }}>
+            <span style={sliderBig}>${price}</span>
+            <span style={{ fontSize: 14, opacity: 0.6 }}>per golfer</span>
+          </div>
+          <input type="range" min="0" max="75" step="1" value={price}
+            onChange={e => setPrice(Number(e.target.value))}
+            style={{ width: '100%', accentColor: 'var(--forest)' }}/>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.5, fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+            <span>$0</span><span>$75</span>
           </div>
         </div>
 
-        {/* Live revenue */}
-        <div style={{ flex: '1 1 200px', minWidth: 190, background: 'rgba(28,73,42,0.06)', borderRadius: 14, padding: '16px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div className="eyebrow">$ based on average booking rate</div>
-          {expected != null ? (
-            <>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, color: 'var(--forest)', lineHeight: 1.05, marginTop: 6 }}>${expected.toLocaleString('en-US')}</div>
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>expected · {Math.round(rate * 100)}% avg booking</div>
-              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2, fontFamily: 'var(--font-mono)' }}>of ${full.toLocaleString('en-US')} at full · {toOpen.length} times × 4</div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, color: 'var(--forest)', lineHeight: 1.05, marginTop: 6 }}>${full.toLocaleString('en-US')}</div>
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>potential at full booking</div>
-              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>{toOpen.length} times × 4 players · live rate kicks in once Killian has booking history</div>
-            </>
+        {/* Expected daily revenue */}
+        <div style={{ flex: '1 1 200px', minWidth: 190, position: 'relative', background: 'rgba(28,73,42,0.06)', borderRadius: 14, padding: '16px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span className="eyebrow">expected daily revenue</span>
+            <button onClick={() => setShowFormula(v => !v)} title="How is this calculated?" style={{
+              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16, lineHeight: 1, opacity: showFormula ? 1 : 0.6, padding: 0,
+            }}>👁</button>
+          </div>
+          <div style={{ ...sliderBig, fontSize: 34, lineHeight: 1.05, marginTop: 6 }}>${revenue.toLocaleString('en-US')}</div>
+          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>based on average booking rate</div>
+
+          {showFormula && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(14,28,19,0.1)', fontSize: 12, lineHeight: 1.5 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>How this is calculated</div>
+              <div style={{ opacity: 0.8 }}>tee times × 4 players × price × avg booking rate</div>
+              <div style={{ fontFamily: 'var(--font-mono)', marginTop: 6, opacity: 0.75 }}>
+                {toOpen.length} × 4 × ${Number(price) || 0}{rate != null ? ` × ${Math.round(rate * 100)}%` : ''} = ${revenue.toLocaleString('en-US')}
+              </div>
+              <div style={{ opacity: 0.55, marginTop: 6 }}>
+                {rate != null
+                  ? `Avg booking rate is ${Math.round(rate * 100)}% from ${course.short_name}'s last 90 days (${fill.booked}/${fill.seats} seats).`
+                  : `No booking history yet — showing full potential ($${full.toLocaleString('en-US')}). The booking rate kicks in once rounds get booked.`}
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Window filter — above the cards */}
+      {/* Window filter (multi-select) — above the cards */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '22px 0 12px' }}>
         <span className="eyebrow" style={{ marginRight: 4 }}>View</span>
         {TIME_WINDOWS.map(w => {
-          const on = w.key === windowKey;
+          const on = windowKeys.has(w.key);
           return (
-            <button key={w.key} onClick={() => setWindowKey(w.key)} style={{
+            <button key={w.key} onClick={() => toggleWindow(w.key)} style={{
               padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700,
               border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
               background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
             }}>{w.label}</button>
           );
         })}
-        <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.55, fontFamily: 'var(--font-mono)' }}>{hmLabel(win.start)}–{hmLabel(win.end === 1440 ? 1439 : win.end)}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.55, fontFamily: 'var(--font-mono)' }}>select one or more</span>
       </div>
 
-      {/* Draft notice + grid */}
+      {/* Draft notice + uniform grid */}
       <div className="card" style={{ padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontSize: 13, opacity: 0.7 }}>
@@ -349,11 +384,15 @@ function TeeTimesPanel({ course }) {
         </div>
 
         {slots === null ? <Spinner/> : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8, marginTop: 14 }}>
             {candidates.map(t => {
               const isOpen = !!openByHM[t];       // already public — managed in the list below
               const isOff = !isOpen && excluded.has(t);
-              const base = { padding: '7px 11px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)' };
+              const base = {
+                height: 36, width: '100%', boxSizing: 'border-box', borderRadius: 9,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)',
+              };
               let st;
               if (isOpen)      st = { ...base, cursor: 'default', border: '1px solid var(--forest)', background: 'var(--forest)', color: 'var(--cream)' };
               else if (isOff)  st = { ...base, cursor: 'pointer', border: '1px dashed rgba(14,28,19,0.25)', background: 'transparent', color: 'var(--ink-soft)', opacity: 0.5, textDecoration: 'line-through' };
@@ -361,7 +400,7 @@ function TeeTimesPanel({ course }) {
               return (
                 <button key={t} onClick={isOpen ? undefined : () => toggleTime(t)} style={st}
                   title={isOpen ? 'Already live — manage in the list below' : (isOff ? 'Tap to add back' : 'New time — tap to remove')}>
-                  {hmLabel(parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3), 10))}
+                  {hmLabel(toMin(t))}
                 </button>
               );
             })}
@@ -370,12 +409,12 @@ function TeeTimesPanel({ course }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
           <button className="btn btn-forest" onClick={saveChanges} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
-          <span style={{ fontSize: 12, opacity: 0.6 }}>{includesCart ? '🛒 cart included' : 'cart not included'} · 4 players per time</span>
+          <span style={{ fontSize: 12, opacity: 0.6 }}>{includesCart ? '🛒 cart included' : 'walk only'} · 4 players per time</span>
           {msg && <span style={{ fontSize: 13, color: 'var(--forest)', fontWeight: 600, marginLeft: 'auto' }}>{msg}</span>}
         </div>
       </div>
 
-      {/* Manage already-live times in this window */}
+      {/* Manage already-live times in the selected window(s) */}
       {slotsInWindow.length > 0 && (
         <>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', margin: '24px 0 10px' }}>Live times · {dayLabel(`${dateStr}T12:00`)}</div>
