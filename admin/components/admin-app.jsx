@@ -1,6 +1,9 @@
-/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule, UsersModule */
-// Sandbox Admin — app shell: login → is_admin gate → dashboard with module nav.
-// Phase 1 ships the shell; later phases fill each module's content in.
+/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule, UsersModule, useManagedCourses, ManagerPortal */
+// Sandbox Admin — app shell: login → role gate → dashboard.
+//   • is_admin            → full Sandbox admin dashboard (all courses)
+//   • manages a course    → scoped course-partner portal (their course only)
+//   • neither             → not authorised
+// Later phases fill each module's content in.
 
 // ─── Module registry (content fills in over later phases) ────────────
 const MODULES = [
@@ -22,8 +25,17 @@ function Root() {
 function Authed({ session }) {
   const [profile] = useProfile(session.user.id);
   if (profile === undefined) return <Splash/>;
-  if (!profile || !profile.is_admin) return <NotAuthorised email={session.user.email}/>;
-  return <Dashboard profile={profile}/>;
+  if (profile && profile.is_admin) return <Dashboard profile={profile}/>;
+  // Not an admin — they might still be a course partner.
+  return <ManagerGate session={session} profile={profile}/>;
+}
+
+// Non-admins: if they manage a course, show the scoped partner portal; else block.
+function ManagerGate({ session, profile }) {
+  const [courses] = useManagedCourses(session.user.id);
+  if (courses === undefined) return <Splash/>;
+  if (!courses.length) return <NotAuthorised email={session.user.email}/>;
+  return <ManagerPortal session={session} profile={profile} courses={courses}/>;
 }
 
 function Splash() {
