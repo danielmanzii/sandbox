@@ -1,6 +1,7 @@
-/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass */
+/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, addCourseManager, removeCourseManager */
 // Users module: search players, set membership tier, toggle admin, manage
-// guest passes. Needs v1/sql/membership.sql applied.
+// guest passes, and assign course-partner (manager) access.
+// Needs v1/sql/membership.sql + v1/sql/course-managers.sql applied.
 
 const TIERS = [
   ['walkup', 'Walk-up'],
@@ -146,6 +147,9 @@ function UserDetail({ user, adminId, onBack }) {
         {isSelf && <div style={{ fontSize: 12, opacity: 0.55, marginTop: 2 }}>You can't change your own admin access here.</div>}
       </div>
 
+      {/* Course-partner access */}
+      <CourseAccess user={user} adminId={adminId}/>
+
       {/* Guest passes */}
       <div className="card" style={{ padding: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
@@ -184,6 +188,71 @@ function UserDetail({ user, adminId, onBack }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Assign this user as a manager of one or more courses. Gives them the scoped
+// course-partner portal (live play, tee times, yardages, financials) for those
+// courses only — enforced by RLS in course-managers.sql.
+function CourseAccess({ user, adminId }) {
+  const [managed, reloadManaged] = useManagedCourses(user.id);
+  const [courses] = useCourses();
+  const [pick, setPick] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  async function add() {
+    if (!pick) return;
+    setBusy(true); setErr('');
+    try { await addCourseManager({ userId: user.id, courseId: pick, createdBy: adminId }); setPick(''); await reloadManaged(); }
+    catch (e) { setErr(e.message || 'Could not assign.'); }
+    setBusy(false);
+  }
+  async function remove(id) {
+    setBusy(true); setErr('');
+    try { await removeCourseManager(id); await reloadManaged(); }
+    catch (e) { setErr(e.message || 'Could not remove.'); }
+    setBusy(false);
+  }
+
+  const managedIds = new Set((managed || []).map(m => m.course_id));
+  const available = (courses || []).filter(c => !managedIds.has(c.id));
+
+  return (
+    <div className="card" style={{ padding: 22, marginBottom: 16 }}>
+      <div className="eyebrow" style={{ marginBottom: 4 }}>Course access · partner portal</div>
+      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 14 }}>
+        Managers sign in at admin.sbx.golf and see only their course — live play, tee times, yardages, and financials.
+      </div>
+
+      {err && <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{err}</div>}
+
+      {managed === undefined ? <Spinner/> : (managed.length === 0 ? (
+        <div style={{ fontSize: 13, opacity: 0.6, marginBottom: 12 }}>Not a manager of any course yet.</div>
+      ) : (
+        <div style={{ marginBottom: 12 }}>
+          {managed.map(m => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: 'var(--hairline)' }}>
+              <span style={{ fontSize: 16 }}>⛳</span>
+              <div style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{m.course ? m.course.short_name : 'Course'}</div>
+              <button className="btn btn-danger" style={{ padding: '6px 10px' }} disabled={busy} onClick={() => remove(m.id)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <Row>
+        <Field label="Grant access to a course">
+          <select className="select" value={pick} onChange={e => setPick(e.target.value)} disabled={busy || !available.length}>
+            <option value="">{available.length ? 'Select a course…' : 'Manages every course'}</option>
+            {available.map(c => <option key={c.id} value={c.id}>{c.short_name}</option>)}
+          </select>
+        </Field>
+        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <button className="btn btn-forest" onClick={add} disabled={busy || !pick}>+ Add course</button>
+        </div>
+      </Row>
     </div>
   );
 }
