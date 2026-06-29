@@ -52,13 +52,14 @@ function useCourseSlots(courseId, fromISO) {
 
 async function saveSlot(slot) {
   const payload = {
-    course_id: slot.course_id,
-    starts_at: slot.starts_at,
-    capacity:  Number(slot.capacity) || 8,
-    price:     Number(slot.price) || 0,
-    type:      slot.type || 'open',
-    title:     slot.title ? slot.title.trim() : null,
-    status:    slot.status || 'open',
+    course_id:     slot.course_id,
+    starts_at:     slot.starts_at,
+    capacity:      4, // a tee time is always a foursome
+    price:         Number(slot.price) || 0,
+    type:          slot.type || 'open',
+    title:         slot.title ? slot.title.trim() : null,
+    status:        slot.status || 'open',
+    includes_cart: !!slot.includes_cart,
   };
   if (slot.id) {
     const { error } = await sbx.from('tee_slots').update(payload).eq('id', slot.id);
@@ -73,23 +74,70 @@ async function deleteSlot(id) {
   if (error) throw slotError(error);
 }
 
-// Bulk-open a day: create slots at each time in `times` (['16:30',…]) on a date.
-// Skips any that already exist (unique course_id+starts_at). Returns # created.
-async function openDay({ courseId, dateStr, times, capacity, price }) {
+// Publish a day's tee times: make every time in `times` (['16:30',…]) a public,
+// bookable open slot at the given price + cart flag. Nothing is public until
+// this runs (it's the manager's "Save changes" action). Upsert UPDATES existing
+// slots at those times (so the price/cart edits apply) and inserts new ones.
+// Returns the number of public times after saving.
+async function publishDayTimes({ courseId, dateStr, times, price, includesCart }) {
+  if (!times.length) return 0;
   const rows = times.map(t => ({
-    course_id: courseId,
-    starts_at: new Date(`${dateStr}T${t}:00`).toISOString(),
-    capacity:  Number(capacity) || 8,
-    price:     Number(price) || 0,
-    type:      'open',
-    status:    'open',
+    course_id:     courseId,
+    starts_at:     new Date(`${dateStr}T${t}:00`).toISOString(),
+    capacity:      4,
+    price:         Number(price) || 0,
+    type:          'open',
+    status:        'open',
+    includes_cart: !!includesCart,
   }));
-  // upsert with ignoreDuplicates so re-opening a day is safe
   const { data, error } = await sbx.from('tee_slots')
-    .upsert(rows, { onConflict: 'course_id,starts_at', ignoreDuplicates: true })
+    .upsert(rows, { onConflict: 'course_id,starts_at' })
     .select('id');
   if (error) throw slotError(error);
   return (data || []).length;
+}
+
+// All tee slots on one calendar day (local), soonest first.
+function useDaySlots(courseId, dateStr) {
+  const [rows, setRows] = React.useState(null);
+  const load = React.useCallback(async () => {
+    if (!courseId || !dateStr) { setRows([]); return; }
+    const start = new Date(`${dateStr}T00:00:00`);
+    const end = new Date(start.getTime() + 864e5);
+    const { data } = await sbx.from('tee_slots').select('*')
+      .eq('course_id', courseId)
+      .gte('starts_at', start.toISOString())
+      .lt('starts_at', end.toISOString())
+      .order('starts_at');
+    setRows(data || []);
+  }, [courseId, dateStr]);
+  React.useEffect(() => { load(); }, [load]);
+  return [rows, load];
+}
+
+// Historical fill rate for this course → drives the live revenue projection.
+//   Looks at past slots (last 90d) and what share of their seats got booked.
+//   { rate: 0..1|null, seats, booked, sampleSlots }
+function useCourseFillRate(courseId) {
+  const [info, setInfo] = React.useState(null);
+  const load = React.useCallback(async () => {
+    if (!courseId) { setInfo(null); return; }
+    const since = new Date(Date.now() - 90 * 864e5).toISOString();
+    const nowISO = new Date().toISOString();
+    const { data: slots } = await sbx.from('tee_slots')
+      .select('id, capacity').eq('course_id', courseId)
+      .gte('starts_at', since).lt('starts_at', nowISO);
+    const ids = (slots || []).map(s => s.id);
+    let booked = 0;
+    if (ids.length) {
+      const { data: bk } = await sbx.from('bookings').select('status').in('slot_id', ids);
+      booked = (bk || []).filter(b => b.status !== 'cancelled' && b.status !== 'no_show').length;
+    }
+    const seats = (slots || []).reduce((s, x) => s + (x.capacity || 4), 0);
+    setInfo({ rate: seats ? Math.min(1, booked / seats) : null, seats, booked, sampleSlots: (slots || []).length });
+  }, [courseId]);
+  React.useEffect(() => { load(); }, [load]);
+  return [info, load];
 }
 
 function slotError(error) {
@@ -279,7 +327,7 @@ function useCourseFinancials(courseId, course) {
 
 Object.assign(window, {
   useManagedCourses, addCourseManager, removeCourseManager,
-  useCourseSlots, saveSlot, deleteSlot, openDay,
+  useCourseSlots, useDaySlots, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
   useDailyYardages, saveDailyYardages, clearDailyYardages,
   useLiveOnCourse, useCourseFinancials,
 });
