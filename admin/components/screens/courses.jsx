@@ -1,4 +1,4 @@
-/* global React, useCourses, loadCourseHoles, saveCourse, deleteCourse */
+/* global React, Row, Field, Spinner, useCourses, loadCourseHoles, saveCourse, deleteCourse */
 // Courses module: list every course; add/edit a course + its Sandbox-9
 // hole/tee data (par + yards per hole). Replaces hand-editing SQL.
 
@@ -213,19 +213,6 @@ function CourseEditor({ course, onClose, onSaved }) {
         <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
         {!isNew && <button className="btn btn-danger" onClick={remove} disabled={saving} style={{ marginLeft: 'auto' }}>Delete course</button>}
       </div>
-    </div>
-  );
-}
-
-// Tiny layout helpers for the form grid.
-function Row({ children }) {
-  return <div style={{ display: 'flex', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>{children}</div>;
-}
-function Field({ label, full, children }) {
-  return (
-    <div style={{ flex: full ? '1 1 100%' : '1 1 0', minWidth: 140 }}>
-      <label className="label">{label}</label>
-      {children}
     </div>
   );
 }
