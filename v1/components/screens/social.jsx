@@ -6,6 +6,7 @@ function SocialScreen({ go }) {
   const [liveEvent] = useLiveEvent();
   const data        = useSbxLeaderboard(500); // null = loading, [] = nobody rated yet
   const streaks     = useStreaks();           // null = loading, else per-user array
+  const myRating    = useMyRating();           // signed-in user's sbx + match counts
   const meId        = MOCK.USER && MOCK.USER.id;
   const [bandView, setBandView] = React.useState(null); // null = home, else a band int
   const [statView, setStatView] = React.useState(null); // null = home, else 'sbx'|'matches'|'longest'|'active'
@@ -60,6 +61,9 @@ function SocialScreen({ go }) {
           Find players. Track the ladder.
         </div>
       </div>
+
+      {/* Gamified climb meter: progress to next band, or matches to get ranked */}
+      <BandProgress rating={myRating}/>
 
       <ExploreSearch go={go}/>
 
@@ -233,6 +237,99 @@ const ordinal = (n) => {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
 const matchesOf = (p) => (p.sbx_2v2_n || 0) + (p.sbx_1v1_n || 0);
+
+// ─── Signed-in user's own rating row (works rated or not) ────────────
+function useMyRating() {
+  const [row, setRow] = React.useState(null); // null = loading
+  React.useEffect(() => {
+    let cancelled = false;
+    const id = MOCK.USER && MOCK.USER.id;
+    if (!id) { setRow({}); return; }
+    (async () => {
+      const { data } = await sbx
+        .from('profiles')
+        .select('sbx, sbx_2v2_n, sbx_1v1_n')
+        .eq('id', id)
+        .maybeSingle();
+      if (!cancelled) setRow(data || {});
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  return row;
+}
+
+// ─── Gamified climb meter ────────────────────────────────────────────
+// Rated  → fill = progress through the current band toward the next.
+// Unrated → fill = confirmed matches played toward the 3 needed to rank.
+// The fill animates on mount and carries a looping sheen.
+function BandProgress({ rating }) {
+  const [w, setW] = React.useState(0);
+
+  const sbx      = (rating && rating.sbx != null) ? Number(rating.sbx) : null;
+  const rated    = sbx != null;
+  const MAX_BAND = 8, NEED = 3;
+  const band     = rated ? Math.floor(sbx) : null;
+  const maxed    = rated && band >= MAX_BAND;
+  const played   = rating ? ((rating.sbx_2v2_n || 0) + (rating.sbx_1v1_n || 0)) : 0;
+
+  const target = rated
+    ? (maxed ? 1 : Math.max(0, Math.min(1, sbx - band)))
+    : Math.max(0, Math.min(1, played / NEED));
+
+  React.useEffect(() => {
+    const t = setTimeout(() => setW(target * 100), 90); // animate from 0 → target
+    return () => clearTimeout(t);
+  }, [target]);
+
+  if (rating == null) return null; // loading — stay quiet
+
+  let eyebrow, valueRight, sub;
+  if (rated && !maxed) {
+    eyebrow = `Band ${band}.0`;
+    valueRight = sbx.toFixed(3);
+    sub = `${(band + 1 - sbx).toFixed(3)} to climb into the ${band + 1}.0 band`;
+  } else if (rated && maxed) {
+    eyebrow = 'Top band';
+    valueRight = sbx.toFixed(3);
+    sub = "You're in the top Sandbox Rating band. 🐐";
+  } else {
+    const remaining = Math.max(0, NEED - played);
+    eyebrow = 'Get ranked';
+    valueRight = `${Math.min(played, NEED)}/${NEED}`;
+    sub = remaining > 0
+      ? `Play ${remaining} more confirmed ${remaining === 1 ? 'match' : 'matches'} to earn your Sandbox Rating.`
+      : 'Calibrating your rating — almost there.';
+  }
+
+  return (
+    <div style={{ padding: '0 16px 18px' }}>
+      <style>{`@keyframes sbx-sheen { 0% { transform: translateX(-130%); } 100% { transform: translateX(360%); } }`}</style>
+      <div className="card" style={{ padding: '16px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{eyebrow}</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', letterSpacing: '-0.01em' }}>{valueRight}</span>
+        </div>
+        <div style={{ position: 'relative', height: 12, borderRadius: 999, background: 'rgba(14,28,19,0.08)', overflow: 'hidden' }}>
+          <div style={{
+            position: 'absolute', top: 0, left: 0, bottom: 0, width: `${w}%`,
+            background: 'linear-gradient(90deg, var(--moss), var(--forest))',
+            borderRadius: 999, overflow: 'hidden',
+            transition: 'width 1.1s cubic-bezier(0.22, 1, 0.36, 1)',
+          }}>
+            <div style={{
+              position: 'absolute', top: 0, bottom: 0, left: 0, width: '38%',
+              background: 'linear-gradient(90deg, transparent, rgba(234,226,206,0.6), transparent)',
+              animation: 'sbx-sheen 1.9s ease-in-out infinite',
+            }}/>
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--ink)', opacity: 0.72, marginTop: 9, fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
+          {sub}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Your rank within your SBX band (tap → full band board) ──────────
 function BandRankCard({ data, meId, onOpen }) {
