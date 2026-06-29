@@ -1,4 +1,4 @@
-/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule, TeeSlotsModule, BookingsModule */
+/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule */
 // Sandbox Admin — app shell: login → is_admin gate → dashboard with module nav.
 // Phase 1 ships the shell; later phases fill each module's content in.
 
@@ -156,6 +156,7 @@ function ModuleView({ id }) {
   if (id === 'courses') return <CoursesModule/>;
   if (id === 'teeSlots') return <TeeSlotsModule/>;
   if (id === 'bookings') return <BookingsModule/>;
+  if (id === 'events') return <EventsModule/>;
   return (
     <div className="card" style={{ padding: 40, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 36 }}>{(MODULES.find(m => m.id === id) || {}).icon}</div>
