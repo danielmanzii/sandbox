@@ -212,7 +212,9 @@ function MatchLive({ matchId, profile, tier, onExit }) {
             yourTeamLabel={yourTeamLabel}
             theirTeamLabel={theirTeamLabel}
             liveOpp={liveOpp}
-            flowKey={`spp_flow_${matchId}_${hole.hole_number}`}
+            draft={youAreA ? hole.draft_a : hole.draft_b}
+            meId={profile.id}
+            onSaveDraft={(d) => saveDraft(matchId, hole.hole_number, youAreA ? 'a' : 'b', d)}
             onLiveScore={broadcastLive}
             onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
             onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
@@ -308,13 +310,17 @@ function ScoreModeChooser({ onPick, onExit }) {
 }
 
 // ─── Hole card ───────────────────────────────────────────────
-function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, theirTeam, yourTeamLabel, theirTeamLabel, liveOpp, flowKey, onLiveScore, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
+function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, yourTeam, theirTeam, yourTeamLabel, theirTeamLabel, liveOpp, draft, meId, onLiveScore, onSaveDraft, onYourScore, onOpponentScore, onSaveStat, onSavePlayerStat, onAdvance }) {
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
   const [mode, setMode] = React.useState(initialMode || 'quick'); // 'quick' | 'stats'
   const hasTeam   = (yourTeam || []).length >= 1; // 1 (1v1) or 2 (2v2)
-  const statsMode = mode === 'stats' && hasTeam;
+  // A teammate started a detailed hole → both of us see that shared shot flow,
+  // regardless of our own toggle, so we never diverge on one team score.
+  const hasDraft  = !!(draft && draft.phase && draft.phase !== 'done');
+  React.useEffect(() => { if (hasDraft && mode !== 'stats') setMode('stats'); }, [hasDraft]);
+  const statsMode = (mode === 'stats' || hasDraft) && hasTeam;
   const statPrefixEarly = youAreA ? 'player_a' : 'player_b';
 
   // Your per-hole stats (1v1 only). In 2v2, team-level stats need per-shot
@@ -378,8 +384,9 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
             <ShotFlow
               yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
               isRegular={isRegular} isMember={isMember}
-              flowKey={flowKey} yourTeamLabel={yourTeamLabel}
+              draft={draft} meId={meId} yourTeamLabel={yourTeamLabel}
               onLiveScore={onLiveScore}
+              onSaveDraft={onSaveDraft}
               onSavePlayerStat={onSavePlayerStat}
               onComplete={({ score, gir, putts, zone, ballPlayer, holedBy }) => {
                 onYourScore(score);
@@ -552,21 +559,26 @@ function FairwayCross({ value, onPick }) {
 // Each stroke both teammates log their own shot on their own card (@handle),
 // the caddie compares the two balls, you pick which to play, repeat until
 // holed. The team score emerges from the stroke count.
-function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, yourTeamLabel, onLiveScore, onSavePlayerStat, onComplete }) {
+function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId, yourTeamLabel, onLiveScore, onSaveDraft, onSavePlayerStat, onComplete }) {
   const [p1, p2] = yourTeam;
-  // Restore any in-progress hole so backing out of the match doesn't lose it.
-  const saved = (() => {
-    try { return JSON.parse((flowKey && localStorage.getItem(flowKey)) || 'null') || {}; } catch (_) { return {}; }
-  })();
-  const [stroke, setStroke] = React.useState(saved.stroke || 0);     // 0-based stroke (0 = tee)
-  const [card, setCard]     = React.useState(saved.card || {});      // { pid: { fairway, reached, ob, zone } }
+  // Seed from the shared draft (a teammate may have already started this hole).
+  const init = (draft && typeof draft === 'object') ? draft : {};
+  const [stroke, setStroke] = React.useState(init.stroke || 0);     // 0-based stroke (0 = tee)
+  const [card, setCard]     = React.useState(init.card || {});      // { pid: { fairway, reached, ob, zone } }
   // 'cards' | 'putt' | 'done'. A finalized hole opens straight to the summary.
-  const [phase, setPhase]   = React.useState(saved.phase || (savedScore != null ? 'done' : 'cards'));
-  const [putts, setPutts]   = React.useState(saved.putts || 0);      // completed missed putt rounds
-  const [puttCard, setPuttCard] = React.useState(saved.puttCard || {}); // this round: { pid: 'made'|'missed' }
-  const [chosen, setChosen] = React.useState(saved.chosen || null);  // { ball, zone, strokesToGreen }
+  const [phase, setPhase]   = React.useState(init.phase || (savedScore != null ? 'done' : 'cards'));
+  const [putts, setPutts]   = React.useState(init.putts || 0);      // completed missed putt rounds
+  const [puttCard, setPuttCard] = React.useState(init.puttCard || {}); // this round: { pid: 'made'|'missed' }
+  const [chosen, setChosen] = React.useState(init.chosen || null);  // { ball, zone, strokesToGreen }
   const [doneScore, setDoneScore] = React.useState(null); // shown instantly on finish, before DB echoes back
-  const [history, setHistory] = React.useState(saved.history || []); // prior states for one-step "Go Back"
+  const [history, setHistory] = React.useState(init.history || []); // prior states for one-step "Go Back"
+
+  // ── Shared-state sync bookkeeping ──
+  // lastRev: the rev of the draft we last wrote or adopted (ignore its echo).
+  // skipWrite: set when we adopt a teammate's draft (or seed) so we don't
+  // immediately echo it straight back to the DB.
+  const lastRev   = React.useRef(init.rev || null);
+  const skipWrite = React.useRef(true); // skip the initial seed write
 
   // Running strokes so far: full swings to the green, plus putt rounds.
   const count = (phase === 'putt' && chosen) ? chosen.strokesToGreen + putts : stroke;
@@ -576,14 +588,37 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
     if (onLiveScore) onLiveScore(count, phase === 'done');
   }, [count, phase]);
 
-  // Persist in-progress state per match+hole; wipe it once the hole finalizes.
+  // Adopt a teammate's newer draft (their write, not ours, not one we've seen).
   React.useEffect(() => {
-    if (!flowKey) return;
-    try {
-      if (phase === 'done') localStorage.removeItem(flowKey);
-      else localStorage.setItem(flowKey, JSON.stringify({ stroke, card, phase, putts, puttCard, chosen, history }));
-    } catch (_) {}
-  }, [flowKey, stroke, card, phase, putts, puttCard, chosen, history]);
+    if (!draft || typeof draft !== 'object') return;
+    if (draft.by === meId || draft.rev === lastRev.current) return;
+    lastRev.current = draft.rev;
+    skipWrite.current = true;
+    setStroke(draft.stroke || 0);
+    setCard(draft.card || {});
+    setPhase(draft.phase || 'cards');
+    setPutts(draft.putts || 0);
+    setPuttCard(draft.puttCard || {});
+    setChosen(draft.chosen || null);
+    setHistory(draft.history || []);
+    setDoneScore(null);
+  }, [draft, meId]);
+
+  // When this side's score lands (either teammate finalized), both jump to done.
+  React.useEffect(() => {
+    if (savedScore != null && phase !== 'done') { skipWrite.current = true; setPhase('done'); }
+  }, [savedScore]);
+
+  // Push every local change to the shared draft so the other teammate mirrors
+  // it; clear the draft once the hole finalizes.
+  React.useEffect(() => {
+    if (!onSaveDraft) return;
+    if (skipWrite.current) { skipWrite.current = false; return; }
+    if (phase === 'done') { onSaveDraft(null); return; }
+    const rev = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    lastRev.current = rev;
+    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, rev, by: meId });
+  }, [stroke, card, phase, putts, puttCard, chosen, history]);
 
   // Snapshot the current state before any forward move so "Go Back" undoes
   // exactly one shot / putt-round (not the whole hole).
@@ -598,7 +633,6 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, flowKey, you
 
   function reset() {
     setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]);
-    try { if (flowKey) localStorage.removeItem(flowKey); } catch (_) {}
   }
 
   // Hole finalized → show the team's score + a way to re-score. This is the
@@ -1221,6 +1255,13 @@ async function saveScore(matchId, holeNumber, who, score) {
     result,
     updated_at: new Date().toISOString(),
   }).eq('match_id', matchId).eq('hole_number', holeNumber);
+}
+
+// Save (or clear) a side's in-progress hole so both teammates share it live.
+// `draft` is the ShotFlow scratchpad, or null to wipe it on finalize.
+async function saveDraft(matchId, holeNumber, who, draft) {
+  const col = who === 'a' ? 'draft_a' : 'draft_b';
+  await sbx.from('match_holes').update({ [col]: draft }).eq('match_id', matchId).eq('hole_number', holeNumber);
 }
 
 // Compute running match state from completed holes.
