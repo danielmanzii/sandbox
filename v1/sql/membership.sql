@@ -78,3 +78,65 @@ drop trigger if exists trg_guard_profile_privileged on public.profiles;
 create trigger trg_guard_profile_privileged
   before update on public.profiles
   for each row execute function public.guard_profile_privileged();
+
+-- ── 5. Guest-pass entitlement + usage logging ───────────────────────────────
+-- Distinguish admin comps ('grant') from monthly tier passes ('tier').
+alter table public.guest_passes
+  add column if not exists source text not null default 'grant';
+
+-- Consume one guest pass for the signed-in member, logging used_at + event.
+-- Order: use an admin-granted 'available' pass first, else the monthly tier
+-- allowance — League = 2 / calendar month, Plus = unlimited. Raises if none
+-- left, so the 2/month cap can't be bypassed from the client.
+create or replace function public.use_guest_pass(p_event_id uuid default null)
+returns public.guest_passes
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_tier text;
+  v_bonus uuid;
+  v_used int;
+  v_row public.guest_passes;
+begin
+  if v_user is null then raise exception 'Not signed in.'; end if;
+  select tier into v_tier from public.profiles where id = v_user;
+
+  -- 1) admin-granted available pass first
+  select id into v_bonus from public.guest_passes
+    where user_id = v_user and status = 'available'
+    order by created_at
+    limit 1;
+  if v_bonus is not null then
+    update public.guest_passes
+      set status = 'used', used_at = now(), event_id = coalesce(p_event_id, event_id)
+      where id = v_bonus
+      returning * into v_row;
+    return v_row;
+  end if;
+
+  -- 2) monthly tier allowance
+  if v_tier = 'plus' then
+    insert into public.guest_passes(user_id, status, source, used_at, event_id)
+      values (v_user, 'used', 'tier', now(), p_event_id)
+      returning * into v_row;
+    return v_row;
+  elsif v_tier = 'league' then
+    select count(*) into v_used from public.guest_passes
+      where user_id = v_user and status = 'used' and source = 'tier'
+        and used_at >= date_trunc('month', now());
+    if v_used >= 2 then
+      raise exception 'No guest passes left this month (League includes 2 per month).';
+    end if;
+    insert into public.guest_passes(user_id, status, source, used_at, event_id)
+      values (v_user, 'used', 'tier', now(), p_event_id)
+      returning * into v_row;
+    return v_row;
+  else
+    raise exception 'Your membership does not include guest passes.';
+  end if;
+end $$;
+
+grant execute on function public.use_guest_pass(uuid) to authenticated;

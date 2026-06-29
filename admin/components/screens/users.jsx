@@ -106,7 +106,17 @@ function UserDetail({ user, adminId, onBack }) {
     setBusy(false);
   }
 
-  const available = (passes || []).filter(p => p.status === 'available').length;
+  // Tier entitlement summary: League = 2 / month, Plus = unlimited, plus any
+  // admin-comped ('available') passes on top.
+  const monthStart = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+  const isThisMonth = (iso) => iso && new Date(iso) >= monthStart;
+  const usedTierThisMonth = (passes || []).filter(p => (p.source || 'grant') === 'tier' && p.status === 'used' && isThisMonth(p.used_at)).length;
+  const bonusAvailable = (passes || []).filter(p => p.status === 'available').length;
+  const allowanceText =
+      tier === 'plus'   ? 'Unlimited · Plus'
+    : tier === 'league' ? `${Math.max(0, 2 - usedTierThisMonth)} of 2 left this month`
+    :                     'No monthly passes';
+  const summaryRight = allowanceText + (bonusAvailable ? ` · ${bonusAvailable} comped` : '');
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
@@ -140,7 +150,7 @@ function UserDetail({ user, adminId, onBack }) {
       <div className="card" style={{ padding: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
           <div className="eyebrow">Guest passes</div>
-          <div style={{ fontSize: 12, opacity: 0.6, fontFamily: 'var(--font-mono)' }}>{available} available</div>
+          <div style={{ fontSize: 12, opacity: 0.7, fontFamily: 'var(--font-mono)', color: 'var(--forest)' }}>{summaryRight}</div>
         </div>
         <Row>
           <Field label="Grant a pass — note (optional)"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. comped for the launch"/></Field>
@@ -160,7 +170,14 @@ function UserDetail({ user, adminId, onBack }) {
                   background: p.status === 'available' ? 'rgba(28,73,42,0.1)' : 'rgba(14,28,19,0.06)',
                   color: p.status === 'available' ? 'var(--forest)' : 'var(--ink-soft)',
                 }}>{p.status}</span>
-                <div style={{ flex: 1, minWidth: 0, fontSize: 13, opacity: 0.8 }}>{p.note || '—'}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, opacity: 0.8 }}>{p.note || (p.source === 'tier' ? 'Monthly pass' : 'Comped')}</div>
+                  {p.status === 'used' && p.used_at && (
+                    <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                      used {new Date(p.used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  )}
+                </div>
                 <button className="btn btn-danger" style={{ padding: '6px 10px' }} disabled={busy} onClick={() => revoke(p.id)}>Remove</button>
               </div>
             ))}
