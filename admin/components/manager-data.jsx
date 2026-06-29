@@ -115,6 +115,44 @@ function useDaySlots(courseId, dateStr) {
   return [rows, load];
 }
 
+// The signed-up field per tee time on a day → { slot_id: [players] }.
+// A player = { id, first_name, last_name, handle, avatar_url, status }.
+// Realtime on bookings so faces appear/disappear as golfers sign up live.
+function useDayFields(courseId, dateStr) {
+  const [bySlot, setBySlot] = React.useState({});
+  const load = React.useCallback(async () => {
+    if (!courseId || !dateStr) { setBySlot({}); return; }
+    const start = new Date(`${dateStr}T00:00:00`);
+    const end = new Date(start.getTime() + 864e5);
+    const { data: slots } = await sbx.from('tee_slots').select('id')
+      .eq('course_id', courseId)
+      .gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString());
+    const ids = (slots || []).map(s => s.id);
+    if (!ids.length) { setBySlot({}); return; }
+    const { data: bk } = await sbx.from('bookings')
+      .select('slot_id, status, created_at, user:profiles!bookings_user_id_fkey(id, first_name, last_name, handle, avatar_url)')
+      .in('slot_id', ids).neq('status', 'cancelled')
+      .order('created_at');
+    const m = {};
+    (bk || []).forEach(b => {
+      if (!b.user) return;
+      (m[b.slot_id] = m[b.slot_id] || []).push({ ...b.user, status: b.status });
+    });
+    setBySlot(m);
+  }, [courseId, dateStr]);
+
+  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    if (!courseId || !dateStr) return;
+    const ch = sbx.channel(`fields-${courseId}-${dateStr}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => load())
+      .subscribe();
+    return () => { sbx.removeChannel(ch); };
+  }, [courseId, dateStr, load]);
+
+  return [bySlot, load];
+}
+
 // Historical fill rate for this course → drives the live revenue projection.
 //   Looks at past slots (last 90d) and what share of their seats got booked.
 //   { rate: 0..1|null, seats, booked, sampleSlots }
@@ -327,7 +365,7 @@ function useCourseFinancials(courseId, course) {
 
 Object.assign(window, {
   useManagedCourses, addCourseManager, removeCourseManager,
-  useCourseSlots, useDaySlots, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
+  useCourseSlots, useDaySlots, useDayFields, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
   useDailyYardages, saveDailyYardages, clearDailyYardages,
   useLiveOnCourse, useCourseFinancials,
 });

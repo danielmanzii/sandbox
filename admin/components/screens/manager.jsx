@@ -1,5 +1,5 @@
 /* global React, Row, Field, Spinner, signOut,
-   useDaySlots, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
+   useDaySlots, useDayFields, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
    useDailyYardages, saveDailyYardages, clearDailyYardages,
    useLiveOnCourse, useCourseFinancials */
 // Course-partner portal — what a course manager sees when they sign in.
@@ -210,6 +210,7 @@ function TeeTimesPanel({ course }) {
   const [msg, setMsg] = React.useState('');
 
   const [slots, reload] = useDaySlots(course.id, dateStr);
+  const [fields] = useDayFields(course.id, dateStr);
   const [fill] = useCourseFillRate(course.id);
 
   const win = TIME_WINDOWS.find(w => w.key === windowKey) || TIME_WINDOWS[0];
@@ -380,7 +381,7 @@ function TeeTimesPanel({ course }) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', margin: '24px 0 10px' }}>Live times · {dayLabel(`${dateStr}T12:00`)}</div>
           <div className="card" style={{ overflow: 'hidden' }}>
             {slotsInWindow.map((s, i) => (
-              <SlotRow key={s.id} slot={s} last={i === slotsInWindow.length - 1} onSaved={reload} onError={setErr}/>
+              <SlotRow key={s.id} slot={s} players={fields[s.id] || []} last={i === slotsInWindow.length - 1} onSaved={reload} onError={setErr}/>
             ))}
           </div>
         </>
@@ -423,7 +424,7 @@ function DateStrip({ value, onChange }) {
   );
 }
 
-function SlotRow({ slot, last, onSaved, onError }) {
+function SlotRow({ slot, players = [], last, onSaved, onError }) {
   const [price, setPrice] = React.useState(slot.price);
   const [status, setStatus] = React.useState(slot.status);
   const [cart, setCart] = React.useState(!!slot.includes_cart);
@@ -453,18 +454,77 @@ function SlotRow({ slot, last, onSaved, onError }) {
         border: cart ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
         background: cart ? 'var(--forest)' : 'transparent', color: cart ? 'var(--cream)' : 'var(--ink-soft)',
       }}>{cart ? '🛒 cart' : 'no cart'}</button>
-      <select className="select" value={status} onChange={e => setStatus(e.target.value)} style={{ width: 120 }}>
+      <select className="select" value={status} onChange={e => setStatus(e.target.value)} style={{ width: 110 }}>
         <option value="open">open</option>
         <option value="closed">closed</option>
         <option value="full">full</option>
         <option value="cancelled">cancelled</option>
       </select>
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-        {dirty && <button className="btn btn-forest" style={{ padding: '7px 12px' }} disabled={busy} onClick={save}>Save</button>}
-        <button className="btn btn-danger" style={{ padding: '7px 10px' }} disabled={busy} onClick={remove}>✕</button>
+
+      {/* Field: who's signed up — pending until 4 grouped up */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <FieldStack players={players}/>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {dirty && <button className="btn btn-forest" style={{ padding: '7px 12px' }} disabled={busy} onClick={save}>Save</button>}
+          <button className="btn btn-danger" style={{ padding: '7px 10px' }} disabled={busy} onClick={remove}>✕</button>
+        </div>
       </div>
     </div>
   );
+}
+
+// Avatar stack + pending/grouped pill for a tee time's field (always out of 4).
+function FieldStack({ players }) {
+  const count = players.length;
+  const full = count >= 4;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} title={players.map(playerName).join(', ') || 'No players yet'}>
+      <div style={{ display: 'flex' }}>
+        {Array.from({ length: 4 }).map((_, i) => {
+          const p = players[i];
+          return (
+            <div key={i} style={{ marginLeft: i ? -8 : 0 }}>
+              {p ? <Avatar player={p}/> : <EmptySeat/>}
+            </div>
+          );
+        })}
+      </div>
+      <span style={{
+        fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+        padding: '4px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+        background: full ? 'var(--forest)' : 'rgba(14,28,19,0.06)',
+        color: full ? 'var(--cream)' : 'var(--ink-soft)',
+      }}>{full ? 'Grouped ✓' : `Pending ${count}/4`}</span>
+    </div>
+  );
+}
+
+function Avatar({ player }) {
+  const ring = '2px solid var(--paper)';
+  if (player.avatar_url) {
+    return <img src={player.avatar_url} alt={playerName(player)} title={playerName(player)}
+      style={{ width: 28, height: 28, borderRadius: 999, objectFit: 'cover', border: ring, background: '#ddd' }}/>;
+  }
+  return (
+    <div title={playerName(player)} style={{
+      width: 28, height: 28, borderRadius: 999, border: ring, background: 'var(--forest)', color: 'var(--cream)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
+    }}>{initials(player)}</div>
+  );
+}
+
+function EmptySeat() {
+  return <div style={{ width: 28, height: 28, borderRadius: 999, border: '1.5px dashed rgba(14,28,19,0.22)', background: 'var(--paper)' }}/>;
+}
+
+function playerName(p) {
+  return [p.first_name, p.last_name].filter(Boolean).join(' ') || (p.handle ? '@' + String(p.handle).replace(/^@/, '') : 'Player');
+}
+function initials(p) {
+  const a = (p.first_name || '').trim(), b = (p.last_name || '').trim();
+  if (a || b) return ((a[0] || '') + (b[0] || '')).toUpperCase();
+  const h = (p.handle || '').replace(/^@/, '');
+  return (h[0] || '?').toUpperCase();
 }
 
 // ─── Daily yardages ──────────────────────────────────────────────────────────
