@@ -543,6 +543,34 @@ async function createEvent(fields) {
   return data;
 }
 
+// ─── Consume + log a guest pass for the signed-in member ─────────────
+// Calls the server RPC (v1/sql/membership.sql) which enforces the tier
+// allowance (League 2 / month, Plus unlimited) and logs used_at + event.
+// Throws a human-readable message when none are left / not a member.
+async function consumeGuestPass(eventId) {
+  const { data, error } = await sbx.rpc('use_guest_pass', { p_event_id: eventId || null });
+  if (error) throw new Error(error.message || 'No guest passes available.');
+  return data;
+}
+
+// Guest passes the signed-in member has left this calendar month, given their
+// tier. Returns { unlimited, remaining, usedThisMonth, comped } or null.
+async function guestPassSummary(userId, tier) {
+  if (!userId) return null;
+  const monthStart = new Date();
+  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const { data } = await sbx
+    .from('guest_passes')
+    .select('status, source, used_at')
+    .eq('user_id', userId);
+  const rows = data || [];
+  const usedThisMonth = rows.filter(p => (p.source || 'grant') === 'tier' && p.status === 'used' && p.used_at && new Date(p.used_at) >= monthStart).length;
+  const comped = rows.filter(p => p.status === 'available').length;
+  if (tier === 'plus') return { unlimited: true, remaining: Infinity, usedThisMonth, comped };
+  if (tier === 'league') return { unlimited: false, remaining: Math.max(0, 2 - usedThisMonth) + comped, usedThisMonth, comped };
+  return { unlimited: false, remaining: comped, usedThisMonth, comped };
+}
+
 Object.assign(window, {
   useEvents, useUpcomingEvents, useLiveEvent, useNextMajor,
   useUserRegistrations, useNextEventForUser,
@@ -551,4 +579,5 @@ Object.assign(window, {
   useMyPendingEventInvites,
   sendEventInvite, acceptEventInvite, declineEventInvite,
   createEvent, updateEvent, cancelEvent, closeEvent,
+  consumeGuestPass, guestPassSummary,
 });
