@@ -647,8 +647,8 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
       <div style={{ position: 'relative', flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.2em' }}>MATCH CODE</div>
         <div style={{
-          fontFamily: 'var(--font-display)', fontSize: 88, letterSpacing: '0.08em',
-          marginTop: 4, color: 'var(--cream)',
+          fontFamily: 'var(--font-display)', fontSize: 56, letterSpacing: '0.04em',
+          marginTop: 4, color: 'var(--cream)', whiteSpace: 'nowrap', maxWidth: '100%',
         }}>{match.join_code}</div>
         <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
           Players tap <b>Joining someone else?</b> under Challenge Friends and type this code. {is2v2 ? 'Each player picks a team as they join.' : ''}
