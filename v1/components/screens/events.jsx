@@ -1,4 +1,4 @@
-/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, useEventRegistrations, registerForEvent, cancelRegistration, cancelEvent, closeEvent, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent, updateEvent, useUserSearch */
+/* global React, Icon, LiveDot, Button, Eyebrow, Chip, Dashed, Ostrich, MOCK, AvatarBy, useEvent, useIsRegistered, useUpcomingEvents, useEventRegistrations, registerForEvent, cancelRegistration, cancelEvent, closeEvent, formatHandle, useFriendsRegisteredForEvents, FriendsHere, sendEventInvite, createEvent, updateEvent, useUserSearch, consumeGuestPass */
 // Events list + detail + register
 
 // ─── Calendar download ────────────────────────────────────────────────
@@ -655,6 +655,12 @@ function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPa
     if (!profile || !profile.id) { setSubmitErr('Sign in required.'); return; }
     setSubmitting(true); setSubmitErr('');
     try {
+      // Using a guest pass? Consume + log it first (server enforces the tier
+      // allowance: League 2/month, Plus unlimited). If none are left, stop
+      // before registering so the spot isn't taken without a pass.
+      if (guest) {
+        await consumeGuestPass(event.id);
+      }
       await registerForEvent({
         eventId:        event.id,
         userId:         profile.id,
@@ -702,7 +708,7 @@ function RegisterSheet({ event, isMember, profile, step, setStep, partner, setPa
 
         {done ? <DoneState event={event} onClose={onClose}/> :
          step === 0 ? <Step0 event={event} isMember={isMember} onNext={() => setStep(1)}/> :
-         step === 1 ? <Step1 partner={partner} setPartner={setPartner} guest={guest} setGuest={setGuest} random={random} setRandom={setRandom} onNext={() => setStep(2)}/> :
+         step === 1 ? <Step1 isMember={isMember} partner={partner} setPartner={setPartner} guest={guest} setGuest={setGuest} random={random} setRandom={setRandom} onNext={() => setStep(2)}/> :
          <Step2 event={event} isMember={isMember} partner={partner} guest={guest} random={random} submitting={submitting} submitErr={submitErr} onConfirm={submitRegistration}/>
         }
       </div>
@@ -733,7 +739,7 @@ function Step0({ event, isMember, onNext }) {
   );
 }
 
-function Step1({ partner, setPartner, guest, setGuest, random, setRandom, onNext }) {
+function Step1({ isMember, partner, setPartner, guest, setGuest, random, setRandom, onNext }) {
   const [query, setQuery]    = React.useState('');
   const [results, searching] = useUserSearch(query, 8);
 
@@ -835,17 +841,19 @@ function Step1({ partner, setPartner, guest, setGuest, random, setRandom, onNext
         </div>
       )}
 
-      {/* Guest pass */}
-      <button onClick={pickGuest} style={optionCard(guest)}>
-        <div style={iconCircle(guest)}>
-          <Icon.Plus size={16} color={guest ? 'var(--cream)' : 'var(--forest)'}/>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Use a guest pass</div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>Bring a non-member · they tee free</div>
-        </div>
-        {guest && <Icon.Check size={14} color="var(--cream)"/>}
-      </button>
+      {/* Guest pass — members only (League 2/mo, Plus unlimited) */}
+      {isMember && (
+        <button onClick={pickGuest} style={optionCard(guest)}>
+          <div style={iconCircle(guest)}>
+            <Icon.Plus size={16} color={guest ? 'var(--cream)' : 'var(--forest)'}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Use a guest pass</div>
+            <div style={{ fontSize: 11, opacity: 0.7 }}>Bring a non-member · they tee free</div>
+          </div>
+          {guest && <Icon.Check size={14} color="var(--cream)"/>}
+        </button>
+      )}
 
       {/* Pair me up */}
       <button onClick={pickRandom} style={optionCard(random)}>
