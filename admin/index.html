@@ -26,8 +26,10 @@
 <!-- Supabase JS SDK (UMD — exposes window.supabase.createClient) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Admin client + app -->
+<!-- Admin client + data + screens + app (app mounts last) -->
 <script type="text/babel" src="components/supabase-client.jsx"></script>
+<script type="text/babel" src="components/courses-data.jsx"></script>
+<script type="text/babel" src="components/screens/courses.jsx"></script>
 <script type="text/babel" src="components/admin-app.jsx"></script>
 
 </body>

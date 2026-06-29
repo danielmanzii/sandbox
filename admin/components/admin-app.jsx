@@ -1,4 +1,4 @@
-/* global React, ReactDOM, sbx, useSession, useProfile, signOut */
+/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule */
 // Sandbox Admin — app shell: login → is_admin gate → dashboard with module nav.
 // Phase 1 ships the shell; later phases fill each module's content in.
 
@@ -151,16 +151,15 @@ function Dashboard({ profile }) {
   );
 }
 
-// ─── Module content (placeholders until each phase lands) ────────────
+// ─── Module content ──────────────────────────────────────────────────
 function ModuleView({ id }) {
-  // Later phases replace each case with a real <CoursesModule/> etc.
+  if (id === 'courses') return <CoursesModule/>;
   return (
     <div className="card" style={{ padding: 40, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 36 }}>{(MODULES.find(m => m.id === id) || {}).icon}</div>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', marginTop: 10 }}>Coming next</div>
       <div style={{ fontSize: 14, opacity: 0.7, marginTop: 8, lineHeight: 1.5 }}>
-        This module is scaffolded and will be filled in. The portal shell, login,
-        and admin gate are live — so the deploy + access setup can be verified now.
+        This module is scaffolded and will be filled in next.
       </div>
     </div>
   );
