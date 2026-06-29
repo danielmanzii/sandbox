@@ -1,4 +1,4 @@
-/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule */
+/* global React, ReactDOM, sbx, useSession, useProfile, signOut, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule, UsersModule */
 // Sandbox Admin — app shell: login → is_admin gate → dashboard with module nav.
 // Phase 1 ships the shell; later phases fill each module's content in.
 
@@ -144,7 +144,7 @@ function Dashboard({ profile }) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--forest)', lineHeight: 1, marginTop: 4 }}>{active.label}</div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 28 }}>
-          <ModuleView id={view}/>
+          <ModuleView id={view} profile={profile}/>
         </div>
       </div>
     </div>
@@ -152,11 +152,12 @@ function Dashboard({ profile }) {
 }
 
 // ─── Module content ──────────────────────────────────────────────────
-function ModuleView({ id }) {
+function ModuleView({ id, profile }) {
   if (id === 'courses') return <CoursesModule/>;
   if (id === 'teeSlots') return <TeeSlotsModule/>;
   if (id === 'bookings') return <BookingsModule/>;
   if (id === 'events') return <EventsModule/>;
+  if (id === 'users') return <UsersModule adminId={profile && profile.id}/>;
   return (
     <div className="card" style={{ padding: 40, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
       <div style={{ fontSize: 36 }}>{(MODULES.find(m => m.id === id) || {}).icon}</div>
