@@ -62,6 +62,8 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
       user.matchesW    = stats.matchesW;
       user.matchesL    = stats.matchesL;
       user.matchesH    = stats.matchesH;
+      user.rec2v2      = stats.rec2v2;
+      user.rec1v1      = stats.rec1v1;
       user.eventsPlayed = stats.matchesTotal;
       user.seasonPoints = stats.seasonPoints;
       user.streak      = stats.streak;
@@ -341,77 +343,110 @@ function sbxTier(r) {
   return 'Beginner';
 }
 
-// ─── Real SBX card (placement-aware). Prefers 2v2; falls back to 1v1. ──
-function RealSbxCard({ user, go, showDashboard }) {
-  const n2 = user.sbx2v2N || 0, n1 = user.sbx1v1N || 0;
-  const has2 = n2 >= 1 && user.sbx2v2 != null;
-  const has1 = n1 >= 1 && user.sbx1v1 != null;
+// ─── Placement stage from a format's confirmed-match count ────────────
+// Each format (1v1 / 2v2) calibrates on its OWN matches — they never
+// cross-count (a 2v2 result can't move your 1v1 rating).
+//   0    → unranked    (no rating yet)
+//   1–2  → calibrating (fills 3 bars; the 3rd match unlocks Provisional)
+//   3–5  → provisional (fills 3 more; the 6th match makes it Official)
+//   6+   → official     (skill label unlocked)
+function sbxStage(n) {
+  if (!n || n <= 0) return 'unranked';
+  if (n < 3) return 'calibrating';
+  if (n < 6) return 'provisional';
+  return 'official';
+}
 
-  // Headline = 2v2 once it has data; otherwise show 1v1 so a player who's
-  // only played 1v1 still sees a number.
-  const fmt = has2 ? '2v2' : has1 ? '1v1' : '2v2';
-  const r   = has2 ? user.sbx2v2 : has1 ? user.sbx1v1 : null;
-  const n   = has2 ? n2 : n1;
-  const rel = Math.round(((has2 ? user.sbx2v2Rel : user.sbx1v1Rel) || 0) * 100);
-  const secLabel = has2 && has1 ? '1v1' : null;
-  const secR = secLabel ? user.sbx1v1 : null;
+function SbxBars({ filled, total = 3 }) {
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} style={{ flex: 1, height: 6, borderRadius: 999,
+          background: i < filled ? 'var(--cream)' : 'rgba(234,226,206,0.22)' }}/>
+      ))}
+    </div>
+  );
+}
 
-  const noData      = !has2 && !has1;
-  const calibrating = !noData && n < 3;       // still showing a provisional number
-  const provisional = !noData && n >= 3 && n < 10;
-  const record = `${user.matchesW || 0}–${user.matchesL || 0}–${user.matchesH || 0}`;
+// One placement-aware rating card for a single format (2v2 or 1v1).
+function SbxFormatCard({ fmt, rating, n, rel, record }) {
+  const stage  = sbxStage(n);
+  const relPct = Math.round((rel || 0) * 100);
+  const rec    = record || { W: 0, L: 0, H: 0 };
+  const recStr = `${rec.W || 0}–${rec.L || 0}–${rec.H || 0}`;
+
+  // Progress + next-milestone within the current journey.
+  const filled = stage === 'calibrating' ? n : stage === 'provisional' ? n - 3 : 0;
+  const milestone = stage === 'calibrating'
+    ? `${3 - n} more ${3 - n === 1 ? 'match' : 'matches'} to unlock your Provisional rating.`
+    : stage === 'provisional'
+      ? `${6 - n} more ${6 - n === 1 ? 'match' : 'matches'} to make it Official.`
+      : '';
+
+  // Right-hand status pill per stage.
+  const pill = stage === 'official'
+    ? <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>Official <span style={{ color: 'var(--moss-light)' }}>✓</span></span>
+    : (stage === 'calibrating' || stage === 'provisional')
+      ? <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(234,226,206,0.18)', padding: '4px 8px', borderRadius: 999, fontWeight: 700 }}>{stage}</span>
+      : null;
 
   return (
     <div style={{
-      background: `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`,
-      color: 'var(--cream)',
-      borderRadius: 'var(--radius-card-lg)', padding: 20, position: 'relative', overflow: 'hidden',
-      boxShadow: 'var(--shadow-md)',
+      background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', borderRadius: 'var(--radius-card-lg)', padding: 20,
+      position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-      <div style={{ position: 'absolute', right: 16, top: 16, fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.6, letterSpacing: '0.24em', fontWeight: 700 }}>SBX · v1</div>
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.65, letterSpacing: '0.14em', textTransform: 'uppercase', position: 'relative' }}>Sandbox Rating™ · {fmt}</div>
 
-      {noData ? (
+      {stage === 'unranked' ? (
         <div style={{ position: 'relative', marginTop: 10 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.9, letterSpacing: '-0.02em' }}>Unrated</div>
-          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
-            Play <strong>3</strong> confirmed matches to lock in your rating.
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-            {[0,1,2].map(i => (
-              <div key={i} style={{ flex: 1, height: 5, borderRadius: 999, background: 'rgba(234,226,206,0.22)' }}/>
-            ))}
-          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, lineHeight: 0.9, letterSpacing: '-0.02em' }}>Unranked</div>
+          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>Play a match to start your SBX rating.</div>
+          <div style={{ marginTop: 12 }}><SbxBars filled={0}/></div>
         </div>
       ) : (
-        <>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 10, position: 'relative' }}>
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 10 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 56, lineHeight: 0.85, letterSpacing: '-0.03em' }}>{r.toFixed(3)}</span>
-              <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 700 }}>{sbxTier(r)}</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.85, letterSpacing: '-0.03em' }}>{rating != null ? rating.toFixed(3) : '—'}</span>
+              {stage === 'official' && <span style={{ fontSize: 12, opacity: 0.85, fontWeight: 700 }}>{sbxTier(rating)}</span>}
             </div>
-            {(calibrating || provisional) && (
-              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(234,226,206,0.18)', padding: '4px 8px', borderRadius: 999, fontWeight: 700 }}>
-                {calibrating ? `Calibrating ${n}/3` : 'Provisional'}
-              </span>
-            )}
+            {pill}
           </div>
-          {calibrating && (
-            <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>Provisional — firms up after {3 - n} more confirmed {3 - n === 1 ? 'match' : 'matches'}.</div>
+
+          {stage !== 'official' && (
+            <>
+              <div className="caption-serif" style={{ fontSize: 12, opacity: 0.72, marginTop: 4, fontStyle: 'italic' }}>
+                Unofficial estimate — firms up as you play.
+              </div>
+              <div style={{ marginTop: 12 }}><SbxBars filled={filled}/></div>
+              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 8 }}>{milestone}</div>
+            </>
           )}
+
           <div style={{ height: 1, background: 'rgba(234,226,206,0.14)', margin: '14px 0 12px' }}/>
           <div style={{ display: 'flex', gap: 14, fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.75, letterSpacing: '0.06em' }}>
-            <span><strong>{record}</strong> W–L–H</span>
+            <span><strong>{recStr}</strong> W–L–H</span>
             <span>·</span>
-            <span>REL. {rel}%</span>
-            {secLabel && <><span>·</span><span>{secLabel} {secR.toFixed(3)}</span></>}
+            <span>REL. {relPct}%</span>
+            <span>·</span>
+            <span>{n} {n === 1 ? 'match' : 'matches'}</span>
           </div>
-        </>
+        </div>
       )}
+    </div>
+  );
+}
 
+// ─── Real SBX card: 2v2 headline on top, 1v1 below — each independent. ─
+function RealSbxCard({ user, go, showDashboard }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <SbxFormatCard fmt="2v2" rating={user.sbx2v2} n={user.sbx2v2N || 0} rel={user.sbx2v2Rel} record={user.rec2v2}/>
+      <SbxFormatCard fmt="1v1" rating={user.sbx1v1} n={user.sbx1v1N || 0} rel={user.sbx1v1Rel} record={user.rec1v1}/>
       {showDashboard && (
-        <Button variant="outlineCream" size="sm" full style={{ marginTop: 14 }} onClick={() => go({ screen: 'stats' })}>
+        <Button variant="forest" size="sm" full style={{ marginTop: 2 }} onClick={() => go({ screen: 'stats' })}>
           Full dashboard <Icon.ArrowRight size={14}/>
         </Button>
       )}
