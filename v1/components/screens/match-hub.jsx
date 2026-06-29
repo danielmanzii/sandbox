@@ -418,6 +418,160 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   );
 }
 
+// ─── Lobby roster (who's on each team) ───────────────────────────────
+// Small circular avatar for a slot occupant (cream-on-forest).
+function LobbyAvatar({ person, size = 32 }) {
+  const initial = ((person && (person.name || person.handle)) || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
+      background: 'rgba(234,226,206,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.44), fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--cream)',
+    }}>
+      {person && person.avatar
+        ? <img src={person.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+        : initial}
+    </div>
+  );
+}
+
+// Fetch handle/name/avatar for whoever currently fills the match's slots.
+function useSlotPeople(match) {
+  const key = [match.player_a, match.player_a2, match.player_b, match.player_b2].filter(Boolean).join(',');
+  const [people, setPeople] = React.useState({});
+  React.useEffect(() => {
+    if (!key) { setPeople({}); return; }
+    let alive = true;
+    (async () => {
+      const { data } = await sbx.from('profiles').select('id, handle, first_name, avatar_url').in('id', key.split(','));
+      if (!alive) return;
+      const map = {};
+      (data || []).forEach(p => { map[p.id] = { id: p.id, handle: p.handle, name: p.first_name, avatar: p.avatar_url }; });
+      setPeople(map);
+    })();
+    return () => { alive = false; };
+  }, [key]);
+  return people;
+}
+
+// Two team panels showing filled seats (avatar + handle) and open spots.
+// When `onPick` is supplied and the viewer isn't seated yet, each team with a
+// free spot gets a "Join Team X" button.
+function LobbyRoster({ match, profile, people, onPick, busySide }) {
+  const is2v2 = match.match_type === '2v2';
+  const meIn = [match.player_a, match.player_a2, match.player_b, match.player_b2].includes(profile.id);
+
+  const TeamPanel = ({ label, slots, side }) => {
+    const hasOpen = slots.some(s => !s);
+    return (
+      <div style={{ flex: 1, padding: 14, borderRadius: 18, background: 'rgba(234,226,206,0.08)', border: '1px solid rgba(234,226,206,0.16)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700, marginBottom: 12 }}>{label}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+          {slots.map((sid, i) => {
+            const p = sid ? people[sid] : null;
+            const isMe = sid && sid === profile.id;
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {sid
+                  ? <LobbyAvatar person={p} size={32}/>
+                  : <div style={{ width: 32, height: 32, borderRadius: 999, border: '1.5px dashed rgba(234,226,206,0.4)', flexShrink: 0 }}/>}
+                <div style={{ minWidth: 0 }}>
+                  {sid ? (
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {(p && p.name) || (p && formatHandle(p.handle)) || 'Player'}{isMe && <span style={{ opacity: 0.6, fontWeight: 600 }}> · you</span>}
+                      </div>
+                      {p && p.handle && <div style={{ fontSize: 11, opacity: 0.6, fontFamily: 'var(--font-mono)' }}>{formatHandle(p.handle)}</div>}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 13, fontWeight: 700, opacity: 0.65 }}>Open spot</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {onPick && !meIn && hasOpen && (
+          <button onClick={() => onPick(side)} disabled={!!busySide} style={{
+            marginTop: 12, width: '100%', padding: '11px', borderRadius: 12,
+            background: 'var(--cream)', color: 'var(--forest)', border: 'none',
+            fontWeight: 800, fontSize: 13, opacity: busySide && busySide !== side ? 0.5 : 1,
+          }}>{busySide === side ? 'Joining…' : `Join ${label}`}</button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+      <TeamPanel label="Team A" slots={is2v2 ? [match.player_a, match.player_a2] : [match.player_a]} side="a"/>
+      <TeamPanel label="Team B" slots={is2v2 ? [match.player_b, match.player_b2] : [match.player_b]} side="b"/>
+    </div>
+  );
+}
+
+// 2v2 join: choose a side. Live-updates as others claim seats.
+function JoinTeamPicker({ match: initial, profile, onClaimed, onBack }) {
+  const [match, setMatch] = React.useState(initial);
+  const [busySide, setBusySide] = React.useState('');
+  const [err, setErr] = React.useState('');
+  const people = useSlotPeople(match);
+
+  React.useEffect(() => {
+    const ch = sbx.channel(`lobby:${match.id}:${Math.random().toString(36).slice(2, 10)}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
+        if (payload.new) setMatch(payload.new);
+      })
+      .subscribe();
+    const poll = setInterval(async () => {
+      const { data } = await sbx.from('matches').select('*').eq('id', match.id).maybeSingle();
+      if (data) setMatch(data);
+    }, 4000);
+    return () => { sbx.removeChannel(ch); clearInterval(poll); };
+  }, [match.id]);
+
+  const full = match.player_a && match.player_a2 && match.player_b && match.player_b2;
+
+  async function pick(side) {
+    if (busySide) return;
+    setBusySide(side); setErr('');
+    const { data, error } = await sbx.rpc('join_match_slot', { p_match: match.id, p_side: side });
+    if (error) { setErr(error.message); setBusySide(''); return; }
+    onClaimed(data);
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px', overflowY: 'auto',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <button onClick={onBack} style={{
+        position: 'absolute', top: 52, left: 16, zIndex: 5, width: 38, height: 38, borderRadius: 999,
+        background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon.ArrowLeft size={16} color="currentColor"/>
+      </button>
+
+      <div style={{ position: 'relative' }}>
+        <Eyebrow color="var(--cream)">Pick your team</Eyebrow>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 0.95, marginTop: 10 }}>Which side?</div>
+        <div style={{ fontSize: 13, opacity: 0.8, marginTop: 10 }}>Tap a team with an open spot — you’ll see everyone as they join.</div>
+      </div>
+
+      <div style={{ position: 'relative', marginTop: 24 }}>
+        <LobbyRoster match={match} profile={profile} people={people} onPick={pick} busySide={busySide}/>
+      </div>
+
+      {full && <div style={{ position: 'relative', marginTop: 16, fontSize: 13, opacity: 0.85 }}>This match is already full.</div>}
+      {err && <div style={{ position: 'relative', marginTop: 14, fontSize: 13, color: '#E7B8A7' }}>{err}</div>}
+      <div style={{ flex: 1 }}/>
+    </div>
+  );
+}
+
 // ─── Waiting lobby (works for both 1v1 and 2v2) ──────────────
 // Subscribes to updates on the match row. Whenever a slot fills we re-render
 // to show progress; when the match goes 'active' (all required slots filled)
@@ -427,9 +581,10 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
   const is2v2 = match.match_type === '2v2';
   const required = is2v2 ? 4 : 2;
   const filled = [match.player_a, match.player_a2, match.player_b, match.player_b2].filter(Boolean).length;
+  const people = useSlotPeople(match);
 
   React.useEffect(() => {
-    const ch = sbx.channel(`match:${match.id}`)
+    const ch = sbx.channel(`match:${match.id}:${Math.random().toString(36).slice(2, 10)}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` }, (payload) => {
         if (payload.new) setMatch(payload.new);
       })
@@ -459,7 +614,7 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-      color: 'var(--cream)', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px',
+      color: 'var(--cream)', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px', overflowY: 'auto',
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <button onClick={onCancel} style={{
@@ -472,7 +627,7 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <div style={{ position: 'relative', marginTop: 24 }}>
+      <div style={{ position: 'relative' }}>
         <Eyebrow color="var(--cream)">Share this code</Eyebrow>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 0.95, marginTop: 10 }}>
           {is2v2 ? <>Waiting on<br/>the other three…</> : <>Waiting on<br/>your opponent…</>}
@@ -482,14 +637,21 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
         </div>
       </div>
 
-      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Live roster — who's on each side as seats fill */}
+      {is2v2 && (
+        <div style={{ position: 'relative', marginTop: 18 }}>
+          <LobbyRoster match={match} profile={profile} people={people}/>
+        </div>
+      )}
+
+      <div style={{ position: 'relative', flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.2em' }}>MATCH CODE</div>
         <div style={{
           fontFamily: 'var(--font-display)', fontSize: 88, letterSpacing: '0.08em',
           marginTop: 4, color: 'var(--cream)',
         }}>{match.join_code}</div>
         <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
-          Players tap <b>Join match</b> on the Unranked tab and type this code. {is2v2 ? 'First to join becomes your partner; the next two are the opposing team.' : ''}
+          Players tap <b>Joining someone else?</b> under Challenge Friends and type this code. {is2v2 ? 'Each player picks a team as they join.' : ''}
         </div>
 
         {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
@@ -663,6 +825,8 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
   const [code, setCode] = React.useState((initialCode || '').toUpperCase());
   const [busy, setBusy] = React.useState(false);
   const [err, setErr]   = React.useState('');
+  const [stage, setStage] = React.useState('code');  // code | pick | waiting
+  const [lobbyMatch, setLobbyMatch] = React.useState(null);
 
   async function submit() {
     const c = code.trim().toUpperCase();
@@ -676,28 +840,31 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
 
     // If the current user is already a slot in this match, just reopen it.
     if ([m.player_a, m.player_a2, m.player_b, m.player_b2].includes(profile.id)) {
-      onJoined(m.id);
-      return;
+      setBusy(false); onJoined(m.id); return;
     }
 
-    // Figure out which slot the joiner fills, based on match_type.
-    const is2v2 = m.match_type === '2v2';
-    let update = null;
-    if (is2v2) {
-      if (!m.player_a2)      update = { player_a2: profile.id };
-      else if (!m.player_b)  update = { player_b:  profile.id };
-      else if (!m.player_b2) update = { player_b2: profile.id, status: 'active', started_at: new Date().toISOString() };
-      else { setErr('That match already has four players.'); setBusy(false); return; }
-    } else {
-      if (!m.player_b) update = { player_b: profile.id, status: 'active', started_at: new Date().toISOString() };
-      else { setErr('That match already has two players.'); setBusy(false); return; }
+    // 2v2 → let them choose a side. 1v1 → claim the opponent seat and go.
+    if (m.match_type === '2v2') {
+      setBusy(false); setLobbyMatch(m); setStage('pick'); return;
     }
+    const { data, error: rpcErr } = await sbx.rpc('join_match_slot', { p_match: m.id, p_side: 'b' });
+    if (rpcErr) { setErr(rpcErr.message); setBusy(false); return; }
+    setBusy(false); onJoined(data.id);
+  }
 
-    const { error: updErr } = await sbx.from('matches').update(update).eq('id', m.id);
-    if (updErr) { setErr(updErr.message); setBusy(false); return; }
-
-    setBusy(false);
-    onJoined(m.id);
+  // 2v2: pick a team, then sit in the waiting lobby until the foursome fills.
+  if (stage === 'pick' && lobbyMatch) {
+    return <JoinTeamPicker
+      match={lobbyMatch} profile={profile}
+      onBack={() => { setStage('code'); setLobbyMatch(null); }}
+      onClaimed={(m2) => {
+        const full = m2.player_a && m2.player_a2 && m2.player_b && m2.player_b2;
+        if (full || m2.status === 'active') { onJoined(m2.id); }
+        else { setLobbyMatch(m2); setStage('waiting'); }
+      }}/>;
+  }
+  if (stage === 'waiting' && lobbyMatch) {
+    return <WaitingForOpponentView match={lobbyMatch} profile={profile} onCancel={onCancel} onReady={(id) => onJoined(id)}/>;
   }
 
   return (
