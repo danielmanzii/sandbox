@@ -25,7 +25,9 @@ function MatchHub({ profile, onOpenMatch, onExit, format = 'regular', initialMod
   const backFromSub = initialMode ? onExit : () => setMode('home');
   if (mode === 'start') return <StartMatchView profile={profile} format={format} onCancel={backFromSub} onCreated={(m) => { setNewMatch(m); setMode('code'); }}/>;
   if (mode === 'join')  return <JoinMatchView  profile={profile} initialCode={initialJoinCode} onCancel={backFromSub} onJoined={(id) => onOpenMatch(id)}/>;
-  if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} profile={profile} onCancel={() => { setNewMatch(null); setMode('home'); loadRecent(); }} onReady={(id) => onOpenMatch(id)}/>;
+  // Backing out of the match-code screen returns you where you came from
+  // (Challenge Friends when entered via initialMode) — not the redundant hub.
+  if (mode === 'code' && newMatch) return <WaitingForOpponentView match={newMatch} profile={profile} onCancel={() => { setNewMatch(null); loadRecent(); backFromSub(); }} onReady={(id) => onOpenMatch(id)}/>;
   if (mode === 'handle' && window.DisplayNameScreen) {
     const DNS = window.DisplayNameScreen;
     return <DNS profile={profile} onCancel={() => setMode('home')} onDone={() => setMode('home')}/>;
@@ -398,12 +400,6 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
             </div>
           </StepCard>
         )}
-
-        {/* Playing as */}
-        <div style={{ padding: '14px 16px', borderRadius: 16, background: 'rgba(14,28,19,0.04)' }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.55, fontWeight: 700 }}>Playing as</div>
-          <div style={{ marginTop: 4, fontSize: 14, color: 'var(--forest)', fontWeight: 700 }}>{formatHandle(profile.handle)}</div>
-        </div>
       </div>
 
       {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}

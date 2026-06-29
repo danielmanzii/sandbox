@@ -79,15 +79,6 @@ function ChallengeFriendsView({ go, profile }) {
         accent="moss"
         available
       />
-
-      <div style={{ marginTop: 24, padding: '16px 16px', borderRadius: 16, background: 'rgba(14,28,19,0.04)' }}>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.55, fontWeight: 700 }}>
-          Playing as
-        </div>
-        <div style={{ marginTop: 4, fontSize: 14, color: 'var(--forest)', fontWeight: 700 }}>
-          {formatHandle(profile.handle)}
-        </div>
-      </div>
     </div>
   );
 }
