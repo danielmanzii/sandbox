@@ -28,12 +28,17 @@ function useUserStats(profileId) {
 
     const list = (matches || []).filter(m => m.status !== 'abandoned');
     let W = 0, L = 0, H = 0;
+    // Per-format records: a 2v2 result never counts toward 1v1 and vice-versa
+    // (mirrors the rating engine, which solves each format independently).
+    const rec2v2 = { W: 0, L: 0, H: 0 }, rec1v1 = { W: 0, L: 0, H: 0 };
     for (const m of list) {
       if (m.status !== 'completed') continue;
       const userIsA = m.player_a === profileId || m.player_a2 === profileId;
-      if (m.result === 'H') H++;
-      else if ((m.result === 'A' && userIsA) || (m.result === 'B' && !userIsA)) W++;
-      else L++;
+      const res = m.result === 'H' ? 'H'
+        : ((m.result === 'A' && userIsA) || (m.result === 'B' && !userIsA)) ? 'W' : 'L';
+      if (res === 'W') W++; else if (res === 'L') L++; else H++;
+      const bucket = m.match_type === '2v2' ? rec2v2 : m.match_type === '1v1' ? rec1v1 : null;
+      if (bucket) bucket[res]++;
     }
 
     // Streak = consecutive completed matches (most recent first) without a loss.
@@ -106,6 +111,8 @@ function useUserStats(profileId) {
       matchesW: W,
       matchesL: L,
       matchesH: H,
+      rec2v2,
+      rec1v1,
       matchesTotal: W + L + H,
       streak,
       seasonPoints: W + 0.5 * H,
@@ -168,6 +175,8 @@ function buildRealUser(profile, stats) {
     matchesW:     stats ? stats.matchesW : 0,
     matchesL:     stats ? stats.matchesL : 0,
     matchesH:     stats ? stats.matchesH : 0,
+    rec2v2:       stats ? stats.rec2v2 : { W: 0, L: 0, H: 0 },
+    rec1v1:       stats ? stats.rec1v1 : { W: 0, L: 0, H: 0 },
     matchesTotal: stats ? stats.matchesTotal : 0,
     streak:       stats ? stats.streak : 0,
     seasonPoints: stats ? stats.seasonPoints : 0,
