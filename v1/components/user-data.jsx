@@ -57,6 +57,9 @@ function useUserStats(profileId) {
     const matchIds = list.map(m => m.id);
     let gir = null, putts = null, proximity = null, fairway = null, girTrend = [];
     let holeCount = 0;
+    // Per-format stat blocks (empty defaults so the UI never sees undefined).
+    let fmt2v2 = { W: 0, L: 0, H: 0, total: 0, winRate: null, winStreak: 0, longestStreak: 0, bestWin: null, shotEff: null, finisher: null, clutch: null, bestPartner: null };
+    let fmt1v1 = { W: 0, L: 0, H: 0, total: 0, winRate: null, winStreak: 0, longestStreak: 0, bestWin: null, scrambling: null, conversion: null, bounceBack: null, closer: null };
     if (matchIds.length > 0) {
       const { data: holes } = await sbx.from('match_holes').select('*').in('match_id', matchIds);
       const matchById = Object.fromEntries(list.map(m => [m.id, m]));
@@ -105,6 +108,105 @@ function useUserStats(profileId) {
         }
         if (d > 0) girTrend.push(+(n / d).toFixed(2));
       }
+
+      // ── Per-format advanced stats ──────────────────────────────────
+      // Per-player rows for EVERYONE in these matches (we need partner data,
+      // not just the user's, to compute rescues).
+      const { data: psAll } = await sbx.from('hole_player_stats')
+        .select('match_id, hole_number, player_id, fairway, gir, ob').in('match_id', matchIds);
+      const psMap = {};
+      for (const s of psAll || []) psMap[`${s.match_id}|${s.hole_number}|${s.player_id}`] = s;
+      const holesByMatch = {};
+      for (const h of holes || []) (holesByMatch[h.match_id] = holesByMatch[h.match_id] || []).push(h);
+      for (const k in holesByMatch) holesByMatch[k].sort((a, b) => a.hole_number - b.hole_number);
+
+      // Completed matches, newest-first, from the user's perspective.
+      const mine = list.filter(m => m.status === 'completed').map(m => {
+        const aSide = [m.player_a, m.player_a2], bSide = [m.player_b, m.player_b2];
+        const userIsA = aSide.includes(profileId);
+        const res = m.result === 'H' ? 'H' : ((m.result === 'A') === userIsA ? 'W' : 'L');
+        const partnerId = (userIsA ? aSide : bSide).find(x => x && x !== profileId) || null;
+        const oppProfile = userIsA ? m.player_b_profile : m.player_a_profile;
+        return { m, fmt: m.match_type, userIsA, res, partnerId, opp: (oppProfile && oppProfile.handle) || null };
+      });
+
+      const pct = (num, den) => (den > 0 ? Math.round((num / den) * 100) : null);
+      const marginRank = (s) => {
+        if (!s) return -1; const t = String(s).trim().toUpperCase();
+        if (t.includes('&')) { const p = t.split('&'); return (parseInt(p[0], 10) || 0) * 100 + (parseInt(p[1], 10) || 0); }
+        const up = t.match(/(\d+)\s*UP/); if (up) return (parseInt(up[1], 10) || 0) * 100;
+        return 0;
+      };
+
+      const buildFmt = (fmtKey, rec) => {
+        const ms = mine.filter(x => x.fmt === fmtKey);
+        const total = rec.W + rec.L + rec.H;
+        let cur = 0; for (const x of ms) { if (x.res === 'W') cur++; else break; }       // ms is newest-first
+        let longest = 0, run = 0; for (const x of ms) { if (x.res === 'W') { run++; longest = Math.max(longest, run); } else run = 0; }
+        let bestWin = null, bestR = -1;
+        for (const x of ms) if (x.res === 'W') { const r = marginRank(x.m.final_margin); if (r > bestR) { bestR = r; bestWin = { margin: x.m.final_margin || 'WIN', opp: x.opp }; } }
+        const f = { W: rec.W, L: rec.L, H: rec.H, total, winRate: total > 0 ? Math.round((rec.W / total) * 100) : null, winStreak: cur, longestStreak: longest, bestWin };
+
+        if (fmtKey === '2v2') {
+          let effN = 0, effD = 0, finN = 0, finD = 0, clN = 0, clD = 0;
+          const partnerAgg = {};
+          for (const x of ms) {
+            const teamLetter = x.userIsA ? 'A' : 'B';
+            if (x.partnerId) { const a = partnerAgg[x.partnerId] || (partnerAgg[x.partnerId] = { W: 0, L: 0, H: 0 }); a[x.res]++; }
+            for (const h of holesByMatch[x.m.id] || []) {
+              if (h.result == null) continue;
+              const teamRes = h.result === 'H' ? 'H' : (h.result === teamLetter ? 'W' : 'L');
+              if (h.ball_player != null) { effD++; if (h.ball_player === profileId) effN++; }
+              if (h.holed_by   != null) { finD++; if (h.holed_by   === profileId) finN++; }
+              const pp = x.partnerId ? psMap[`${h.match_id}|${h.hole_number}|${x.partnerId}`] : null;
+              if (pp && h.ball_player != null) {
+                const compromised = pp.gir === false || pp.ob === true || (pp.fairway && pp.fairway !== 'hit');
+                if (compromised) { clD++; if (h.ball_player === profileId && (teamRes === 'W' || teamRes === 'H')) clN++; }
+              }
+            }
+          }
+          f.shotEff  = effD ? { pct: pct(effN, effD), sample: effD } : null;
+          f.finisher = finD ? { pct: pct(finN, finD), sample: finD } : null;
+          f.clutch   = clD  ? { pct: pct(clN, clD),   sample: clD  } : null;
+          let bp = null;
+          for (const pid in partnerAgg) { const a = partnerAgg[pid]; const g = a.W + a.L + a.H; if (g < 2) continue; const wp = Math.round((a.W / g) * 100); if (!bp || wp > bp.winPct || (wp === bp.winPct && g > bp.games)) bp = { id: pid, winPct: wp, games: g }; }
+          f.bestPartnerRaw = bp;
+        }
+
+        if (fmtKey === '1v1') {
+          let scrN = 0, scrD = 0, conN = 0, conD = 0, bbN = 0, bbD = 0, clsN = 0, clsD = 0;
+          for (const x of ms) {
+            const hs = holesByMatch[x.m.id] || [];
+            const tot = x.m.total_holes || hs.length;
+            let up = 0, prev = null;
+            hs.forEach((h, i) => {
+              if (h.result == null) return;
+              const userGir = x.userIsA ? h.player_a_gir : h.player_b_gir;
+              const holeRes = h.result === 'H' ? 'H' : (h.result === (x.userIsA ? 'A' : 'B') ? 'W' : 'L');
+              if (userGir === false) { scrD++; if (holeRes === 'W' || holeRes === 'H') scrN++; }
+              if (userGir === true)  { conD++; if (holeRes === 'W') conN++; }
+              if (prev === 'L')      { bbD++; if (holeRes === 'W') bbN++; }
+              if (Math.abs(up) <= 1 || i >= tot - 2) { clsD++; if (holeRes === 'W') clsN++; }
+              up += holeRes === 'W' ? 1 : holeRes === 'L' ? -1 : 0;
+              prev = holeRes;
+            });
+          }
+          f.scrambling = scrD ? { pct: pct(scrN, scrD), sample: scrD } : null;
+          f.conversion = conD ? { pct: pct(conN, conD), sample: conD } : null;
+          f.bounceBack = bbD ? { pct: pct(bbN, bbD), sample: bbD } : null;
+          f.closer     = clsD ? { pct: pct(clsN, clsD), sample: clsD } : null;
+        }
+        return f;
+      };
+
+      fmt2v2 = buildFmt('2v2', rec2v2);
+      fmt1v1 = buildFmt('1v1', rec1v1);
+
+      // Resolve the best-partner handle (id → @handle).
+      if (fmt2v2.bestPartnerRaw) {
+        const { data: bpP } = await sbx.from('profiles').select('handle').eq('id', fmt2v2.bestPartnerRaw.id).maybeSingle();
+        fmt2v2.bestPartner = { handle: (bpP && bpP.handle) || null, winPct: fmt2v2.bestPartnerRaw.winPct, games: fmt2v2.bestPartnerRaw.games };
+      }
     }
 
     setStats({
@@ -113,6 +215,8 @@ function useUserStats(profileId) {
       matchesH: H,
       rec2v2,
       rec1v1,
+      fmt2v2,
+      fmt1v1,
       matchesTotal: W + L + H,
       streak,
       seasonPoints: W + 0.5 * H,
@@ -177,6 +281,8 @@ function buildRealUser(profile, stats) {
     matchesH:     stats ? stats.matchesH : 0,
     rec2v2:       stats ? stats.rec2v2 : { W: 0, L: 0, H: 0 },
     rec1v1:       stats ? stats.rec1v1 : { W: 0, L: 0, H: 0 },
+    fmt2v2:       stats ? stats.fmt2v2 : null,
+    fmt1v1:       stats ? stats.fmt1v1 : null,
     matchesTotal: stats ? stats.matchesTotal : 0,
     streak:       stats ? stats.streak : 0,
     seasonPoints: stats ? stats.seasonPoints : 0,

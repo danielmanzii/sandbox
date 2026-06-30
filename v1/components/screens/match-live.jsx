@@ -677,7 +677,11 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     yourTeam.forEach(p => {
       const c = card[p.id] || {}; const patch = {};
       if (c.fairway) patch.fairway = c.fairway;
-      if (c.reached === true) { patch.gir = true; if (c.zone) patch.zone = c.zone; }
+      // Persist green result explicitly (true/false) and OB per player so rescue
+      // stats (Clutch %) can tell "missed the green / went OB" from "untracked".
+      if (c.reached === true || c.reached === 'holed') { patch.gir = true; if (c.zone) patch.zone = c.zone; }
+      else if (c.reached === false) { patch.gir = false; }
+      if (c.ob) patch.ob = true;
       if (Object.keys(patch).length) onSavePlayerStat(p.id, patch);
     });
     const c = card[pid] || {};
