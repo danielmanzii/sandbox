@@ -85,8 +85,18 @@ function Root() {
   const session = useSession();
   const [profile, , reloadProfile] = useProfile(session && session.user ? session.user.id : null);
   const [recovering, clearRecovering] = useRecovering();
+  const [landing, setLanding] = React.useState(false);
 
   React.useEffect(() => { window.reloadProfile = reloadProfile; }, [reloadProfile]);
+  React.useEffect(() => {
+    window.spp_beginLanding = () => setLanding(true);
+    window.spp_endLanding = () => setLanding(false);
+    return () => { delete window.spp_beginLanding; delete window.spp_endLanding; };
+  }, []);
+
+  // Post-sign-up branded landing (bouncing logo) — overrides all gating so the
+  // new user goes create-account → loader → home with no flashes in between.
+  if (landing) return <PhoneShell><LoadingScreen/></PhoneShell>;
 
   // Loading while we resolve session/profile
   if (session === undefined || (session && profile === undefined)) {
@@ -265,11 +275,10 @@ function LoadingScreen() {
   return (
     <div style={{
       position: 'absolute', inset: 0,
-      background: 'var(--canvas)',
+      background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 70%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--forest)',
     }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, opacity: 0.6 }}>Loading…</div>
+      <img src="assets/monogram-cream.svg" alt="" style={{ width: 56, animation: 'sppbounce 0.62s ease-in-out infinite' }}/>
     </div>
   );
 }
@@ -366,7 +375,7 @@ function TabBar({ tabs, active, go }) {
       background: 'var(--forest-deep)',
       borderRadius: 999,
       padding: '6px',
-      display: 'flex', gap: 2,
+      display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'space-between',
       boxShadow: '0 18px 36px rgba(14,28,19,0.34), inset 0 0 0 1px rgba(234,226,206,0.08)',
       border: '1px solid rgba(234,226,206,0.12)',
     }}>
@@ -377,26 +386,31 @@ function TabBar({ tabs, active, go }) {
         const showAvatar = t.id === 'profile' && myAvatar;
         return (
           <button key={t.id} onClick={() => go({ screen: t.id, viewingHandle: null })} style={{
-            flex: 1, padding: '10px 4px', borderRadius: 999,
+            display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            gap: isActive ? 7 : 0,
+            padding: isActive ? '10px 16px' : '10px 13px',
+            borderRadius: 999, overflow: 'hidden', whiteSpace: 'nowrap',
             background: isActive ? 'var(--clay)' : 'transparent',
             color: isActive ? 'var(--forest-deep)' : 'rgba(234,226,206,0.75)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            transition: 'all 0.2s',
+            transition: 'background 0.3s ease, gap 0.3s ease, padding 0.3s ease',
           }}>
-            {showAvatar ? (
-              <img
-                src={myAvatar}
-                alt=""
-                style={{
+            {/* keyed by active so the icon remounts and re-plays the bounce on selection */}
+            <span key={isActive ? 'on' : 'off'} style={{ display: 'flex', animation: isActive ? 'iconBounce 0.5s ease' : 'none' }}>
+              {showAvatar ? (
+                <img src={myAvatar} alt="" style={{
                   width: 22, height: 22, borderRadius: 999, objectFit: 'cover',
                   border: isActive ? '1.5px solid var(--forest-deep)' : '1.5px solid rgba(234,226,206,0.55)',
                   background: '#5A7B4A',
-                }}
-              />
-            ) : (
-              <IconComp size={18} color="currentColor" filled={isActive}/>
-            )}
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{t.label}</span>
+                }}/>
+              ) : (
+                <IconComp size={19} color="currentColor" filled={isActive}/>
+              )}
+            </span>
+            <span style={{
+              maxWidth: isActive ? 90 : 0, opacity: isActive ? 1 : 0,
+              overflow: 'hidden', fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase',
+              transition: 'max-width 0.32s ease, opacity 0.28s ease',
+            }}>{t.label}</span>
           </button>
         );
       })}

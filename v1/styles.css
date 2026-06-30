@@ -114,6 +114,21 @@ button {
 .scroll-hide::-webkit-scrollbar { display: none; }
 .scroll-hide { scrollbar-width: none; }
 
+/* SPP loading bounce */
+@keyframes sppbounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-16px); }
+}
+
+/* Dock icon bounce when a tab is selected */
+@keyframes iconBounce {
+  0%, 100% { transform: translateY(0); }
+  20%      { transform: translateY(-0.3em); }
+  40%      { transform: translateY(0); }
+  60%      { transform: translateY(-0.1em); }
+  80%      { transform: translateY(0); }
+}
+
 /* dashed paper motif */
 .dashed-line {
   background-image: linear-gradient(90deg, currentColor 50%, transparent 50%);
