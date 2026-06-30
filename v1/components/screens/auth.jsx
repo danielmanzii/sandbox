@@ -202,11 +202,17 @@ function SignUpView({ onBack, onSignInInstead }) {
       setCreatedUserId(userId);
     }
 
+    // Branded bouncing-logo loader while we finish + land in the app.
+    if (window.spp_beginLanding) window.spp_beginLanding();
+    const landedAt = Date.now();
+
+    // New users start unrated — SBX 0 (no history), not the table's 4.0 default.
     const { error: profileErr } = await sbx.from('profiles').upsert({
       id: userId, first_name: firstName.trim(), last_name: lastName.trim(),
-      gender: gender || null, dob: dob || null, handle: '@' + cleanHandle,
+      gender: gender || null, dob: dob || null, handle: '@' + cleanHandle, sbx: 0,
     }, { onConflict: 'id' });
     if (profileErr) {
+      if (window.spp_endLanding) window.spp_endLanding();
       if (/duplicate|unique/i.test(profileErr.message)) {
         // Handle was taken in the moment between the check and the insert.
         setHandleStatus('taken');
@@ -218,8 +224,11 @@ function SignUpView({ onBack, onSignInInstead }) {
       setBusy(false);
       return;
     }
-    // Profile now has a handle, so the auth gate routes straight into the app.
+    // Hold the bounce for ~1s, then load the app (gate routes straight to home).
+    const elapsed = Date.now() - landedAt;
+    if (elapsed < 1000) await new Promise(r => setTimeout(r, 1000 - elapsed));
     if (window.reloadProfile) await window.reloadProfile();
+    if (window.spp_endLanding) window.spp_endLanding();
     setBusy(false);
   }
 
@@ -643,6 +652,7 @@ function ProfileSetupScreen({ session, onDone }) {
       last_name:  lastName.trim(),
       gender: gender || null,
       dob:    dob    || null,
+      sbx: 0,
     });
     if (error) { setErr(error.message); setBusy(false); return; }
     setBusy(false);
