@@ -591,12 +591,6 @@ function FieldStack({ slot, players }) {
   const tone = tones[st.tone] || tones.search;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} title={players.map(playerName).join(', ') || 'No players yet'}>
-      <div style={{ display: 'flex' }}>
-        {Array.from({ length: 4 }).map((_, i) => {
-          const p = players[i];
-          return <div key={i} style={{ marginLeft: i ? -8 : 0 }}>{p ? <Avatar player={p}/> : <EmptySeat/>}</div>;
-        })}
-      </div>
       <span style={{
         fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
         padding: '4px 9px', borderRadius: 999, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 5, ...tone,
@@ -604,6 +598,12 @@ function FieldStack({ slot, players }) {
         {st.tone === 'live' && <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--cream)' }}/>}
         {st.label}
       </span>
+      <div style={{ display: 'flex' }}>
+        {Array.from({ length: 4 }).map((_, i) => {
+          const p = players[i];
+          return <div key={i} style={{ marginLeft: i ? -8 : 0 }}>{p ? <Avatar player={p}/> : <EmptySeat/>}</div>;
+        })}
+      </div>
     </div>
   );
 }
