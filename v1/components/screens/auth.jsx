@@ -60,7 +60,7 @@ function WelcomeView({ onSignUp, onSignIn }) {
   );
 }
 
-// ─── Sign Up ─────────────────────────────────────────────────
+// ─── Sign Up (one question at a time, slides right→left) ─────
 function SignUpView({ onBack, onSignInInstead }) {
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName]   = React.useState('');
@@ -68,123 +68,117 @@ function SignUpView({ onBack, onSignInInstead }) {
   const [dob, setDob]             = React.useState('');
   const [email, setEmail]         = React.useState('');
   const [password, setPassword]   = React.useState('');
+  const [step, setStep]           = React.useState(0);
   const [busy, setBusy]           = React.useState(false);
   const [err, setErr]             = React.useState('');
 
-  const valid = firstName.trim() && lastName.trim() && email.trim() && password.length >= 6;
+  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
 
-  async function submit(e) {
-    e.preventDefault();
-    if (!valid || busy) return;
+  // One step per question. Optional steps are always "valid" (can advance blank).
+  const steps = [
+    { key: 'firstName', eyebrow: 'Your name', title: "What's your first name?", valid: !!firstName.trim(),
+      field: <Input value={firstName} onChange={setFirstName} autoComplete="given-name" placeholder="First name" enterKeyHint="next"/> },
+    { key: 'lastName', eyebrow: 'Your name', title: 'And your last name?', valid: !!lastName.trim(),
+      field: <Input value={lastName} onChange={setLastName} autoComplete="family-name" placeholder="Last name" enterKeyHint="next"/> },
+    { key: 'email', eyebrow: 'Sign-in details', title: "What's your email?", valid: emailOk,
+      hint: emailOk || !email ? '' : 'That doesn’t look like an email yet.',
+      field: <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off" placeholder="you@example.com" enterKeyHint="next"/> },
+    { key: 'password', eyebrow: 'Sign-in details', title: 'Create a password', hint: 'At least 6 characters', valid: password.length >= 6,
+      field: <Input value={password} onChange={setPassword} type="password" autoComplete="new-password" placeholder="••••••••" enterKeyHint="next"/> },
+    { key: 'gender', eyebrow: 'About you (optional)', title: 'How do you identify?', valid: true,
+      field: <Select value={gender} onChange={setGender} options={[
+        ['', 'Prefer not to say'], ['male', 'Male'], ['female', 'Female'], ['other', 'Other'],
+      ]}/> },
+    { key: 'dob', eyebrow: 'About you (optional)', title: "When's your birthday?", valid: true,
+      field: <Input value={dob} onChange={setDob} type="date"/> },
+  ];
+  const last = steps.length - 1;
+  const cur = steps[step];
+
+  // Drop focus when moving between steps so the keyboard tucks away and you see
+  // the screen first — you tap the field to bring it back.
+  function blur() { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  function next() {
+    if (!cur.valid || busy) return;
+    blur();
+    if (step < last) { setErr(''); setStep(s => s + 1); }
+    else submit();
+  }
+  function back() {
+    blur();
+    if (step === 0) onBack();
+    else { setErr(''); setStep(s => s - 1); }
+  }
+
+  async function submit() {
     setBusy(true); setErr('');
-
-    // 1) Create auth user
-    const { data: signUpData, error: signUpErr } = await sbx.auth.signUp({ email, password });
-    if (signUpErr) {
-      setErr(signUpErr.message);
-      setBusy(false);
-      return;
-    }
-
+    const { data: signUpData, error: signUpErr } = await sbx.auth.signUp({ email: email.trim(), password });
+    if (signUpErr) { setErr(signUpErr.message); setBusy(false); return; }
     const user = signUpData.user;
-    if (!user) {
-      setErr('Sign-up did not return a user. Check your email confirmation settings.');
-      setBusy(false);
-      return;
-    }
+    if (!user) { setErr('Sign-up did not return a user. Check your email confirmation settings.'); setBusy(false); return; }
+    if (!signUpData.session) { setErr('Account created. Check your email for a confirmation link, then sign in.'); setBusy(false); return; }
 
-    // 2) Insert profile row. The session may not be live yet if email-confirm
-    // is enabled in Supabase; in that case we'll prompt the user to confirm
-    // and set up their profile on first sign-in.
-    const sessionNow = signUpData.session;
-    if (!sessionNow) {
-      setErr('Account created. Check your email for a confirmation link, then sign in.');
-      setBusy(false);
-      return;
-    }
-
-    // Profile is saved without a handle — the next step (DisplayNameScreen)
-    // will prompt for one. Keeps the two screens doing one job each.
     const { error: profileErr } = await sbx.from('profiles').insert({
-      id: user.id,
-      first_name: firstName.trim(),
-      last_name:  lastName.trim(),
-      gender: gender || null,
-      dob:    dob    || null,
+      id: user.id, first_name: firstName.trim(), last_name: lastName.trim(),
+      gender: gender || null, dob: dob || null,
     });
-    if (profileErr) {
-      setErr('Account created but profile save failed: ' + profileErr.message);
-      setBusy(false);
-      return;
-    }
-    // Tell Root to re-fetch the profile so the AuthGate routes us to the
-    // display-name step immediately (avoids a race where useProfile queried
-    // before this insert landed and cached a null result).
+    if (profileErr) { setErr('Account created but profile save failed: ' + profileErr.message); setBusy(false); return; }
     if (window.reloadProfile) await window.reloadProfile();
     setBusy(false);
   }
 
   return (
-    <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
-      <BackButton onClick={onBack}/>
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
+      <BackButton onClick={back}/>
 
-      <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--paper)">Create your account</Eyebrow>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
-          Let's get you<br/>rated.
+      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Eyebrow color="var(--paper)">{cur.eyebrow}</Eyebrow>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {steps.map((s, i) => (
+            <div key={s.key} style={{
+              width: i === step ? 22 : 7, height: 7, borderRadius: 99,
+              background: i <= step ? 'var(--paper)' : 'rgba(234,226,206,0.28)',
+              transition: 'width 0.35s ease, background 0.35s ease',
+            }}/>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 22 }}>
-        <Row>
-          <Field label="First name" required>
-            <Input value={firstName} onChange={setFirstName} autoComplete="given-name"/>
-          </Field>
-          <Field label="Last name" required>
-            <Input value={lastName} onChange={setLastName} autoComplete="family-name"/>
-          </Field>
-        </Row>
-
-        <Row>
-          <Field label="Gender">
-            <Select value={gender} onChange={setGender} options={[
-              ['',   '—'],
-              ['male',   'Male'],
-              ['female', 'Female'],
-              ['other',  'Other'],
-              ['skip',   'Prefer not to say'],
-            ]}/>
-          </Field>
-          <Field label="Date of birth">
-            <Input value={dob} onChange={setDob} type="date"/>
-          </Field>
-        </Row>
-
-        <Field label="Email" required>
-          <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off"/>
-        </Field>
-        <Field label="Password" required hint="At least 6 characters">
-          <Input value={password} onChange={setPassword} type="password" autoComplete="new-password"/>
-        </Field>
+      {/* Sliding questions */}
+      <div style={{ overflow: 'hidden', marginTop: 26 }}>
+        <div style={{
+          display: 'flex', width: `${steps.length * 100}%`,
+          transform: `translateX(-${step * (100 / steps.length)}%)`,
+          transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}>
+          {steps.map((s, i) => (
+            <div key={s.key} aria-hidden={i !== step} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 2px', minHeight: 150 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1.05, letterSpacing: '-0.02em' }}>{s.title}</div>
+              <div style={{ marginTop: 22, opacity: i === step ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+                {s.field}
+                {s.hint && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>{s.hint}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
 
       <div style={{ flex: 1 }}/>
 
-      <Button variant="paper" size="lg" full disabled={!valid || busy} onClick={submit} style={{ marginTop: 18 }}>
-        {busy ? 'Creating…' : 'Create account'}
+      <Button variant="paper" size="lg" full disabled={!cur.valid || busy} onClick={next} style={{ marginTop: 18 }}>
+        {step < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
         {!busy && <Icon.ArrowRight size={16}/>}
       </Button>
 
       <button type="button" onClick={onSignInInstead} style={{
         marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
-        letterSpacing: '0.06em',
+        color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
       }}>
         Already have an account? <u>Sign in</u>
       </button>
-    </form>
+    </div>
   );
 }
 
