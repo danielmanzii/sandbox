@@ -68,11 +68,27 @@ function SignUpView({ onBack, onSignInInstead }) {
   const [dob, setDob]             = React.useState('');
   const [email, setEmail]         = React.useState('');
   const [password, setPassword]   = React.useState('');
+  const [handle, setHandle]       = React.useState('');
+  const [handleStatus, setHandleStatus] = React.useState('idle'); // idle|checking|available|taken|invalid
+  const [createdUserId, setCreatedUserId] = React.useState(null); // set once the auth user exists
   const [step, setStep]           = React.useState(0);
   const [busy, setBusy]           = React.useState(false);
   const [err, setErr]             = React.useState('');
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  const cleanHandle = sanitizeHandle(handle);
+
+  // Live @handle availability check (debounced) for the final step.
+  React.useEffect(() => {
+    if (!handle) { setHandleStatus('idle'); return undefined; }
+    if (!isValidHandle(cleanHandle)) { setHandleStatus('invalid'); return undefined; }
+    setHandleStatus('checking');
+    const t = setTimeout(async () => {
+      const { data } = await sbx.from('profiles').select('id').eq('handle', '@' + cleanHandle).maybeSingle();
+      setHandleStatus(data ? 'taken' : 'available');
+    }, 400);
+    return () => clearTimeout(t);
+  }, [handle, cleanHandle]);
 
   // One step per question. Optional steps are always "valid" (can advance blank).
   const steps = [
@@ -91,6 +107,25 @@ function SignUpView({ onBack, onSignInInstead }) {
       ]}/> },
     { key: 'dob', eyebrow: 'About you (optional)', title: "When's your birthday?", valid: true,
       field: <WheelPicker value={dob} onChange={setDob}/> },
+    { key: 'handle', eyebrow: 'Last step', title: 'Pick a display name', valid: handleStatus === 'available',
+      field: (
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', textAlign: 'left',
+            background: 'rgba(255,255,255,0.08)', border: `1px solid ${borderFor(handleStatus)}`,
+            borderRadius: 14, padding: '0 14px', transition: 'border-color 0.15s',
+          }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'rgba(234,226,206,0.5)' }}>@</span>
+            <input value={handle} onChange={e => setHandle(e.target.value)} placeholder="yourname"
+              autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={20}
+              style={{ flex: 1, padding: '15px 8px', background: 'transparent', border: 'none', color: 'var(--paper)', fontSize: 20, fontFamily: 'var(--font-display)', outline: 'none' }}/>
+            <StatusIcon status={handleStatus}/>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12, fontFamily: 'var(--font-mono)', color: statusTextColor(handleStatus), minHeight: 18 }}>
+            {statusText(handleStatus, cleanHandle)}
+          </div>
+        </div>
+      ) },
   ];
   const last = steps.length - 1;
   const cur = steps[step];
@@ -117,17 +152,36 @@ function SignUpView({ onBack, onSignInInstead }) {
 
   async function submit() {
     setBusy(true); setErr('');
-    const { data: signUpData, error: signUpErr } = await sbx.auth.signUp({ email: email.trim(), password });
-    if (signUpErr) { setErr(signUpErr.message); setBusy(false); return; }
-    const user = signUpData.user;
-    if (!user) { setErr('Sign-up did not return a user. Check your email confirmation settings.'); setBusy(false); return; }
-    if (!signUpData.session) { setErr('Account created. Check your email for a confirmation link, then sign in.'); setBusy(false); return; }
+    // Create the auth user once. If a later retry happens (e.g. handle taken),
+    // reuse the existing user instead of signing up again with the same email.
+    let userId = createdUserId;
+    if (!userId) {
+      const { data: signUpData, error: signUpErr } = await sbx.auth.signUp({ email: email.trim(), password });
+      if (signUpErr) { setErr(signUpErr.message); setBusy(false); return; }
+      const user = signUpData.user;
+      if (!user) { setErr('Sign-up did not return a user. Check your email confirmation settings.'); setBusy(false); return; }
+      if (!signUpData.session) { setErr('Account created. Check your email for a confirmation link, then sign in.'); setBusy(false); return; }
+      userId = user.id;
+      setCreatedUserId(userId);
+    }
 
-    const { error: profileErr } = await sbx.from('profiles').insert({
-      id: user.id, first_name: firstName.trim(), last_name: lastName.trim(),
-      gender: gender || null, dob: dob || null,
-    });
-    if (profileErr) { setErr('Account created but profile save failed: ' + profileErr.message); setBusy(false); return; }
+    const { error: profileErr } = await sbx.from('profiles').upsert({
+      id: userId, first_name: firstName.trim(), last_name: lastName.trim(),
+      gender: gender || null, dob: dob || null, handle: '@' + cleanHandle,
+    }, { onConflict: 'id' });
+    if (profileErr) {
+      if (/duplicate|unique/i.test(profileErr.message)) {
+        // Handle was taken in the moment between the check and the insert.
+        setHandleStatus('taken');
+        setStep(steps.length - 1);
+        setErr('That display name was just taken — pick another.');
+      } else {
+        setErr('Account created but profile save failed: ' + profileErr.message);
+      }
+      setBusy(false);
+      return;
+    }
+    // Profile now has a handle, so the auth gate routes straight into the app.
     if (window.reloadProfile) await window.reloadProfile();
     setBusy(false);
   }
