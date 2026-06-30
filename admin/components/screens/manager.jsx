@@ -74,7 +74,7 @@ function ManagerPortal({ session, profile, courses }) {
         display: 'flex', flexDirection: 'column', padding: '22px 14px',
       }}>
         <div style={{ padding: '0 10px 16px' }}>
-          <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 22, display: 'block' }}/>
+          <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 33, display: 'block' }}/>
           <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6, marginTop: 6 }}>Course Partner</div>
         </div>
 
@@ -147,7 +147,7 @@ function LiveBoard({ course }) {
 
       {groups === null ? <Spinner/> : groups.length === 0 ? (
         <div className="card" style={{ padding: 44, textAlign: 'center' }}>
-          <Mascot size={104} style={{ margin: '0 auto' }}/>
+          <Mascot size={156} style={{ margin: '0 auto' }}/>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', marginTop: 14 }}>Nobody on the course</div>
           <div style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>Groups appear here the moment they check in and start scoring.</div>
         </div>
@@ -444,7 +444,7 @@ function TeeTimesPanel({ course }) {
       <div style={{ marginTop: 12 }}>
         {slotsInWindow.length === 0 ? (
           <div className="card" style={{ padding: 28, textAlign: 'center' }}>
-            <Mascot size={76} style={{ margin: '0 auto 10px' }}/>
+            <Mascot size={114} style={{ margin: '0 auto 10px' }}/>
             <div style={{ fontSize: 14, opacity: 0.7 }}>No live tee times in this view.</div>
           </div>
         ) : (
@@ -658,7 +658,7 @@ function YardagesPanel({ course }) {
 
         {draft === null ? <Spinner/> : draft.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <Mascot size={72} style={{ margin: '0 auto 10px' }}/>
+            <Mascot size={108} style={{ margin: '0 auto 10px' }}/>
             <div style={{ fontSize: 14, opacity: 0.7 }}>This course has no hole layout yet. Ask an admin to add the Sandbox 9 in Courses.</div>
           </div>
         ) : (
