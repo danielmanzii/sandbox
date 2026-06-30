@@ -74,8 +74,8 @@ function ManagerPortal({ session, profile, courses }) {
         display: 'flex', flexDirection: 'column', padding: '22px 14px',
       }}>
         <div style={{ padding: '0 10px 16px' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 1 }}>Sandbox</div>
-          <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6 }}>Course Partner</div>
+          <img src="assets/lockup-full-cream.svg" alt="Sandbox" style={{ height: 26, display: 'block' }}/>
+          <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6, marginTop: 6 }}>Course Partner</div>
         </div>
 
         {/* Course switcher (only if they manage more than one) */}
@@ -147,8 +147,8 @@ function LiveBoard({ course }) {
 
       {groups === null ? <Spinner/> : groups.length === 0 ? (
         <div className="card" style={{ padding: 44, textAlign: 'center' }}>
-          <div style={{ fontSize: 34 }}>🌙</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', marginTop: 8 }}>Nobody on the course</div>
+          <img src="assets/mascot-full-forest.svg" alt="" style={{ height: 96, display: 'block', margin: '0 auto', opacity: 0.9 }}/>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', marginTop: 12 }}>Nobody on the course</div>
           <div style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>Groups appear here the moment they check in and start scoring.</div>
         </div>
       ) : (

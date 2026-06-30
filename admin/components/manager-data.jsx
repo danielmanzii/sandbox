@@ -48,6 +48,26 @@ async function removeCourseManager(id) {
   if (error) throw new Error(error.message || 'Could not remove.');
 }
 
+// Create a brand-new manager LOGIN (email + password) and link it to a course,
+// via the create-manager Edge Function (which safely holds the service-role key
+// server-side). Requires the function to be deployed.
+async function createManagerAccount({ email, password, courseId, firstName, lastName, handle }) {
+  const { data, error } = await sbx.functions.invoke('create-manager', {
+    body: { email, password, courseId, firstName, lastName, handle },
+  });
+  if (error) {
+    let msg = error.message || 'Could not create the account.';
+    // FunctionsHttpError carries the response; pull our JSON error out of it.
+    try { const body = await error.context.json(); if (body && body.error) msg = body.error; } catch (_) { /* noop */ }
+    if (/Failed to send a request|Function not found|404/i.test(msg)) {
+      msg = 'The create-manager function isn’t deployed yet. Deploy it in Supabase, then try again.';
+    }
+    throw new Error(msg);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
 // ─── Tee slots for one course (manager-editable window) ─────────────────────
 //   Loads slots from `from` (a Date) forward, soonest first.
 function useCourseSlots(courseId, fromISO) {
@@ -377,7 +397,7 @@ function useCourseFinancials(courseId, course) {
 }
 
 Object.assign(window, {
-  useManagedCourses, useManagerIds, addCourseManager, removeCourseManager,
+  useManagedCourses, useManagerIds, addCourseManager, removeCourseManager, createManagerAccount,
   useCourseSlots, useDaySlots, useDayFields, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
   useDailyYardages, saveDailyYardages, clearDailyYardages,
   useLiveOnCourse, useCourseFinancials,

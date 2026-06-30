@@ -40,7 +40,8 @@ function ManagerGate({ session, profile }) {
 
 function Splash() {
   return (
-    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center', justifyContent: 'center' }}>
+      <img src="assets/monogram-forest.svg" alt="Sandbox" style={{ height: 64, opacity: 0.92 }}/>
       <div className="spin"/>
     </div>
   );
@@ -64,8 +65,9 @@ function LoginScreen() {
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <form onSubmit={submit} className="card" style={{ width: '100%', maxWidth: 380, padding: 32 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--forest)', lineHeight: 1 }}>Sandbox</div>
-        <div className="eyebrow" style={{ marginTop: 4 }}>Admin portal</div>
+        <img src="assets/mascot-full-forest.svg" alt="" style={{ height: 84, display: 'block', margin: '0 auto 14px' }}/>
+        <img src="assets/lockup-full-forest.svg" alt="Sandbox" style={{ height: 30, display: 'block' }}/>
+        <div className="eyebrow" style={{ marginTop: 8 }}>Admin & course portal</div>
 
         <div style={{ marginTop: 24 }}>
           <label className="label">Email</label>
@@ -93,8 +95,8 @@ function NotAuthorised({ email }) {
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 32, textAlign: 'center' }}>
-        <div style={{ fontSize: 40 }}>🔒</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', marginTop: 8 }}>Not authorised</div>
+        <img src="assets/mascot-full-forest.svg" alt="" style={{ height: 96, display: 'block', margin: '0 auto', opacity: 0.9 }}/>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', marginTop: 12 }}>Not authorised</div>
         <div style={{ fontSize: 14, opacity: 0.7, marginTop: 8, lineHeight: 1.5 }}>
           <strong>{email}</strong> isn't an admin account. Ask Daniel or Rob to grant access.
         </div>
@@ -118,8 +120,8 @@ function Dashboard({ profile }) {
         display: 'flex', flexDirection: 'column', padding: '22px 14px',
       }}>
         <div style={{ padding: '0 10px 18px' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 1 }}>Sandbox</div>
-          <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6 }}>Admin</div>
+          <img src="assets/lockup-full-cream.svg" alt="Sandbox" style={{ height: 26, display: 'block' }}/>
+          <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6, marginTop: 6 }}>Admin</div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
