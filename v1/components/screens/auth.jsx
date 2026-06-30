@@ -224,9 +224,9 @@ function SignUpView({ onBack, onSignInInstead }) {
       setBusy(false);
       return;
     }
-    // Hold the bounce for ~1s, then load the app (gate routes straight to home).
+    // Hold the bounce for at least 2s, then load the app (gate routes to home).
     const elapsed = Date.now() - landedAt;
-    if (elapsed < 1000) await new Promise(r => setTimeout(r, 1000 - elapsed));
+    if (elapsed < 2000) await new Promise(r => setTimeout(r, 2000 - elapsed));
     if (window.reloadProfile) await window.reloadProfile();
     if (window.spp_endLanding) window.spp_endLanding();
     setBusy(false);
@@ -432,6 +432,10 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
       sessionStorage.removeItem('spp_session_only');
     }
 
+    // Branded bouncing-logo loader for at least 2s, then land in the app.
+    if (window.spp_beginLanding) window.spp_beginLanding();
+    await new Promise(r => setTimeout(r, 2000));
+    if (window.spp_endLanding) window.spp_endLanding();
     setBusy(false);
     // AuthGate picks up the new session automatically.
   }

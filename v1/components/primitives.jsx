@@ -26,9 +26,23 @@ const Icon = {
   ),
   Tee: ({ size = 22, color = 'currentColor', filled = false }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="6.5" r="3.5" stroke={color} strokeWidth="2" fill={filled ? color : 'none'}/>
-      <path d="M8 10c1 2 2 3 4 3s3-1 4-3" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-      <path d="M12 13v7M8 20h8" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      {/* ball */}
+      <circle cx="12" cy="8" r="5.6" stroke={color} strokeWidth="2" fill={filled ? color : 'none'}/>
+      {/* dimples (shown on the outline state) */}
+      {!filled && (
+        <g fill={color}>
+          <circle cx="9.4" cy="8.3" r="0.7"/>
+          <circle cx="10.9" cy="8.1" r="0.7"/>
+          <circle cx="8.8" cy="9.7" r="0.7"/>
+          <circle cx="10.3" cy="9.7" r="0.7"/>
+          <circle cx="11.7" cy="9.8" r="0.7"/>
+          <circle cx="9.6" cy="11.1" r="0.7"/>
+        </g>
+      )}
+      {/* tee */}
+      <path d="M9 14.2c1.1 1.5 1.9 2.1 3 2.1s1.9-.6 3-2.1" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 16.3v4.4" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      <path d="M9.9 20.7h4.2" stroke={color} strokeWidth="2" strokeLinecap="round"/>
     </svg>
   ),
   Chart: ({ size = 22, color = 'currentColor', filled = false }) => (
