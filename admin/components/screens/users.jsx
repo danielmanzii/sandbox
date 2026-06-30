@@ -1,4 +1,4 @@
-/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, useManagerIds, addCourseManager, removeCourseManager */
+/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, useManagerIds, addCourseManager, removeCourseManager, createManagerAccount */
 // Users module: search players, set membership tier, toggle admin, manage
 // guest passes, and assign course-partner (manager) access.
 // Needs v1/sql/membership.sql + v1/sql/course-managers.sql applied.
@@ -35,8 +35,13 @@ function UsersModule({ adminId }) {
   const [users, error, reload] = useUsers(query);
   const managerIds = useManagerIds();
   const [selected, setSelected] = React.useState(null);
+  const [creating, setCreating] = React.useState(false);
 
   if (error === 'MIGRATION') return <MigrationNeeded/>;
+
+  if (creating) {
+    return <CreateManagerForm adminId={adminId} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); reload(); }}/>;
+  }
 
   if (selected) {
     return (
@@ -54,6 +59,9 @@ function UsersModule({ adminId }) {
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <button className="btn btn-forest" onClick={() => setCreating(true)}>+ New manager account</button>
+      </div>
       <Row>
         <Field label="Search players" full>
           <input className="input" value={query} onChange={e => setQuery(e.target.value)} placeholder="name or @handle"/>
@@ -289,6 +297,111 @@ function CourseAccess({ user, adminId }) {
           <button className="btn btn-forest" onClick={add} disabled={busy || !pick}>+ Add course</button>
         </div>
       </Row>
+    </div>
+  );
+}
+
+// Create a brand-new course-manager login (email + password) and link it to a
+// course, in one step, via the create-manager Edge Function.
+function CreateManagerForm({ adminId, onClose, onCreated }) {
+  const [courses] = useCourses();
+  const [courseId, setCourseId] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [firstName, setFirstName] = React.useState('');
+  const [lastName, setLastName] = React.useState('Manager');
+  const [handle, setHandle] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const [done, setDone] = React.useState(null); // { email }
+
+  // Prefill name/handle from the chosen course.
+  function pickCourse(id) {
+    setCourseId(id);
+    const c = (courses || []).find(x => x.id === id);
+    if (c && !firstName) setFirstName(c.short_name);
+    if (c && !handle) setHandle(String(c.short_name).toLowerCase().replace(/[^a-z0-9]+/g, ''));
+  }
+  function generatePassword() {
+    // Readable, shareable: 3 short chunks. (Math.random is fine for a temp pw the
+    // course will use as-is; they can change it later.)
+    const chunk = () => Math.random().toString(36).slice(2, 6);
+    setPassword(`${chunk()}-${chunk()}-${chunk()}`);
+  }
+
+  async function submit() {
+    if (!courseId) { setErr('Pick a course.'); return; }
+    if (!email.trim()) { setErr('Enter a login email.'); return; }
+    if (password.length < 8) { setErr('Password must be at least 8 characters.'); return; }
+    setBusy(true); setErr('');
+    try {
+      await createManagerAccount({ email: email.trim(), password, courseId, firstName, lastName, handle });
+      setDone({ email: email.trim(), password });
+    } catch (e) { setErr(e.message || 'Could not create the account.'); }
+    setBusy(false);
+  }
+
+  const courseName = (courses || []).find(c => c.id === courseId);
+
+  if (done) {
+    return (
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+        <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+          <div style={{ fontSize: 34 }}>✅</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', marginTop: 8 }}>Manager account created</div>
+          <div style={{ fontSize: 14, opacity: 0.75, marginTop: 8 }}>
+            Share these credentials with {courseName ? courseName.short_name : 'the course'} — they sign in at <strong>admin.sbx.golf</strong>.
+          </div>
+          <div style={{ marginTop: 16, textAlign: 'left', background: 'rgba(28,73,42,0.06)', borderRadius: 12, padding: '14px 16px', fontFamily: 'var(--font-mono)', fontSize: 14 }}>
+            <div><span style={{ opacity: 0.6 }}>login</span>  {done.email}</div>
+            <div style={{ marginTop: 6 }}><span style={{ opacity: 0.6 }}>password</span>  {done.password}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+            <button className="btn btn-forest" onClick={onCreated}>Done</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 560, margin: '0 auto' }}>
+      <button className="btn btn-ghost" onClick={onClose} style={{ marginBottom: 18 }}>← Back to users</button>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)', marginBottom: 6 }}>New manager account</div>
+      <div style={{ fontSize: 13, opacity: 0.65, marginBottom: 18 }}>
+        Creates a login for a course and grants it manager access to that course only. Add the course first in <strong>Courses</strong> if it isn’t there yet.
+      </div>
+
+      {err && <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{err}</div>}
+
+      <div className="card" style={{ padding: 22 }}>
+        <Row>
+          <Field label="Course" full>
+            <select className="select" value={courseId} onChange={e => pickCourse(e.target.value)}>
+              <option value="">{courses === null ? 'Loading…' : 'Select a course…'}</option>
+              {(courses || []).map(c => <option key={c.id} value={c.id}>{c.short_name}</option>)}
+            </select>
+          </Field>
+        </Row>
+        <Row>
+          <Field label="Login email"><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="killian@sbx.golf"/></Field>
+          <Field label="Password">
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input className="input" value={password} onChange={e => setPassword(e.target.value)} placeholder="at least 8 characters"/>
+              <button className="btn btn-ghost" type="button" onClick={generatePassword} style={{ whiteSpace: 'nowrap' }}>Generate</button>
+            </div>
+          </Field>
+        </Row>
+        <Row>
+          <Field label="Display name"><input className="input" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Killian Greens"/></Field>
+          <Field label="@handle"><input className="input" value={handle} onChange={e => setHandle(e.target.value)} placeholder="killiangreens"/></Field>
+        </Row>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button className="btn btn-forest" onClick={submit} disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
+        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+      </div>
     </div>
   );
 }
