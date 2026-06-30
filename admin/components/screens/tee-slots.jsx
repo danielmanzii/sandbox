@@ -71,7 +71,7 @@ function TeeSlotsModule() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{fmtSlot(s.starts_at)}</div>
                     <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
-                      {s.title ? s.title + ' · ' : ''}{s.type} · capacity {s.capacity}
+                      capacity {s.capacity}
                     </div>
                   </div>
                   <span style={{
@@ -139,25 +139,11 @@ function TeeSlotEditor({ courseId, slot, onClose, onSaved }) {
         <Field label="Price ($)"><input className="input" type="number" min="0" value={form.price} onChange={e => set('price', e.target.value)}/></Field>
       </Row>
       <Row>
-        <Field label="Type">
-          <select className="select" value={form.type} onChange={e => set('type', e.target.value)}>
-            <option value="open">open</option>
-            <option value="event">event</option>
-            <option value="major">major</option>
-          </select>
-        </Field>
         <Field label="Status">
           <select className="select" value={form.status} onChange={e => set('status', e.target.value)}>
             <option value="open">open</option>
-            <option value="full">full</option>
             <option value="closed">closed</option>
-            <option value="cancelled">cancelled</option>
           </select>
-        </Field>
-      </Row>
-      <Row>
-        <Field label="Title (for event / major)" full>
-          <input className="input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Friday Night Major"/>
         </Field>
       </Row>
 

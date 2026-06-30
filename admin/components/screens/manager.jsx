@@ -513,17 +513,38 @@ function DateStrip({ value, onChange }) {
   );
 }
 
+// Auto status from who's signed up + play state (a tee time = a foursome of 4):
+//   open · searching for N more · booked · in progress · closed
+// Derived live; the manager only manually opens/closes.
+function teeStatus(slot, players) {
+  if (slot.status === 'closed' || slot.status === 'cancelled') return { label: 'closed', tone: 'mute' };
+  const n = players.length;
+  const anyPlaying = players.some(p => p.status === 'playing');
+  const allDone = n > 0 && players.every(p => p.status === 'completed');
+  if (allDone) return { label: 'closed', tone: 'mute' };
+  if (anyPlaying) return { label: 'in progress', tone: 'live' };
+  if (n >= 4) return { label: 'booked', tone: 'booked' };
+  if (n === 0) return { label: 'open', tone: 'open' };
+  return { label: `searching for ${4 - n} more`, tone: 'search' };
+}
+
 function SlotRow({ slot, players = [], last, onSaved, onError }) {
   const [price, setPrice] = React.useState(slot.price);
-  const [status, setStatus] = React.useState(slot.status);
   const [cart, setCart] = React.useState(!!slot.includes_cart);
   const [busy, setBusy] = React.useState(false);
-  const dirty = String(price) !== String(slot.price) || status !== slot.status || cart !== !!slot.includes_cart;
+  const dirty = String(price) !== String(slot.price) || cart !== !!slot.includes_cart;
+  const closed = slot.status === 'closed' || slot.status === 'cancelled';
 
   async function save() {
     setBusy(true); onError('');
-    try { await saveSlot({ ...slot, price, status, includes_cart: cart }); onSaved(); }
+    try { await saveSlot({ ...slot, price, includes_cart: cart }); onSaved(); }
     catch (e) { onError(e.message || 'Could not save.'); }
+    setBusy(false);
+  }
+  async function toggleClosed() {
+    setBusy(true); onError('');
+    try { await saveSlot({ ...slot, price, includes_cart: cart, status: closed ? 'open' : 'closed' }); onSaved(); }
+    catch (e) { onError(e.message || 'Could not update.'); }
     setBusy(false);
   }
   async function remove() {
@@ -543,18 +564,13 @@ function SlotRow({ slot, players = [], last, onSaved, onError }) {
         border: cart ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
         background: cart ? 'var(--forest)' : 'transparent', color: cart ? 'var(--cream)' : 'var(--ink-soft)',
       }}>{cart ? '🛒 cart' : 'no cart'}</button>
-      <select className="select" value={status} onChange={e => setStatus(e.target.value)} style={{ width: 110 }}>
-        <option value="open">open</option>
-        <option value="closed">closed</option>
-        <option value="full">full</option>
-        <option value="cancelled">cancelled</option>
-      </select>
 
-      {/* Field: who's signed up — pending until 4 grouped up */}
+      {/* Field: avatars + auto status */}
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <FieldStack players={players}/>
+        <FieldStack slot={slot} players={players}/>
         <div style={{ display: 'flex', gap: 8 }}>
           {dirty && <button className="btn btn-forest" style={{ padding: '7px 12px' }} disabled={busy} onClick={save}>Save</button>}
+          <button className="btn btn-ghost" style={{ padding: '7px 10px' }} disabled={busy} onClick={toggleClosed}>{closed ? 'Reopen' : 'Close'}</button>
           <button className="btn btn-danger" style={{ padding: '7px 10px' }} disabled={busy} onClick={remove}>✕</button>
         </div>
       </div>
@@ -562,28 +578,32 @@ function SlotRow({ slot, players = [], last, onSaved, onError }) {
   );
 }
 
-// Avatar stack + pending/grouped pill for a tee time's field (always out of 4).
-function FieldStack({ players }) {
-  const count = players.length;
-  const full = count >= 4;
+// Avatar stack + the auto status badge for a tee time's field (out of 4).
+function FieldStack({ slot, players }) {
+  const st = teeStatus(slot, players);
+  const tones = {
+    open:   { background: 'transparent', color: 'var(--forest)', border: '1px solid var(--forest)' },
+    search: { background: 'rgba(14,28,19,0.06)', color: 'var(--ink-soft)', border: '1px solid transparent' },
+    booked: { background: 'var(--forest)', color: 'var(--cream)', border: '1px solid var(--forest)' },
+    live:   { background: 'var(--forest)', color: 'var(--cream)', border: '1px solid var(--forest)' },
+    mute:   { background: 'rgba(14,28,19,0.06)', color: 'var(--ink-soft)', border: '1px solid transparent' },
+  };
+  const tone = tones[st.tone] || tones.search;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} title={players.map(playerName).join(', ') || 'No players yet'}>
       <div style={{ display: 'flex' }}>
         {Array.from({ length: 4 }).map((_, i) => {
           const p = players[i];
-          return (
-            <div key={i} style={{ marginLeft: i ? -8 : 0 }}>
-              {p ? <Avatar player={p}/> : <EmptySeat/>}
-            </div>
-          );
+          return <div key={i} style={{ marginLeft: i ? -8 : 0 }}>{p ? <Avatar player={p}/> : <EmptySeat/>}</div>;
         })}
       </div>
       <span style={{
         fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-        padding: '4px 9px', borderRadius: 999, whiteSpace: 'nowrap',
-        background: full ? 'var(--forest)' : 'rgba(14,28,19,0.06)',
-        color: full ? 'var(--cream)' : 'var(--ink-soft)',
-      }}>{full ? 'Grouped ✓' : `Pending ${count}/4`}</span>
+        padding: '4px 9px', borderRadius: 999, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 5, ...tone,
+      }}>
+        {st.tone === 'live' && <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--cream)' }}/>}
+        {st.label}
+      </span>
     </div>
   );
 }
