@@ -94,14 +94,19 @@ function SignUpView({ onBack, onSignInInstead }) {
     return () => clearTimeout(t);
   }, [email, emailOk]);
 
-  // Live @handle availability check (debounced) for the final step.
+  // Live @handle availability check (debounced) for the final step. We're not
+  // signed in yet, so profiles SELECT is blocked by RLS — use the email_for_handle
+  // RPC (SECURITY DEFINER, callable while logged out) instead: a returned email
+  // means the handle is taken.
   React.useEffect(() => {
     if (!handle) { setHandleStatus('idle'); return undefined; }
     if (!isValidHandle(cleanHandle)) { setHandleStatus('invalid'); return undefined; }
     setHandleStatus('checking');
     const t = setTimeout(async () => {
-      const { data } = await sbx.from('profiles').select('id').eq('handle', '@' + cleanHandle).maybeSingle();
-      setHandleStatus(data ? 'taken' : 'available');
+      try {
+        const { data, error } = await sbx.rpc('email_for_handle', { handle_input: cleanHandle });
+        setHandleStatus(error ? 'available' : (data ? 'taken' : 'available'));
+      } catch (_) { setHandleStatus('available'); }
     }, 400);
     return () => clearTimeout(t);
   }, [handle, cleanHandle]);
