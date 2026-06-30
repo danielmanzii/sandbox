@@ -1,4 +1,4 @@
-/* global React, Row, Field, Spinner, useRcCourses, saveRcCourse, deleteRcCourse, useRcTees, saveRcTee, deleteRcTee, loadRcHoles, saveRcHoles, saveFullScorecard */
+/* global React, Row, Field, Spinner, useRcCourses, saveRcCourse, deleteRcCourse, useRcTees, saveRcTee, deleteRcTee, loadRcHoles, saveRcHoles, saveFullScorecard, teeColor */
 // Scorecards module: manage REAL course tee data (tees, yardage, rating, slope
 // + per-hole). This is the actual course data the golfer app shows when picking
 // a course/tee — separate from the Sandbox-9 pitch-and-putt yardages in Courses.
@@ -51,14 +51,14 @@ function ScorecardsModule() {
   );
 }
 
-function RcEditor({ course, onClose, onSaved }) {
+function RcEditor({ course, prefill, onClose, onSaved }) {
   const isNew = !course;
   const [form, setForm] = React.useState(() => ({
     id: course ? course.id : undefined,
-    name: course ? course.name : '',
-    city: course ? (course.city || '') : '',
-    state: course ? (course.state || 'FL') : 'FL',
-    holes: course ? (course.holes || 18) : 18,
+    name: course ? course.name : (prefill ? prefill.name || '' : ''),
+    city: course ? (course.city || '') : (prefill ? prefill.city || '' : ''),
+    state: course ? (course.state || 'FL') : ((prefill && prefill.state) || 'FL'),
+    holes: course ? (course.holes || 18) : ((prefill && prefill.holes) || 18),
   }));
   const [courseId, setCourseId] = React.useState(course ? course.id : null);
   const [saving, setSaving] = React.useState(false);
@@ -83,7 +83,7 @@ function RcEditor({ course, onClose, onSaved }) {
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto' }}>
-      <button className="btn btn-ghost" onClick={onClose} style={{ marginBottom: 18 }}>← Back to scorecards</button>
+      <button className="btn btn-ghost" onClick={onClose} style={{ marginBottom: 18 }}>← Back to courses</button>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)', marginBottom: 16 }}>{isNew ? 'New course' : form.name}</div>
 
       {err && <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{err}</div>}
@@ -160,9 +160,8 @@ function TeeRow({ tee, holes, isNew, onSaved, onError }) {
   return (
     <div style={{ borderTop: 'var(--hairline)', padding: '12px 0' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ width: 26, height: 26, borderRadius: 99, marginBottom: 4, background: f.color || '#ccc', border: '2px solid var(--paper)', boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' }}/>
-        <Mini label="Tee" w={92}><input className="input" style={inp} value={f.name || ''} onChange={e => set('name', e.target.value)} placeholder="Blue"/></Mini>
-        <Mini label="Color" w={92}><input className="input" style={inp} value={f.color || ''} onChange={e => set('color', e.target.value)} placeholder="#3b6fb3"/></Mini>
+        <div style={{ width: 26, height: 26, borderRadius: 99, marginBottom: 4, background: teeColor(f.name), border: '2px solid var(--paper)', boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' }}/>
+        <Mini label="Tee" w={100}><input className="input" style={inp} value={f.name || ''} onChange={e => set('name', e.target.value)} placeholder="Blue"/></Mini>
         <Mini label="Par" w={60}><input className="input" style={inp} type="number" value={f.par ?? ''} onChange={e => set('par', e.target.value)} placeholder="72"/></Mini>
         <Mini label="Yards" w={74}><input className="input" style={inp} type="number" value={f.yards ?? ''} onChange={e => set('yards', e.target.value)} placeholder="6449"/></Mini>
         <Mini label="Rating" w={70}><input className="input" style={inp} type="number" step="0.1" value={f.rating ?? ''} onChange={e => set('rating', e.target.value)} placeholder="70.1"/></Mini>
@@ -296,7 +295,7 @@ function QuickScorecard({ onClose, onSaved }) {
 
   return (
     <div>
-      <button className="btn btn-ghost" onClick={onClose} style={{ marginBottom: 18 }}>← Back to scorecards</button>
+      <button className="btn btn-ghost" onClick={onClose} style={{ marginBottom: 18 }}>← Back to courses</button>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)', marginBottom: 4 }}>Enter a scorecard</div>
       <div style={{ fontSize: 13, opacity: 0.65, marginBottom: 18 }}>Type straight off the physical card — a row per tee, a box per hole. Saves the course, tees and holes in one go.</div>
 
@@ -338,9 +337,8 @@ function QuickScorecard({ onClose, onSaved }) {
               <tr key={ti} style={{ borderTop: 'var(--hairline)' }}>
                 <td style={{ padding: '6px 4px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input value={t.color} onChange={e => setTee(ti, 'color', e.target.value)} title="Colour"
-                      style={{ width: 22, height: 22, padding: 0, border: 'none', background: t.color || '#ccc', borderRadius: 99, cursor: 'pointer' }}/>
-                    <input className="input" value={t.name} onChange={e => setTee(ti, 'name', e.target.value)} placeholder="Blue" style={{ width: 76, padding: '5px 7px' }}/>
+                    <div title={t.name} style={{ width: 22, height: 22, flexShrink: 0, background: teeColor(t.name), borderRadius: 99, boxShadow: '0 0 0 1px rgba(0,0,0,0.12)' }}/>
+                    <input className="input" value={t.name} onChange={e => setTee(ti, 'name', e.target.value)} placeholder="Blue" style={{ width: 84, padding: '5px 7px' }}/>
                     <input className="input" value={t.rating} onChange={e => setTee(ti, 'rating', e.target.value)} placeholder="rtg" style={{ width: 48, padding: '5px 5px', fontFamily: 'var(--font-mono)' }}/>
                     <input className="input" value={t.slope} onChange={e => setTee(ti, 'slope', e.target.value)} placeholder="slp" style={{ width: 44, padding: '5px 5px', fontFamily: 'var(--font-mono)' }}/>
                   </div>
@@ -377,4 +375,4 @@ function QuickScorecard({ onClose, onSaved }) {
   );
 }
 
-Object.assign(window, { ScorecardsModule });
+Object.assign(window, { ScorecardsModule, RcEditor, QuickScorecard });

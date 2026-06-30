@@ -1,4 +1,4 @@
-/* global React, ReactDOM, sbx, useSession, useProfile, signOut, Mascot, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule, UsersModule, ScorecardsModule, useManagedCourses, ManagerPortal */
+/* global React, ReactDOM, sbx, useSession, useProfile, signOut, Mascot, CoursesModule, TeeSlotsModule, BookingsModule, EventsModule, UsersModule, useManagedCourses, ManagerPortal */
 // Sandbox Admin — app shell: login → role gate → dashboard.
 //   • is_admin            → full Sandbox admin dashboard (all courses)
 //   • manages a course    → scoped course-partner portal (their course only)
@@ -7,8 +7,7 @@
 
 // ─── Module registry (content fills in over later phases) ────────────
 const MODULES = [
-  { id: 'courses',    label: 'Courses',    icon: '⛳', hint: 'Sandbox-9 courses & pitch-and-putt yardages' },
-  { id: 'scorecards', label: 'Scorecards', icon: '🏌️', hint: 'Real course tees · yardage · rating · slope' },
+  { id: 'courses',   label: 'SBX courses', icon: '⛳', hint: 'Golf courses · full scorecard & Sandbox-9 data' },
   { id: 'teeSlots',  label: 'Tee slots',  icon: '🕒', hint: 'Availability & pricing' },
   { id: 'users',     label: 'Users',      icon: '👤', hint: 'Membership & guest passes' },
   { id: 'bookings',  label: 'Bookings',   icon: '📋', hint: 'Reservations' },
@@ -174,7 +173,6 @@ function Dashboard({ profile }) {
 // ─── Module content ──────────────────────────────────────────────────
 function ModuleView({ id, profile }) {
   if (id === 'courses') return <CoursesModule/>;
-  if (id === 'scorecards') return <ScorecardsModule/>;
   if (id === 'teeSlots') return <TeeSlotsModule/>;
   if (id === 'bookings') return <BookingsModule/>;
   if (id === 'events') return <EventsModule/>;
