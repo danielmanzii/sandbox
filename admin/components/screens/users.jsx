@@ -1,4 +1,4 @@
-/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, addCourseManager, removeCourseManager */
+/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, useManagerIds, addCourseManager, removeCourseManager */
 // Users module: search players, set membership tier, toggle admin, manage
 // guest passes, and assign course-partner (manager) access.
 // Needs v1/sql/membership.sql + v1/sql/course-managers.sql applied.
@@ -15,9 +15,25 @@ function userName(u) {
   return [u.first_name, u.last_name].filter(Boolean).join(' ') || (u.handle ? `@${String(u.handle).replace(/^@/, '')}` : 'Unnamed');
 }
 
+// Role buckets for the segment filter. Admin wins over manager so the groups
+// are mutually exclusive.
+function roleOf(u, managerIds) {
+  if (u.is_admin) return 'admin';
+  if (managerIds && managerIds.has(u.id)) return 'manager';
+  return 'regular';
+}
+const ROLE_TABS = [
+  ['all', 'All'],
+  ['admin', 'Admins'],
+  ['manager', 'Managers'],
+  ['regular', 'Regular'],
+];
+
 function UsersModule({ adminId }) {
   const [query, setQuery] = React.useState('');
+  const [role, setRole] = React.useState('all');
   const [users, error, reload] = useUsers(query);
+  const managerIds = useManagerIds();
   const [selected, setSelected] = React.useState(null);
 
   if (error === 'MIGRATION') return <MigrationNeeded/>;
@@ -32,6 +48,10 @@ function UsersModule({ adminId }) {
     );
   }
 
+  const counts = { all: (users || []).length, admin: 0, manager: 0, regular: 0 };
+  (users || []).forEach(u => { counts[roleOf(u, managerIds)] += 1; });
+  const shown = (users || []).filter(u => role === 'all' || roleOf(u, managerIds) === role);
+
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
       <Row>
@@ -40,21 +60,37 @@ function UsersModule({ adminId }) {
         </Field>
       </Row>
 
+      {/* Role segment */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {ROLE_TABS.map(([key, label]) => {
+          const on = role === key;
+          return (
+            <button key={key} onClick={() => setRole(key)} style={{
+              padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+              border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
+              background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
+            }}>{label} <span style={{ opacity: 0.7, fontFamily: 'var(--font-mono)' }}>{counts[key]}</span></button>
+          );
+        })}
+      </div>
+
       {error && <div style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{error}</div>}
 
-      {users === null ? <Spinner/> : users.length === 0 ? (
-        <div className="card" style={{ padding: 30, textAlign: 'center', opacity: 0.7, fontSize: 14 }}>No players found.</div>
+      {users === null ? <Spinner/> : shown.length === 0 ? (
+        <div className="card" style={{ padding: 30, textAlign: 'center', opacity: 0.7, fontSize: 14 }}>No {role === 'all' ? 'players' : ROLE_TABS.find(t => t[0] === role)[1].toLowerCase()} found.</div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
-          {users.map((u, i) => (
+          {shown.map((u, i) => (
             <button key={u.id} onClick={() => setSelected(u)} style={{
               display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left',
               padding: '13px 16px', background: 'transparent', cursor: 'pointer',
-              border: 'none', borderBottom: i < users.length - 1 ? 'var(--hairline)' : 'none',
+              border: 'none', borderBottom: i < shown.length - 1 ? 'var(--hairline)' : 'none',
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>
-                  {userName(u)}{u.is_admin && <span style={{ marginLeft: 8, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.7 }}>ADMIN</span>}
+                  {userName(u)}
+                  {u.is_admin && <span style={{ marginLeft: 8, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.7 }}>ADMIN</span>}
+                  {!u.is_admin && managerIds && managerIds.has(u.id) && <span style={{ marginLeft: 8, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.7 }}>MANAGER</span>}
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
                   {u.handle ? `@${String(u.handle).replace(/^@/, '')}` : '—'} · SBX {u.sbx != null ? Number(u.sbx).toFixed(3) : '—'}

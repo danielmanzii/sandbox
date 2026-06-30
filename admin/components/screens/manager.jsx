@@ -211,7 +211,8 @@ function TeeTimesPanel({ course }) {
   const [price, setPrice] = React.useState(Math.min(75, course.suggested_price || 22));
   const [windowKeys, setWindowKeys] = React.useState(() => new Set(['twilight']));
   const [liveWindowKeys, setLiveWindowKeys] = React.useState(() => new Set(['all']));
-  const [excluded, setExcluded] = React.useState(() => new Set()); // 'HH:MM' turned off (light)
+  const [added, setAdded] = React.useState(() => new Set());     // 'HH:MM' turned ON (not yet live)
+  const [removed, setRemoved] = React.useState(() => new Set()); // 'HH:MM' live times turned OFF
   const [showFormula, setShowFormula] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
@@ -236,10 +237,19 @@ function TeeTimesPanel({ course }) {
     return [...set].sort((a, b) => toMin(a) - toMin(b));
   }, [windowKeys, intervalMin, slots]);
 
-  // Two states only: a time is selected (dark) unless turned off (light).
-  const selectedTimes = candidates.filter(t => !excluded.has(t));
+  // Dark = live. A time is selected because it's currently live, minus any the
+  // manager just turned off, plus any they just turned on. With no edits,
+  // selected == the live schedule exactly.
+  const liveSet = React.useMemo(() => {
+    const s = new Set();
+    (slots || []).forEach(x => { if (x.status === 'open') s.add(slotHM(x.starts_at)); });
+    return s;
+  }, [slots]);
+  const isSelected = (t) => added.has(t) || (liveSet.has(t) && !removed.has(t));
+  const selectedTimes = candidates.filter(isSelected);
   const selectedSet = new Set(selectedTimes);
   const liveInScope = (slots || []).filter(s => s.status === 'open' && inWindows(minutesOfDay(s.starts_at), windowKeys));
+  const allSelected = candidates.length > 0 && candidates.every(isSelected);
 
   // Live "expected daily revenue" from this course's real fill rate.
   const rate = (fill && fill.rate != null && fill.sampleSlots >= 4) ? fill.rate : null;
@@ -249,9 +259,18 @@ function TeeTimesPanel({ course }) {
   const revenue = expected != null ? expected : full;
 
   function toggleTime(t) {
-    setExcluded(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; });
+    if (isSelected(t)) {
+      if (liveSet.has(t)) setRemoved(p => new Set(p).add(t));
+      else setAdded(p => { const n = new Set(p); n.delete(t); return n; });
+    } else {
+      if (liveSet.has(t)) setRemoved(p => { const n = new Set(p); n.delete(t); return n; });
+      else setAdded(p => new Set(p).add(t));
+    }
   }
-  function selectAll(on) { setExcluded(on ? new Set() : new Set(candidates)); }
+  function selectAll(on) {
+    if (on) { setAdded(new Set(candidates)); setRemoved(new Set()); }
+    else { setAdded(new Set()); setRemoved(new Set(candidates.filter(t => liveSet.has(t)))); }
+  }
   const mkToggle = (setter) => (k) => setter(prev => {
     if (k === 'all') return new Set(['all']);
     const n = new Set(prev); n.delete('all');
@@ -280,6 +299,7 @@ function TeeTimesPanel({ course }) {
       if (removable.length) parts.push(`${removable.length} removed`);
       if (keptBooked) parts.push(`${keptBooked} kept (booked)`);
       setMsg('Saved — ' + parts.join(' · ') + '.');
+      setAdded(new Set()); setRemoved(new Set());
       reload();
     } catch (e) { setErr(e.message || 'Could not save.'); }
     setBusy(false);
@@ -296,7 +316,7 @@ function TeeTimesPanel({ course }) {
       {err && <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{err}</div>}
 
       {/* Date strip */}
-      <DateStrip value={dateStr} onChange={d => { setDateStr(d); setExcluded(new Set()); setMsg(''); }}/>
+      <DateStrip value={dateStr} onChange={d => { setDateStr(d); setAdded(new Set()); setRemoved(new Set()); setMsg(''); }}/>
 
       {/* Controls: interval slider · (revenue over price slider) · cart */}
       <div className="card" style={{ padding: 22, marginTop: 16, display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'stretch' }}>
@@ -382,18 +402,18 @@ function TeeTimesPanel({ course }) {
       <div className="card" style={{ padding: 20, marginTop: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontSize: 13, opacity: 0.7 }}>
-            <strong>{selectedTimes.length}</strong> selected — tap to toggle. Saving makes the live schedule exactly these times.
-            {liveInScope.length ? <span style={{ opacity: 0.7 }}> ({liveInScope.length} live now in view)</span> : null}
+            <strong style={{ color: 'var(--forest)' }}>Dark = live.</strong> Tap to toggle; Save makes the live schedule exactly the dark times.
+            {liveInScope.length ? <span style={{ opacity: 0.7 }}> ({liveInScope.length} live in view)</span> : null}
           </div>
-          <button onClick={() => selectAll(excluded.size > 0)} style={{
+          <button onClick={() => selectAll(!allSelected)} style={{
             border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--forest)', padding: 0,
-          }}>{excluded.size > 0 ? 'Select all' : 'Clear all'}</button>
+          }}>{allSelected ? 'Clear all' : 'Select all'}</button>
         </div>
 
         {slots === null ? <Spinner/> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8, marginTop: 14 }}>
             {candidates.map(t => {
-              const on = !excluded.has(t);   // dark = selected · light = not
+              const on = isSelected(t);   // dark = live/selected · light = off
               const st = {
                 height: 36, width: '100%', boxSizing: 'border-box', borderRadius: 9, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
