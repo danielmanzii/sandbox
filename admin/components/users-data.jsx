@@ -58,6 +58,22 @@ async function revokeGuestPass(id) {
   if (error) throw humanizeUser(error);
 }
 
+// Permanently delete a user via the delete-user Edge Function (service-role,
+// server-side). Removes the auth account; the profile cascades off it.
+async function deleteUserAccount(userId) {
+  const { data, error } = await sbx.functions.invoke('delete-user', { body: { userId } });
+  if (error) {
+    let msg = error.message || 'Could not delete the user.';
+    try { const body = await error.context.json(); if (body && body.error) msg = body.error; } catch (_) { /* noop */ }
+    if (/Failed to send a request|Function not found|404/i.test(msg)) {
+      msg = 'The delete-user function isn’t deployed yet. Deploy it in Supabase, then try again.';
+    }
+    throw new Error(msg);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
 function humanizeUser(error) {
   const msg = (error && error.message) || 'Something went wrong.';
   if (/row-level security|permission/i.test(msg)) return new Error('Not allowed — your account needs admin access.');
@@ -65,4 +81,4 @@ function humanizeUser(error) {
   return new Error(msg);
 }
 
-Object.assign(window, { useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass });
+Object.assign(window, { useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, deleteUserAccount });
