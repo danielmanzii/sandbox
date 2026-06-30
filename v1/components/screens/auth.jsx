@@ -10,7 +10,7 @@ function AuthScreens() {
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
       color: 'var(--paper)',
-      overflow: 'auto',
+      overflow: 'hidden',
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Decorative grain + mascot */}
@@ -31,36 +31,36 @@ function AuthScreens() {
 // ─── Welcome ─────────────────────────────────────────────────
 function WelcomeView({ onSignUp, onSignIn }) {
   return (
-    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 28px 32px', color: 'var(--paper)' }}>
-      <Wordmark variant="white" size={160}/>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 28, whiteSpace: 'nowrap', color: 'var(--paper)' }}>
-        Pitch & Putt, Rated.
-      </div>
-      <div className="caption-serif" style={{ fontSize: 18, marginTop: 18, opacity: 0.85, maxWidth: 340, color: 'var(--paper)', lineHeight: 1.4 }}>
-        Miami's pitch &amp; putt, match play league.<br/>
-        Real matches, real ratings, real bragging rights.
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '0 28px', color: 'var(--paper)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <Wordmark variant="white" size={190}/>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 26, whiteSpace: 'nowrap', color: 'var(--paper)' }}>
+          Pitch &amp; Putt, Rated.
+        </div>
+        <div className="caption-serif" style={{ fontSize: 18, marginTop: 16, opacity: 0.85, maxWidth: 340, color: 'var(--paper)', lineHeight: 1.4 }}>
+          Miami's pitch &amp; putt, match play league.<br/>
+          Real matches, real ratings, real bragging rights.
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 36, width: '100%', maxWidth: 360 }}>
+          <Button variant="paper" size="lg" full onClick={onSignUp}>
+            Create account
+            <Icon.ArrowRight size={16}/>
+          </Button>
+          <Button variant="outlineWhite" size="lg" full onClick={onSignIn}>
+            Sign In
+          </Button>
+        </div>
       </div>
 
-      <div style={{ flex: 1 }}/>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 32 }}>
-        <Button variant="paper" size="lg" full onClick={onSignUp}>
-          Create account
-          <Icon.ArrowRight size={16}/>
-        </Button>
-        <Button variant="outlineWhite" size="lg" full onClick={onSignIn}>
-          Sign In
-        </Button>
-      </div>
-
-      <div style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', marginTop: 20, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--paper)' }}>
+      <div style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', paddingBottom: 20, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--paper)' }}>
         v1 prototype · real data · real matches
       </div>
     </div>
   );
 }
 
-// ─── Sign Up ─────────────────────────────────────────────────
+// ─── Sign Up (one question at a time, slides right→left) ─────
 function SignUpView({ onBack, onSignInInstead }) {
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName]   = React.useState('');
@@ -68,123 +68,315 @@ function SignUpView({ onBack, onSignInInstead }) {
   const [dob, setDob]             = React.useState('');
   const [email, setEmail]         = React.useState('');
   const [password, setPassword]   = React.useState('');
+  const [emailStatus, setEmailStatus] = React.useState('idle'); // idle|checking|free|taken
+  const [handle, setHandle]       = React.useState('');
+  const [handleStatus, setHandleStatus] = React.useState('idle'); // idle|checking|available|taken|invalid
+  const [createdUserId, setCreatedUserId] = React.useState(null); // set once the auth user exists
+  const [step, setStep]           = React.useState(0);
   const [busy, setBusy]           = React.useState(false);
   const [err, setErr]             = React.useState('');
 
-  const valid = firstName.trim() && lastName.trim() && email.trim() && password.length >= 6;
+  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  const cleanHandle = sanitizeHandle(handle);
 
-  async function submit(e) {
-    e.preventDefault();
-    if (!valid || busy) return;
+  // Live "email already in use" check (debounced). Falls back to "free" if the
+  // email_exists function isn't deployed, so the flow still works (the final
+  // sign-up will catch a dupe).
+  React.useEffect(() => {
+    if (!emailOk) { setEmailStatus('idle'); return undefined; }
+    setEmailStatus('checking');
+    const t = setTimeout(async () => {
+      try {
+        const { data, error } = await sbx.rpc('email_exists', { p_email: email.trim() });
+        setEmailStatus(error ? 'free' : (data ? 'taken' : 'free'));
+      } catch (_) { setEmailStatus('free'); }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [email, emailOk]);
+
+  // Live @handle availability check (debounced) for the final step. We're not
+  // signed in yet, so profiles SELECT is blocked by RLS — use the email_for_handle
+  // RPC (SECURITY DEFINER, callable while logged out) instead: a returned email
+  // means the handle is taken.
+  React.useEffect(() => {
+    if (!handle) { setHandleStatus('idle'); return undefined; }
+    if (!isValidHandle(cleanHandle)) { setHandleStatus('invalid'); return undefined; }
+    setHandleStatus('checking');
+    const t = setTimeout(async () => {
+      try {
+        const { data, error } = await sbx.rpc('email_for_handle', { handle_input: cleanHandle });
+        setHandleStatus(error ? 'available' : (data ? 'taken' : 'available'));
+      } catch (_) { setHandleStatus('available'); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [handle, cleanHandle]);
+
+  // One step per question. Optional steps are always "valid" (can advance blank).
+  const steps = [
+    { key: 'firstName', eyebrow: 'Your name', title: "What's your first name?", valid: !!firstName.trim(),
+      field: <Input value={firstName} onChange={setFirstName} autoComplete="given-name" placeholder="First name" enterKeyHint="next"/> },
+    { key: 'lastName', eyebrow: 'Your name', title: 'And your last name?', valid: !!lastName.trim(),
+      field: <Input value={lastName} onChange={setLastName} autoComplete="family-name" placeholder="Last name" enterKeyHint="next"/> },
+    { key: 'email', eyebrow: 'Sign-in details', title: "What's your email?", valid: emailOk && emailStatus !== 'taken' && emailStatus !== 'checking',
+      field: (
+        <div>
+          <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off" placeholder="you@example.com" enterKeyHint="next"/>
+          <div style={{ marginTop: 8, fontSize: 12, fontFamily: 'var(--font-mono)', minHeight: 18, textAlign: 'left',
+            color: emailStatus === 'taken' ? 'var(--loss-soft)' : 'rgba(234,226,206,0.6)' }}>
+            {emailStatus === 'taken' ? 'Email already in use, use another or sign in.'
+              : emailStatus === 'checking' ? 'Checking…'
+              : (email && !emailOk ? 'That doesn’t look like an email yet.' : '')}
+          </div>
+          {emailStatus === 'taken' && (
+            <button type="button" onClick={onSignInInstead} style={{
+              marginTop: 14, width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: 'var(--paper)', color: 'var(--forest)', fontWeight: 800, fontSize: 15,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>Sign in <Icon.ArrowRight size={16}/></button>
+          )}
+        </div>
+      ) },
+    { key: 'password', eyebrow: 'Sign-in details', title: 'Create a password', hint: 'At least 6 characters', valid: password.length >= 6,
+      field: <Input value={password} onChange={setPassword} type="password" autoComplete="new-password" placeholder="••••••••" enterKeyHint="next"/> },
+    { key: 'gender', eyebrow: 'About you (optional)', title: 'What is your gender?', valid: true,
+      field: <ChoiceButtons value={gender} onChange={setGender} options={[
+        ['male', 'Male'], ['female', 'Female'], ['skip', 'Prefer not to say'],
+      ]}/> },
+    { key: 'dob', eyebrow: 'About you (optional)', title: "When's your birthday?", valid: true,
+      field: <WheelPicker value={dob} onChange={setDob}/> },
+    { key: 'handle', eyebrow: 'Last step', title: 'Pick a display name', valid: handleStatus === 'available',
+      field: (
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', textAlign: 'left',
+            background: 'rgba(255,255,255,0.08)', border: `1px solid ${borderFor(handleStatus)}`,
+            borderRadius: 14, padding: '0 14px', transition: 'border-color 0.15s',
+          }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'rgba(234,226,206,0.5)' }}>@</span>
+            <input value={handle} onChange={e => setHandle(e.target.value)} placeholder="yourname"
+              autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={20}
+              style={{ flex: 1, padding: '15px 8px', background: 'transparent', border: 'none', color: 'var(--paper)', fontSize: 20, fontFamily: 'var(--font-display)', outline: 'none' }}/>
+            <StatusIcon status={handleStatus}/>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12, fontFamily: 'var(--font-mono)', color: statusTextColor(handleStatus), minHeight: 18 }}>
+            {statusText(handleStatus, cleanHandle)}
+          </div>
+        </div>
+      ) },
+  ];
+  const last = steps.length - 1;
+  const cur = steps[step];
+
+  // Keyboard-aware: when the on-screen keyboard opens the visual viewport shrinks.
+  // We lift the centered content by half that amount so it re-centers in the
+  // space that's left; when the keyboard hides, it eases back to centre.
+  const inset = useKeyboardInset();
+
+  // Drop focus when moving between steps so the keyboard tucks away and you see
+  // the screen first — you tap the field to bring it back.
+  function blur() { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  function next() {
+    if (!cur.valid || busy) return;
+    blur();
+    if (step < last) { setErr(''); setStep(s => s + 1); }
+    else submit();
+  }
+  function back() {
+    blur();
+    if (step === 0) onBack();
+    else { setErr(''); setStep(s => s - 1); }
+  }
+
+  async function submit() {
     setBusy(true); setErr('');
-
-    // 1) Create auth user
-    const { data: signUpData, error: signUpErr } = await sbx.auth.signUp({ email, password });
-    if (signUpErr) {
-      setErr(signUpErr.message);
-      setBusy(false);
-      return;
+    // Create the auth user once. If a later retry happens (e.g. handle taken),
+    // reuse the existing user instead of signing up again with the same email.
+    let userId = createdUserId;
+    if (!userId) {
+      const { data: signUpData, error: signUpErr } = await sbx.auth.signUp({ email: email.trim(), password });
+      if (signUpErr) { setErr(signUpErr.message); setBusy(false); return; }
+      const user = signUpData.user;
+      if (!user) { setErr('Sign-up did not return a user. Check your email confirmation settings.'); setBusy(false); return; }
+      if (!signUpData.session) { setErr('Account created. Check your email for a confirmation link, then sign in.'); setBusy(false); return; }
+      userId = user.id;
+      setCreatedUserId(userId);
     }
 
-    const user = signUpData.user;
-    if (!user) {
-      setErr('Sign-up did not return a user. Check your email confirmation settings.');
-      setBusy(false);
-      return;
-    }
-
-    // 2) Insert profile row. The session may not be live yet if email-confirm
-    // is enabled in Supabase; in that case we'll prompt the user to confirm
-    // and set up their profile on first sign-in.
-    const sessionNow = signUpData.session;
-    if (!sessionNow) {
-      setErr('Account created. Check your email for a confirmation link, then sign in.');
-      setBusy(false);
-      return;
-    }
-
-    // Profile is saved without a handle — the next step (DisplayNameScreen)
-    // will prompt for one. Keeps the two screens doing one job each.
-    const { error: profileErr } = await sbx.from('profiles').insert({
-      id: user.id,
-      first_name: firstName.trim(),
-      last_name:  lastName.trim(),
-      gender: gender || null,
-      dob:    dob    || null,
-    });
+    const { error: profileErr } = await sbx.from('profiles').upsert({
+      id: userId, first_name: firstName.trim(), last_name: lastName.trim(),
+      gender: gender || null, dob: dob || null, handle: '@' + cleanHandle,
+    }, { onConflict: 'id' });
     if (profileErr) {
-      setErr('Account created but profile save failed: ' + profileErr.message);
+      if (/duplicate|unique/i.test(profileErr.message)) {
+        // Handle was taken in the moment between the check and the insert.
+        setHandleStatus('taken');
+        setStep(steps.length - 1);
+        setErr('That display name was just taken — pick another.');
+      } else {
+        setErr('Account created but profile save failed: ' + profileErr.message);
+      }
       setBusy(false);
       return;
     }
-    // Tell Root to re-fetch the profile so the AuthGate routes us to the
-    // display-name step immediately (avoids a race where useProfile queried
-    // before this insert landed and cached a null result).
+    // Profile now has a handle, so the auth gate routes straight into the app.
     if (window.reloadProfile) await window.reloadProfile();
     setBusy(false);
   }
 
   return (
-    <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
-      <BackButton onClick={onBack}/>
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '0 24px' }}>
+      <BackButton onClick={back}/>
 
-      <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--paper)">Create your account</Eyebrow>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
-          Let's get you<br/>rated.
+      {/* Centered content — lifts up by half the keyboard height when focused */}
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
+      }}>
+        <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
+          {/* Progress */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 24 }}>
+            {steps.map((s, i) => (
+              <div key={s.key} style={{
+                width: i === step ? 22 : 7, height: 7, borderRadius: 99,
+                background: i <= step ? 'var(--paper)' : 'rgba(234,226,206,0.28)',
+                transition: 'width 0.35s ease, background 0.35s ease',
+              }}/>
+            ))}
+          </div>
+
+          {/* Sliding questions */}
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{
+              display: 'flex', width: `${steps.length * 100}%`,
+              transform: `translateX(-${step * (100 / steps.length)}%)`,
+              transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}>
+              {steps.map((s, i) => (
+                <div key={s.key} aria-hidden={i !== step} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 4px', opacity: i === step ? 1 : 0, transition: 'opacity 0.3s ease', pointerEvents: i === step ? 'auto' : 'none' }}>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>{s.eyebrow}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1.08, letterSpacing: '-0.02em' }}>{s.title}</div>
+                  <div style={{ marginTop: 22 }}>
+                    {s.field}
+                    {s.hint && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>{s.hint}</div>}
+                  </div>
+                  {/* Next / submit, right under the field (hidden when email is taken — the Sign in button takes over) */}
+                  {!(s.key === 'email' && emailStatus === 'taken') && (
+                    <Button variant="paper" size="lg" full disabled={!s.valid || busy} onClick={next} style={{ marginTop: 22 }}>
+                      {i < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
+                      {!busy && <Icon.ArrowRight size={16}/>}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {err && <div style={{ marginTop: 16, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 22 }}>
-        <Row>
-          <Field label="First name" required>
-            <Input value={firstName} onChange={setFirstName} autoComplete="given-name"/>
-          </Field>
-          <Field label="Last name" required>
-            <Input value={lastName} onChange={setLastName} autoComplete="family-name"/>
-          </Field>
-        </Row>
+// ─── Keyboard inset (visual viewport) ────────────────────────
+function useKeyboardInset() {
+  const [inset, setInset] = React.useState(0);
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const onResize = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    onResize();
+    return () => { vv.removeEventListener('resize', onResize); vv.removeEventListener('scroll', onResize); };
+  }, []);
+  return inset;
+}
 
-        <Row>
-          <Field label="Gender">
-            <Select value={gender} onChange={setGender} options={[
-              ['',   '—'],
-              ['male',   'Male'],
-              ['female', 'Female'],
-              ['other',  'Other'],
-              ['skip',   'Prefer not to say'],
-            ]}/>
-          </Field>
-          <Field label="Date of birth">
-            <Input value={dob} onChange={setDob} type="date"/>
-          </Field>
-        </Row>
+// ─── Choice buttons (gender) ─────────────────────────────────
+function ChoiceButtons({ value, onChange, options }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {options.map(([v, l]) => {
+        const on = value === v;
+        return (
+          <button key={v} type="button" onClick={() => onChange(v)} style={{
+            padding: '15px 16px', borderRadius: 14, fontSize: 16, fontWeight: 600, fontFamily: 'var(--font-body)',
+            cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s',
+            background: on ? 'var(--paper)' : 'rgba(255,255,255,0.08)',
+            border: `1px solid ${on ? 'var(--paper)' : 'rgba(234,226,206,0.2)'}`,
+            color: on ? 'var(--forest)' : 'var(--paper)',
+          }}>{l}</button>
+        );
+      })}
+    </div>
+  );
+}
 
-        <Field label="Email" required>
-          <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off"/>
-        </Field>
-        <Field label="Password" required hint="At least 6 characters">
-          <Input value={password} onChange={setPassword} type="password" autoComplete="new-password"/>
-        </Field>
-      </div>
+// ─── Birthday wheel picker ───────────────────────────────────
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function WheelPicker({ value, onChange }) {
+  const thisYear = new Date().getFullYear();
+  const years = React.useMemo(() => { const a = []; for (let y = thisYear - 13; y >= 1925; y--) a.push(y); return a; }, [thisYear]);
+  const days = React.useMemo(() => Array.from({ length: 31 }, (_, i) => i + 1), []);
 
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
+  const parsed = (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) ? value.split('-').map(Number) : null;
+  const [y, setY] = React.useState(parsed ? parsed[0] : thisYear - 25);
+  const [m, setM] = React.useState(parsed ? parsed[1] : 1); // 1-12
+  const [d, setD] = React.useState(parsed ? parsed[2] : 1); // 1-31
 
-      <div style={{ flex: 1 }}/>
+  React.useEffect(() => {
+    onChange(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [y, m, d]);
 
-      <Button variant="paper" size="lg" full disabled={!valid || busy} onClick={submit} style={{ marginTop: 18 }}>
-        {busy ? 'Creating…' : 'Create account'}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
+  return (
+    <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', gap: 6 }}>
+      {/* Selected band */}
+      <div style={{ position: 'absolute', top: 40, left: 0, right: 0, height: 40, borderTop: '1px solid rgba(234,226,206,0.28)', borderBottom: '1px solid rgba(234,226,206,0.28)', pointerEvents: 'none' }}/>
+      <WheelColumn width={64} items={days} value={d} onChange={setD} fmt={String}/>
+      <WheelColumn width={132} items={MONTHS.map((_, i) => i + 1)} value={m} onChange={setM} fmt={(mm) => MONTHS[mm - 1]}/>
+      <WheelColumn width={84} items={years} value={y} onChange={setY} fmt={String}/>
+    </div>
+  );
+}
 
-      <button type="button" onClick={onSignInInstead} style={{
-        marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
-        letterSpacing: '0.06em',
-      }}>
-        Already have an account? <u>Sign in</u>
-      </button>
-    </form>
+const WHEEL_ITEM = 40;
+function WheelColumn({ items, value, onChange, fmt, width }) {
+  const ref = React.useRef(null);
+  const idx = Math.max(0, items.indexOf(value));
+
+  // Position to the current value on mount (no smooth — instant).
+  React.useEffect(() => {
+    if (ref.current) ref.current.scrollTop = idx * WHEEL_ITEM;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onScroll() {
+    const i = Math.max(0, Math.min(items.length - 1, Math.round(ref.current.scrollTop / WHEEL_ITEM)));
+    if (items[i] !== value) onChange(items[i]);
+  }
+
+  return (
+    <div ref={ref} onScroll={onScroll} className="scroll-hide" style={{
+      height: WHEEL_ITEM * 3, width, overflowY: 'scroll', scrollSnapType: 'y mandatory',
+      WebkitMaskImage: 'linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent)',
+      maskImage: 'linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent)',
+    }}>
+      <div style={{ height: WHEEL_ITEM }}/>
+      {items.map((it) => {
+        const on = it === value;
+        return (
+          <div key={it} style={{
+            height: WHEEL_ITEM, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            scrollSnapAlign: 'center', fontFamily: 'var(--font-body)', fontSize: 18,
+            color: on ? 'var(--paper)' : 'rgba(234,226,206,0.45)', fontWeight: on ? 700 : 500,
+            transition: 'color 0.15s',
+          }}>{fmt(it)}</div>
+        );
+      })}
+      <div style={{ height: WHEEL_ITEM }}/>
+    </div>
   );
 }
 
@@ -235,79 +427,71 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
     // AuthGate picks up the new session automatically.
   }
 
+  const inset = useKeyboardInset();
   return (
-    <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
+    <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '0 24px' }}>
       <BackButton onClick={onBack}/>
 
-      <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--paper)">Welcome back</Eyebrow>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
-          Sign in.
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
+      }}>
+        <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
+          <Eyebrow color="var(--paper)">Welcome back</Eyebrow>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
+            Sign in.
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28, textAlign: 'left' }}>
+            <Field label="Email or username">
+              <Input value={identity} onChange={setIdentity} type="text" autoComplete="username" autoCapitalize="off" placeholder="you@example.com or @handle"/>
+            </Field>
+            <Field label="Password">
+              <Input value={password} onChange={setPassword} type="password" autoComplete="current-password"/>
+            </Field>
+          </div>
+
+          {/* Remember me */}
+          <button type="button" onClick={() => setRemember(r => !r)} style={{
+            marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center',
+            color: 'var(--paper)', padding: 0, width: '100%',
+          }}>
+            <span style={{
+              width: 20, height: 20, borderRadius: 6,
+              background: remember ? 'var(--paper)' : 'transparent',
+              border: '1.5px solid var(--paper)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              {remember && (
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <path d="M2 7.5l3.2 3L12 3.5" stroke="var(--forest)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </span>
+            <span style={{ fontSize: 13, fontFamily: 'var(--font-body)', opacity: 0.9 }}>Remember me</span>
+          </button>
+
+          {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
+
+          <Button variant="paper" size="lg" full disabled={!identity || !password || busy} onClick={submit} style={{ marginTop: 22 }}>
+            {busy ? 'Signing in…' : 'Sign in'}
+            {!busy && <Icon.ArrowRight size={16}/>}
+          </Button>
+
+          <button type="button" onClick={onForgot} style={{
+            marginTop: 16, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+            color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+          }}>
+            Forgot your password?
+          </button>
+          <button type="button" onClick={onSignUpInstead} style={{
+            marginTop: 8, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+            color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+          }}>
+            New here? <u>Create an account</u>
+          </button>
         </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
-        <Field label="Email or username">
-          <Input value={identity} onChange={setIdentity} type="text" autoComplete="username" autoCapitalize="off" placeholder="you@example.com or @handle"/>
-        </Field>
-        <Field label="Password">
-          <Input value={password} onChange={setPassword} type="password" autoComplete="current-password"/>
-        </Field>
-      </div>
-
-      {/* Remember me */}
-      <button
-        type="button"
-        onClick={() => setRemember(r => !r)}
-        style={{
-          marginTop: 14,
-          display: 'flex', alignItems: 'center', gap: 10,
-          color: 'var(--paper)', textAlign: 'left',
-          padding: 0,
-        }}
-      >
-        <span style={{
-          width: 20, height: 20, borderRadius: 6,
-          background: remember ? 'var(--paper)' : 'transparent',
-          border: '1.5px solid var(--paper)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          {remember && (
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7.5l3.2 3L12 3.5" stroke="var(--forest)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          )}
-        </span>
-        <span style={{ fontSize: 13, fontFamily: 'var(--font-body)', opacity: 0.9 }}>
-          Remember me
-        </span>
-      </button>
-
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
-
-      <div style={{ flex: 1 }}/>
-
-      <Button variant="paper" size="lg" full disabled={!identity || !password || busy} onClick={submit} style={{ marginTop: 18 }}>
-        {busy ? 'Signing in…' : 'Sign in'}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
-
-      <button type="button" onClick={onForgot} style={{
-        marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
-        letterSpacing: '0.06em',
-      }}>
-        Forgot your password?
-      </button>
-
-      <button type="button" onClick={onSignUpInstead} style={{
-        marginTop: 8, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
-        letterSpacing: '0.06em',
-      }}>
-        New here? <u>Create an account</u>
-      </button>
     </form>
   );
 }
@@ -584,7 +768,7 @@ function Select({ value, onChange, options }) {
 function BackButton({ onClick }) {
   return (
     <button type="button" onClick={onClick} style={{
-      position: 'absolute', top: 20, left: 20,
+      position: 'absolute', top: 20, left: 20, zIndex: 20,
       width: 38, height: 38, borderRadius: 999,
       background: 'rgba(255,255,255,0.08)',
       border: '1px solid rgba(234,226,206,0.2)',
