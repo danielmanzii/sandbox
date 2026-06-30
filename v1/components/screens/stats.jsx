@@ -17,7 +17,7 @@ function StatsScreen({ go, tier }) {
       </div>
 
       <div style={{ display: 'flex', gap: 4, margin: '0 16px 0', background: 'rgba(14,28,19,0.05)', borderRadius: 14, padding: 4 }}>
-        {[['you', 'You'], ['h2h', 'Head-to-Head'], ['badges', 'Badges']].map(([k, l]) => (
+        {[['you', 'You'], ['h2h', 'Head-to-Head']].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: '10px 12px', borderRadius: 11,
             background: tab === k ? 'var(--paper)' : 'transparent',
@@ -30,8 +30,7 @@ function StatsScreen({ go, tier }) {
 
       {!isMember ? <StatsLocked go={go}/>
         : tab === 'you' ? <StatsYou go={go}/>
-        : tab === 'h2h' ? <StatsH2H/>
-        : <StatsBadges/>}
+        : <StatsH2H/>}
     </div>
   );
 }
@@ -299,86 +298,41 @@ function StatsH2H() {
 
   return (
     <div style={{ padding: '16px' }}>
+      <SectionHeader eyebrow="Rivalries" title="Head-to-head"/>
       {rows.length === 0 ? (
-        <div className="card" style={{ padding: '28px 20px', textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1, marginBottom: 6 }}>No rivalries yet.</div>
-          <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.6 }}>Head-to-head records build as you play.</div>
-        </div>
+        <EmptyNote title="No rivalries yet." body="Head-to-head records build as you play opponents more than once."/>
       ) : (
-        <>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Your records</div>
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {rows.map((h, i) => (
-              <div key={h.opp} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < rows.length - 1 ? '1px solid rgba(14,28,19,0.05)' : 'none' }}>
-                <AvatarBy handle={h.opp} size={36}/>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{formatHandle(h.opp)}</div>
-                  <div style={{ fontSize: 10, opacity: 0.55, marginTop: 3 }}>{h.w + h.l + h.h} matches</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-display)' }}>
-                  <span style={{ color: 'var(--forest)', fontSize: 18 }}>{h.w}</span>
-                  <span style={{ color: 'rgba(14,28,19,0.3)', fontSize: 12 }}>–</span>
-                  <span style={{ color: 'var(--clay-deep)', fontSize: 18 }}>{h.l}</span>
-                  <span style={{ color: 'rgba(14,28,19,0.3)', fontSize: 12 }}>–</span>
-                  <span style={{ color: '#8A6A4A', fontSize: 16 }}>{h.h}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {rows.map(h => <RivalCard key={h.opp} h={h}/>)}
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Achievements, computed from real stats ───────────────────────────
-function StatsBadges() {
-  const u = MOCK.USER;
-  const total = u.matchesTotal || 0;
-  const badges = [
-    { id: 'first',  name: 'First Round',  sub: 'Play your first match',   icon: 'flag',   earned: total >= 1 },
-    { id: 'win',    name: 'First Win',    sub: 'Win a match',             icon: 'trophy', earned: (u.matchesW || 0) >= 1 },
-    { id: 'rated',  name: 'Rated',        sub: 'Complete 3 matches',      icon: 'ball',   earned: (u.sbx2v2N || 0) >= 3 },
-    { id: 'fire',   name: 'On Fire',      sub: '3-match unbeaten streak', icon: 'fire',   earned: (u.streak || 0) >= 3 },
-    { id: 'reg',    name: 'Regular',      sub: 'Play 10 matches',         icon: 'bolt',   earned: total >= 10 },
-    { id: 'sharp',  name: 'Sharp',        sub: 'Reach 5.000 SBX',         icon: 'trophy', earned: (u.sbx2v2 || 0) >= 5 },
-  ];
-  const earned = badges.filter(b => b.earned).length;
-
+// One rival: avatar + handle, W–L–H + win rate, and a W/H/L proportion bar
+// (same visual language as the You section's record hero).
+function RivalCard({ h }) {
+  const total = h.w + h.l + h.h;
+  const wr = total > 0 ? Math.round((h.w / total) * 100) : 0;
   return (
-    <div style={{ padding: '16px' }}>
-      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-        Earned · {earned} of {badges.length}
+    <div className="card" style={{ padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <AvatarBy handle={h.opp} size={40}/>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatHandle(h.opp)}</div>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.55, marginTop: 5, letterSpacing: '0.06em' }}>{total} {total === 1 ? 'match' : 'matches'}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 0.9, color: 'var(--forest)' }}>{h.w}–{h.l}–{h.h}</div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6, marginTop: 3 }}>{wr}% win</div>
+        </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-        {badges.map(b => <BadgeCard key={b.id} b={b}/>)}
+      <div style={{ display: 'flex', gap: 3, marginTop: 12, height: 8, borderRadius: 999, overflow: 'hidden', background: 'rgba(14,28,19,0.06)' }}>
+        {h.w > 0 && <div style={{ flex: h.w, background: 'var(--forest)' }}/>}
+        {h.h > 0 && <div style={{ flex: h.h, background: 'rgba(14,28,19,0.2)' }}/>}
+        {h.l > 0 && <div style={{ flex: h.l, background: 'var(--loss)' }}/>}
       </div>
-    </div>
-  );
-}
-
-function BadgeCard({ b }) {
-  const ic = {
-    flag: <Icon.Flag size={22}/>, fire: <Icon.Fire size={22}/>, bolt: <Icon.Bolt size={22}/>,
-    trophy: <Icon.Trophy size={22}/>, ball: <Icon.Ball size={22}/>,
-  }[b.icon];
-  const locked = !b.earned;
-  return (
-    <div style={{
-      background: locked ? 'transparent' : 'var(--paper)',
-      border: locked ? '1.5px dashed rgba(14,28,19,0.15)' : 'var(--hairline)',
-      borderRadius: 18, padding: '16px 14px', textAlign: 'center',
-      opacity: locked ? 0.55 : 1, boxShadow: locked ? 'none' : 'var(--shadow-sm)',
-    }}>
-      <div style={{
-        width: 48, height: 48, margin: '0 auto', borderRadius: '50%',
-        background: locked ? 'transparent' : 'var(--forest)',
-        color: locked ? 'var(--forest)' : 'var(--cream)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        border: locked ? '1.5px dashed currentColor' : 'none',
-      }}>{locked ? <Icon.Lock size={18}/> : ic}</div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, marginTop: 10, lineHeight: 1, color: 'var(--forest)' }}>{b.name}</div>
-      <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, lineHeight: 1.3 }}>{b.sub}</div>
     </div>
   );
 }
