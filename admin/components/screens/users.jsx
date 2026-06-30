@@ -1,4 +1,4 @@
-/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, useManagerIds, addCourseManager, removeCourseManager, createManagerAccount */
+/* global React, Row, Field, Spinner, useUsers, setUserTier, setUserAdmin, useGuestPasses, grantGuestPass, revokeGuestPass, useCourses, useManagedCourses, useManagerIds, addCourseManager, removeCourseManager, createManagerAccount, deleteUserAccount */
 // Users module: search players, set membership tier, toggle admin, manage
 // guest passes, and assign course-partner (manager) access.
 // Needs v1/sql/membership.sql + v1/sql/course-managers.sql applied.
@@ -232,6 +232,45 @@ function UserDetail({ user, adminId, onBack }) {
           </div>
         )}
       </div>
+
+      {/* Danger zone */}
+      {!isSelf && <DangerZone user={user} onDeleted={onBack}/>}
+    </div>
+  );
+}
+
+// Permanently delete a user — two-step confirm so it can't happen on one tap.
+function DangerZone({ user, onDeleted }) {
+  const [confirming, setConfirming] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  async function doDelete() {
+    setBusy(true); setErr('');
+    try { await deleteUserAccount(user.id); onDeleted(); }
+    catch (e) { setErr(e.message || 'Could not delete.'); setBusy(false); }
+  }
+
+  return (
+    <div className="card" style={{ padding: 22, marginTop: 16, border: '1px solid rgba(155,58,46,0.25)' }}>
+      <div className="eyebrow" style={{ color: 'var(--loss)', marginBottom: 6 }}>Danger zone</div>
+      <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 14 }}>
+        Permanently delete this account and profile. This can’t be undone.
+      </div>
+
+      {err && <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{err}</div>}
+
+      {!confirming ? (
+        <button className="btn btn-danger" onClick={() => { setErr(''); setConfirming(true); }}>Delete user</button>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Really delete <span style={{ color: 'var(--loss)' }}>{userName(user)}</span>?</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn btn-danger" onClick={doDelete} disabled={busy}>{busy ? 'Deleting…' : 'Yes, permanently delete'}</button>
+            <button className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
