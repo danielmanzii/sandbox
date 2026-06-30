@@ -85,15 +85,20 @@ function SignUpView({ onBack, onSignInInstead }) {
       field: <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off" placeholder="you@example.com" enterKeyHint="next"/> },
     { key: 'password', eyebrow: 'Sign-in details', title: 'Create a password', hint: 'At least 6 characters', valid: password.length >= 6,
       field: <Input value={password} onChange={setPassword} type="password" autoComplete="new-password" placeholder="••••••••" enterKeyHint="next"/> },
-    { key: 'gender', eyebrow: 'About you (optional)', title: 'How do you identify?', valid: true,
-      field: <Select value={gender} onChange={setGender} options={[
-        ['', 'Prefer not to say'], ['male', 'Male'], ['female', 'Female'], ['other', 'Other'],
+    { key: 'gender', eyebrow: 'About you (optional)', title: 'What is your gender?', valid: true,
+      field: <ChoiceButtons value={gender} onChange={setGender} options={[
+        ['male', 'Male'], ['female', 'Female'], ['skip', 'Prefer not to say'],
       ]}/> },
     { key: 'dob', eyebrow: 'About you (optional)', title: "When's your birthday?", valid: true,
-      field: <Input value={dob} onChange={setDob} type="date"/> },
+      field: <WheelPicker value={dob} onChange={setDob}/> },
   ];
   const last = steps.length - 1;
   const cur = steps[step];
+
+  // Keyboard-aware: when the on-screen keyboard opens the visual viewport shrinks.
+  // We lift the centered content by half that amount so it re-centers in the
+  // space that's left; when the keyboard hides, it eases back to centre.
+  const inset = useKeyboardInset();
 
   // Drop focus when moving between steps so the keyboard tucks away and you see
   // the screen first — you tap the field to bring it back.
@@ -128,56 +133,164 @@ function SignUpView({ onBack, onSignInInstead }) {
   }
 
   return (
-    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '0 24px' }}>
       <BackButton onClick={back}/>
 
-      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Eyebrow color="var(--paper)">{cur.eyebrow}</Eyebrow>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {steps.map((s, i) => (
-            <div key={s.key} style={{
-              width: i === step ? 22 : 7, height: 7, borderRadius: 99,
-              background: i <= step ? 'var(--paper)' : 'rgba(234,226,206,0.28)',
-              transition: 'width 0.35s ease, background 0.35s ease',
-            }}/>
-          ))}
-        </div>
-      </div>
-
-      {/* Sliding questions */}
-      <div style={{ overflow: 'hidden', marginTop: 26 }}>
-        <div style={{
-          display: 'flex', width: `${steps.length * 100}%`,
-          transform: `translateX(-${step * (100 / steps.length)}%)`,
-          transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
-        }}>
-          {steps.map((s, i) => (
-            <div key={s.key} aria-hidden={i !== step} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 2px', minHeight: 150 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1.05, letterSpacing: '-0.02em' }}>{s.title}</div>
-              <div style={{ marginTop: 22, opacity: i === step ? 1 : 0, transition: 'opacity 0.3s ease' }}>
-                {s.field}
-                {s.hint && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>{s.hint}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
-
-      <div style={{ flex: 1 }}/>
-
-      <Button variant="paper" size="lg" full disabled={!cur.valid || busy} onClick={next} style={{ marginTop: 18 }}>
-        {step < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
-
-      <button type="button" onClick={onSignInInstead} style={{
-        marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+      {/* Centered content — lifts up by half the keyboard height when focused */}
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
       }}>
-        Already have an account? <u>Sign in</u>
-      </button>
+        <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
+          {/* Progress */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 24 }}>
+            {steps.map((s, i) => (
+              <div key={s.key} style={{
+                width: i === step ? 22 : 7, height: 7, borderRadius: 99,
+                background: i <= step ? 'var(--paper)' : 'rgba(234,226,206,0.28)',
+                transition: 'width 0.35s ease, background 0.35s ease',
+              }}/>
+            ))}
+          </div>
+
+          {/* Sliding questions */}
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{
+              display: 'flex', width: `${steps.length * 100}%`,
+              transform: `translateX(-${step * (100 / steps.length)}%)`,
+              transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}>
+              {steps.map((s, i) => (
+                <div key={s.key} aria-hidden={i !== step} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 4px' }}>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>{s.eyebrow}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1.08, letterSpacing: '-0.02em' }}>{s.title}</div>
+                  <div style={{ marginTop: 24, opacity: i === step ? 1 : 0, transition: 'opacity 0.3s ease', pointerEvents: i === step ? 'auto' : 'none' }}>
+                    {s.field}
+                    {s.hint && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>{s.hint}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom actions */}
+      <div style={{ paddingBottom: 24 }}>
+        {err && <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12, textAlign: 'center' }}>{err}</div>}
+        <Button variant="paper" size="lg" full disabled={!cur.valid || busy} onClick={next}>
+          {step < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
+          {!busy && <Icon.ArrowRight size={16}/>}
+        </Button>
+        <button type="button" onClick={onSignInInstead} style={{
+          marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+          color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+        }}>
+          Already have an account? <u>Sign in</u>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Keyboard inset (visual viewport) ────────────────────────
+function useKeyboardInset() {
+  const [inset, setInset] = React.useState(0);
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const onResize = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    onResize();
+    return () => { vv.removeEventListener('resize', onResize); vv.removeEventListener('scroll', onResize); };
+  }, []);
+  return inset;
+}
+
+// ─── Choice buttons (gender) ─────────────────────────────────
+function ChoiceButtons({ value, onChange, options }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {options.map(([v, l]) => {
+        const on = value === v;
+        return (
+          <button key={v} type="button" onClick={() => onChange(v)} style={{
+            padding: '15px 16px', borderRadius: 14, fontSize: 16, fontWeight: 600, fontFamily: 'var(--font-body)',
+            cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s',
+            background: on ? 'var(--paper)' : 'rgba(255,255,255,0.08)',
+            border: `1px solid ${on ? 'var(--paper)' : 'rgba(234,226,206,0.2)'}`,
+            color: on ? 'var(--forest)' : 'var(--paper)',
+          }}>{l}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Birthday wheel picker ───────────────────────────────────
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function WheelPicker({ value, onChange }) {
+  const thisYear = new Date().getFullYear();
+  const years = React.useMemo(() => { const a = []; for (let y = thisYear - 13; y >= 1925; y--) a.push(y); return a; }, [thisYear]);
+  const days = React.useMemo(() => Array.from({ length: 31 }, (_, i) => i + 1), []);
+
+  const parsed = (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) ? value.split('-').map(Number) : null;
+  const [y, setY] = React.useState(parsed ? parsed[0] : thisYear - 25);
+  const [m, setM] = React.useState(parsed ? parsed[1] : 1); // 1-12
+  const [d, setD] = React.useState(parsed ? parsed[2] : 1); // 1-31
+
+  React.useEffect(() => {
+    onChange(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [y, m, d]);
+
+  return (
+    <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', gap: 6 }}>
+      {/* Selected band */}
+      <div style={{ position: 'absolute', top: 40, left: 0, right: 0, height: 40, borderTop: '1px solid rgba(234,226,206,0.28)', borderBottom: '1px solid rgba(234,226,206,0.28)', pointerEvents: 'none' }}/>
+      <WheelColumn width={64} items={days} value={d} onChange={setD} fmt={String}/>
+      <WheelColumn width={132} items={MONTHS.map((_, i) => i + 1)} value={m} onChange={setM} fmt={(mm) => MONTHS[mm - 1]}/>
+      <WheelColumn width={84} items={years} value={y} onChange={setY} fmt={String}/>
+    </div>
+  );
+}
+
+const WHEEL_ITEM = 40;
+function WheelColumn({ items, value, onChange, fmt, width }) {
+  const ref = React.useRef(null);
+  const idx = Math.max(0, items.indexOf(value));
+
+  // Position to the current value on mount (no smooth — instant).
+  React.useEffect(() => {
+    if (ref.current) ref.current.scrollTop = idx * WHEEL_ITEM;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onScroll() {
+    const i = Math.max(0, Math.min(items.length - 1, Math.round(ref.current.scrollTop / WHEEL_ITEM)));
+    if (items[i] !== value) onChange(items[i]);
+  }
+
+  return (
+    <div ref={ref} onScroll={onScroll} className="scroll-hide" style={{
+      height: WHEEL_ITEM * 3, width, overflowY: 'scroll', scrollSnapType: 'y mandatory',
+      WebkitMaskImage: 'linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent)',
+      maskImage: 'linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent)',
+    }}>
+      <div style={{ height: WHEEL_ITEM }}/>
+      {items.map((it) => {
+        const on = it === value;
+        return (
+          <div key={it} style={{
+            height: WHEEL_ITEM, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            scrollSnapAlign: 'center', fontFamily: 'var(--font-body)', fontSize: 18,
+            color: on ? 'var(--paper)' : 'rgba(234,226,206,0.45)', fontWeight: on ? 700 : 500,
+            transition: 'color 0.15s',
+          }}>{fmt(it)}</div>
+        );
+      })}
+      <div style={{ height: WHEEL_ITEM }}/>
     </div>
   );
 }
