@@ -1,4 +1,4 @@
-/* global React, Button, Eyebrow, Wordmark, Ostrich, Icon, sbx */
+/* global React, Button, Eyebrow, Wordmark, Ostrich, Icon, sbx, signOut */
 // Welcome / Sign-up / Sign-in screens.
 // Shown when there's no active Supabase session (handled by AuthGate in index.html).
 
@@ -712,6 +712,13 @@ function ProfileSetupScreen({ session, onDone }) {
           {busy ? 'Saving…' : 'Continue'}
           {!busy && <Icon.ArrowRight size={16}/>}
         </Button>
+
+        <button type="button" onClick={signOut} style={{
+          marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+          color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+        }}>
+          Not you? <u>Sign out</u>
+        </button>
       </form>
     </div>
   );
@@ -921,6 +928,15 @@ function DisplayNameScreen({ profile, onDone, onCancel }) {
           {busy ? 'Saving…' : 'Continue'}
           {!busy && <Icon.ArrowRight size={16}/>}
         </Button>
+
+        {!onCancel && (
+          <button type="button" onClick={signOut} style={{
+            marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+            color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+          }}>
+            Not you? <u>Sign out</u>
+          </button>
+        )}
       </form>
     </div>
   );
