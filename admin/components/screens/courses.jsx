@@ -1,59 +1,60 @@
-/* global React, Row, Field, Spinner, useCourses, loadCourseHoles, saveCourse, deleteCourse */
-// Courses module: list every course; add/edit a course + its Sandbox-9
-// hole/tee data (par + yards per hole). Replaces hand-editing SQL.
+/* global React, Row, Field, Spinner, useCourses, loadCourseHoles, saveCourse, deleteCourse, useRcCourses, RcEditor, QuickScorecard */
+// SBX courses module: one list of every golf course. Each row opens either the
+// FULL COURSE data (real tees/yardage/rating/slope → rc_courses) or the SBX
+// COURSE data (Sandbox-9 pitch-and-putt yardages → courses). Merges what used
+// to be the separate Courses + Scorecards modules.
 
 function CoursesModule() {
-  const [courses, reload] = useCourses();
-  const [editing, setEditing] = React.useState(null); // null | 'new' | courseRow
+  const [sbxCourses, reloadSbx] = useCourses();
+  const [rcCourses, reloadRc] = useRcCourses();
+  const [view, setView] = React.useState(null);
+  const reloadAll = () => { reloadSbx(); reloadRc(); };
+  const close = () => setView(null);
+  const saved = () => { setView(null); reloadAll(); };
 
-  if (editing) {
-    return (
-      <CourseEditor
-        course={editing === 'new' ? null : editing}
-        onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); reload(); }}
-      />
-    );
+  if (view) {
+    if (view.kind === 'quick') return <QuickScorecard onClose={close} onSaved={saved}/>;
+    if (view.kind === 'sbx') return <CourseEditor course={view.course} prefill={view.prefill} onClose={close} onSaved={saved}/>;
+    if (view.kind === 'full') return <RcEditor course={view.course} prefill={view.prefill} onClose={close} onSaved={saved}/>;
   }
+
+  const loading = sbxCourses === null || rcCourses === null;
+  // Merge the two tables by course name into one list.
+  const byKey = {};
+  (sbxCourses || []).forEach(c => { const k = c.name.trim().toLowerCase(); byKey[k] = { ...(byKey[k] || { key: k }), name: c.name, city: c.city, state: c.state, sbx: c }; });
+  (rcCourses || []).forEach(c => { const k = c.name.trim().toLowerCase(); const e = byKey[k] || { key: k }; byKey[k] = { ...e, name: e.name || c.name, city: e.city || c.city, full: c }; });
+  const list = Object.values(byKey).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div style={{ maxWidth: 880, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-        <div style={{ fontSize: 13, opacity: 0.65 }}>
-          {courses === null ? 'Loading…' : `${courses.length} ${courses.length === 1 ? 'course' : 'courses'} in the network`}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, opacity: 0.65 }}>{loading ? 'Loading…' : `${list.length} ${list.length === 1 ? 'course' : 'courses'}`}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost" onClick={() => setView({ kind: 'sbx', course: null })}>+ Add SBX course</button>
+          <button className="btn btn-forest" onClick={() => setView({ kind: 'quick' })}>＋ Enter a scorecard</button>
         </div>
-        <button className="btn btn-forest" onClick={() => setEditing('new')}>+ Add course</button>
       </div>
 
-      {courses === null ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spin"/></div>
-      ) : courses.length === 0 ? (
+      {loading ? <Spinner/> : list.length === 0 ? (
         <div className="card" style={{ padding: 40, textAlign: 'center' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)' }}>No courses yet</div>
-          <div style={{ fontSize: 14, opacity: 0.7, marginTop: 8 }}>Add your first network course to get started.</div>
+          <div style={{ fontSize: 14, opacity: 0.7, marginTop: 8 }}>Add a course to get started.</div>
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
-          {courses.map((c, i) => (
-            <button key={c.id} onClick={() => setEditing(c)} style={{
-              display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left',
-              padding: '14px 18px', background: 'transparent', cursor: 'pointer',
-              border: 'none', borderBottom: i < courses.length - 1 ? 'var(--hairline)' : 'none',
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>{c.name}</div>
-                <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
-                  {c.short_name} · {c.city}, {c.state} · {c.holes} holes · par {c.par}
-                </div>
+          {list.map((e, i) => (
+            <div key={e.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < list.length - 1 ? 'var(--hairline)' : 'none', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>{e.name}</div>
+                <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>{[e.city, e.state].filter(Boolean).join(', ')}</div>
               </div>
-              <span style={{
-                fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
-                padding: '4px 10px', borderRadius: 999,
-                background: c.status === 'active' ? 'rgba(28,73,42,0.1)' : 'rgba(14,28,19,0.06)',
-                color: c.status === 'active' ? 'var(--forest)' : 'var(--ink-soft)',
-              }}>{c.status}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--forest)', fontFamily: 'var(--font-mono)' }}>${c.suggested_price}</span>
-            </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <CourseTab label="Full course" has={!!e.full}
+                  onClick={() => setView({ kind: 'full', course: e.full || null, prefill: e.full ? null : { name: e.name, city: e.city, state: e.state } })}/>
+                <CourseTab label="SBX course" has={!!e.sbx}
+                  onClick={() => setView({ kind: 'sbx', course: e.sbx || null, prefill: e.sbx ? null : { name: e.name, short_name: e.name, city: e.city, state: e.state } })}/>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -61,18 +62,30 @@ function CoursesModule() {
   );
 }
 
+// A per-course entry tab. Filled (forest) when that data exists, outlined "+" when it doesn't.
+function CourseTab({ label, has, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '8px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+      border: has ? '1px solid var(--forest)' : '1px dashed rgba(14,28,19,0.3)',
+      background: has ? 'var(--forest)' : 'transparent', color: has ? 'var(--cream)' : 'var(--ink-soft)',
+    }}>{has ? label : `+ ${label}`}</button>
+  );
+}
+
 function blankHoles() {
   return Array.from({ length: 9 }, (_, i) => ({ hole_number: i + 1, par: 3, sandbox_yards: '' }));
 }
 
-function CourseEditor({ course, onClose, onSaved }) {
+function CourseEditor({ course, prefill, onClose, onSaved }) {
   const isNew = !course;
+  const p = prefill || {};
   const [form, setForm] = React.useState(() => ({
     id:               course ? course.id : undefined,
-    name:             course ? course.name : '',
-    short_name:       course ? course.short_name : '',
-    city:             course ? course.city : '',
-    state:            course ? (course.state || 'FL') : 'FL',
+    name:             course ? course.name : (p.name || ''),
+    short_name:       course ? course.short_name : (p.short_name || ''),
+    city:             course ? course.city : (p.city || ''),
+    state:            course ? (course.state || 'FL') : (p.state || 'FL'),
     address:          course ? (course.address || '') : '',
     phone:            course ? (course.phone || '') : '',
     description:      course ? (course.description || '') : '',

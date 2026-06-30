@@ -6,6 +6,18 @@
 // selectable in the app. Admin RLS already allows writes (v1/sql/rc-courses.sql).
 
 function numOrNull(v) { return (v === '' || v == null) ? null : Number(v); }
+
+// Tee colour straight from the tee's name — no hex picker needed.
+const TEE_COLORS = {
+  black: '#111111', championship: '#111111', back: '#111111',
+  blue: '#2f6fb3', white: '#9aa0a6', gold: '#caa53d', yellow: '#e1c340',
+  red: '#c0392b', green: '#2e7d32', forest: '#1c492a', silver: '#b8bcc2',
+  orange: '#cc7a2b', purple: '#6b4ea0', pink: '#d46a9f', teal: '#2a9d8f',
+};
+function teeColor(name) {
+  const k = (name || '').trim().toLowerCase();
+  return TEE_COLORS[k] || '#9aa0a6';
+}
 function rcErr(error) {
   const msg = (error && error.message) || 'Something went wrong.';
   if (error && error.code === '23505') return new Error('That name already exists for this course.');
@@ -63,7 +75,7 @@ async function saveRcTee(t) {
   const payload = {
     course_id: t.course_id,
     name:   (t.name || '').trim(),
-    color:  t.color ? t.color.trim() : null,
+    color:  teeColor(t.name),
     par:    numOrNull(t.par),
     yards:  numOrNull(t.yards),
     rating: numOrNull(t.rating),
@@ -119,7 +131,7 @@ async function saveFullScorecard({ course, tees, par, hcp }) {
     const { data, error } = await sbx.from('rc_tees').upsert({
       course_id: courseId,
       name: t.name.trim(),
-      color: t.color ? t.color.trim() : null,
+      color: teeColor(t.name),
       par: parTotal,
       yards: total,
       rating: numOrNull(t.rating),
@@ -146,5 +158,5 @@ async function saveFullScorecard({ course, tees, par, hcp }) {
 Object.assign(window, {
   useRcCourses, saveRcCourse, deleteRcCourse,
   useRcTees, saveRcTee, deleteRcTee,
-  loadRcHoles, saveRcHoles, saveFullScorecard,
+  loadRcHoles, saveRcHoles, saveFullScorecard, teeColor,
 });
