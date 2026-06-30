@@ -284,12 +284,12 @@ function TeeTimesPanel({ course }) {
       {/* Date strip */}
       <DateStrip value={dateStr} onChange={d => { setDateStr(d); setExcluded(new Set()); setMsg(''); }}/>
 
-      {/* Controls: interval slider · price slider (+ cart above it) · revenue */}
-      <div className="card" style={{ padding: 22, marginTop: 16, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'stretch' }}>
+      {/* Controls: interval slider · (revenue over price slider) · cart */}
+      <div className="card" style={{ padding: 22, marginTop: 16, display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* Interval slider */}
-        <div style={{ flex: '2 1 260px', minWidth: 240 }}>
+        <div style={{ flex: '1 1 230px', minWidth: 220 }}>
           <div style={sliderHeading}>tee time interval?</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 6px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 8px' }}>
             <span style={sliderBig}>{intervalMin}</span>
             <span style={{ fontSize: 14, opacity: 0.6 }}>minutes apart</span>
           </div>
@@ -301,22 +301,41 @@ function TeeTimesPanel({ course }) {
           </div>
         </div>
 
-        {/* Price slider, with the walk/cart toggle above it on the right */}
-        <div style={{ flex: '2 1 260px', minWidth: 240 }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
-            {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
-              const on = includesCart === val;
-              return (
-                <button key={lbl} onClick={() => setIncludesCart(val)} style={{
-                  padding: '8px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                  border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
-                  background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
-                }}>{lbl}</button>
-              );
-            })}
+        {/* Expected-revenue chip sitting above the price slider */}
+        <div style={{ flex: '1 1 230px', minWidth: 220, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'relative', background: 'rgba(28,73,42,0.07)', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span className="eyebrow">expected daily revenue</span>
+              <button onClick={() => setShowFormula(v => !v)} title="How is this calculated?" style={{
+                border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15, lineHeight: 1, opacity: showFormula ? 1 : 0.55, padding: 0,
+              }}>👁</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ ...sliderBig, fontSize: 30 }}>${revenue.toLocaleString('en-US')}</span>
+              <span style={{ fontSize: 12, opacity: 0.65 }}>based on average booking rate</span>
+            </div>
+
+            {showFormula && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, zIndex: 6,
+                background: 'var(--paper)', border: 'var(--hairline)', borderRadius: 12, boxShadow: '0 12px 30px rgba(14,28,19,0.16)',
+                padding: '14px 16px', fontSize: 12, lineHeight: 1.5 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--forest)' }}>How this is calculated</div>
+                <div style={{ opacity: 0.8 }}>tee times × 4 players × price × avg booking rate</div>
+                <div style={{ fontFamily: 'var(--font-mono)', marginTop: 6, opacity: 0.8 }}>
+                  {toOpen.length} × 4 × ${Number(price) || 0}{rate != null ? ` × ${Math.round(rate * 100)}%` : ''} = ${revenue.toLocaleString('en-US')}
+                </div>
+                <div style={{ opacity: 0.55, marginTop: 6 }}>
+                  {rate != null
+                    ? `Avg booking rate is ${Math.round(rate * 100)}% from ${course.short_name}'s last 90 days (${fill.booked}/${fill.seats} seats).`
+                    : `No booking history yet — showing full potential ($${full.toLocaleString('en-US')}). The booking rate kicks in once rounds get booked.`}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Price slider */}
           <div style={sliderHeading}>price per golfer?</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '10px 0 6px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '10px 0 8px' }}>
             <span style={sliderBig}>${price}</span>
             <span style={{ fontSize: 14, opacity: 0.6 }}>per golfer</span>
           </div>
@@ -328,31 +347,18 @@ function TeeTimesPanel({ course }) {
           </div>
         </div>
 
-        {/* Expected daily revenue */}
-        <div style={{ flex: '1 1 200px', minWidth: 190, position: 'relative', background: 'rgba(28,73,42,0.06)', borderRadius: 14, padding: '16px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span className="eyebrow">expected daily revenue</span>
-            <button onClick={() => setShowFormula(v => !v)} title="How is this calculated?" style={{
-              border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16, lineHeight: 1, opacity: showFormula ? 1 : 0.6, padding: 0,
-            }}>👁</button>
-          </div>
-          <div style={{ ...sliderBig, fontSize: 34, lineHeight: 1.05, marginTop: 6 }}>${revenue.toLocaleString('en-US')}</div>
-          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>based on average booking rate</div>
-
-          {showFormula && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(14,28,19,0.1)', fontSize: 12, lineHeight: 1.5 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>How this is calculated</div>
-              <div style={{ opacity: 0.8 }}>tee times × 4 players × price × avg booking rate</div>
-              <div style={{ fontFamily: 'var(--font-mono)', marginTop: 6, opacity: 0.75 }}>
-                {toOpen.length} × 4 × ${Number(price) || 0}{rate != null ? ` × ${Math.round(rate * 100)}%` : ''} = ${revenue.toLocaleString('en-US')}
-              </div>
-              <div style={{ opacity: 0.55, marginTop: 6 }}>
-                {rate != null
-                  ? `Avg booking rate is ${Math.round(rate * 100)}% from ${course.short_name}'s last 90 days (${fill.booked}/${fill.seats} seats).`
-                  : `No booking history yet — showing full potential ($${full.toLocaleString('en-US')}). The booking rate kicks in once rounds get booked.`}
-              </div>
-            </div>
-          )}
+        {/* Walk-only / cart toggle — far right, stacked */}
+        <div style={{ flex: '0 0 150px', display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center' }}>
+          {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
+            const on = includesCart === val;
+            return (
+              <button key={lbl} onClick={() => setIncludesCart(val)} style={{
+                width: '100%', padding: '13px 10px', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.18)',
+                background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
+              }}>{lbl}</button>
+            );
+          })}
         </div>
       </div>
 
