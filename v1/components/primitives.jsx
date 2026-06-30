@@ -26,23 +26,19 @@ const Icon = {
   ),
   Tee: ({ size = 22, color = 'currentColor', filled = false }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* ball */}
-      <circle cx="12" cy="8" r="5.6" stroke={color} strokeWidth="2" fill={filled ? color : 'none'}/>
-      {/* dimples (shown on the outline state) */}
-      {!filled && (
-        <g fill={color}>
-          <circle cx="9.4" cy="8.3" r="0.7"/>
-          <circle cx="10.9" cy="8.1" r="0.7"/>
-          <circle cx="8.8" cy="9.7" r="0.7"/>
-          <circle cx="10.3" cy="9.7" r="0.7"/>
-          <circle cx="11.7" cy="9.8" r="0.7"/>
-          <circle cx="9.6" cy="11.1" r="0.7"/>
-        </g>
-      )}
-      {/* tee */}
-      <path d="M9 14.2c1.1 1.5 1.9 2.1 3 2.1s1.9-.6 3-2.1" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M12 16.3v4.4" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-      <path d="M9.9 20.7h4.2" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      {/* golf ball — always outlined with dimples so it reads as a ball */}
+      <circle cx="12" cy="7.5" r="5.4" stroke={color} strokeWidth="2" fill={filled ? 'rgba(0,0,0,0.06)' : 'none'}/>
+      <g fill={color}>
+        <circle cx="9.3" cy="7.8" r="0.75"/>
+        <circle cx="10.8" cy="7.5" r="0.75"/>
+        <circle cx="8.7" cy="9.2" r="0.75"/>
+        <circle cx="10.2" cy="9.2" r="0.75"/>
+        <circle cx="9.4" cy="10.6" r="0.75"/>
+      </g>
+      {/* tee — cup the ball sits in, stem, flared base */}
+      <path d="M8.6 13.4c1 1.4 2 2 3.4 2s2.4-.6 3.4-2" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 15.4v3.6" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      <path d="M9.6 20.4c1-1 3.8-1 4.8 0" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
   Chart: ({ size = 22, color = 'currentColor', filled = false }) => (
@@ -167,8 +163,8 @@ const Icon = {
   ),
   Search: ({ size = 16, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7"/>
-      <path d="m20 20-3.5-3.5"/>
+      <circle cx="10" cy="10" r="6"/>
+      <path d="m14.2 14.2 7.3 7.3"/>
     </svg>
   ),
 };
