@@ -68,6 +68,7 @@ function SignUpView({ onBack, onSignInInstead }) {
   const [dob, setDob]             = React.useState('');
   const [email, setEmail]         = React.useState('');
   const [password, setPassword]   = React.useState('');
+  const [emailStatus, setEmailStatus] = React.useState('idle'); // idle|checking|free|taken
   const [handle, setHandle]       = React.useState('');
   const [handleStatus, setHandleStatus] = React.useState('idle'); // idle|checking|available|taken|invalid
   const [createdUserId, setCreatedUserId] = React.useState(null); // set once the auth user exists
@@ -77,6 +78,21 @@ function SignUpView({ onBack, onSignInInstead }) {
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
   const cleanHandle = sanitizeHandle(handle);
+
+  // Live "email already in use" check (debounced). Falls back to "free" if the
+  // email_exists function isn't deployed, so the flow still works (the final
+  // sign-up will catch a dupe).
+  React.useEffect(() => {
+    if (!emailOk) { setEmailStatus('idle'); return undefined; }
+    setEmailStatus('checking');
+    const t = setTimeout(async () => {
+      try {
+        const { data, error } = await sbx.rpc('email_exists', { p_email: email.trim() });
+        setEmailStatus(error ? 'free' : (data ? 'taken' : 'free'));
+      } catch (_) { setEmailStatus('free'); }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [email, emailOk]);
 
   // Live @handle availability check (debounced) for the final step.
   React.useEffect(() => {
@@ -96,9 +112,18 @@ function SignUpView({ onBack, onSignInInstead }) {
       field: <Input value={firstName} onChange={setFirstName} autoComplete="given-name" placeholder="First name" enterKeyHint="next"/> },
     { key: 'lastName', eyebrow: 'Your name', title: 'And your last name?', valid: !!lastName.trim(),
       field: <Input value={lastName} onChange={setLastName} autoComplete="family-name" placeholder="Last name" enterKeyHint="next"/> },
-    { key: 'email', eyebrow: 'Sign-in details', title: "What's your email?", valid: emailOk,
-      hint: emailOk || !email ? '' : 'That doesn’t look like an email yet.',
-      field: <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off" placeholder="you@example.com" enterKeyHint="next"/> },
+    { key: 'email', eyebrow: 'Sign-in details', title: "What's your email?", valid: emailOk && emailStatus !== 'taken' && emailStatus !== 'checking',
+      field: (
+        <div>
+          <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off" placeholder="you@example.com" enterKeyHint="next"/>
+          <div style={{ marginTop: 8, fontSize: 12, fontFamily: 'var(--font-mono)', minHeight: 18, textAlign: 'left',
+            color: emailStatus === 'taken' ? 'var(--loss-soft)' : 'rgba(234,226,206,0.6)' }}>
+            {emailStatus === 'taken' ? 'That email is already in use — sign in instead.'
+              : emailStatus === 'checking' ? 'Checking…'
+              : (email && !emailOk ? 'That doesn’t look like an email yet.' : '')}
+          </div>
+        </div>
+      ) },
     { key: 'password', eyebrow: 'Sign-in details', title: 'Create a password', hint: 'At least 6 characters', valid: password.length >= 6,
       field: <Input value={password} onChange={setPassword} type="password" autoComplete="new-password" placeholder="••••••••" enterKeyHint="next"/> },
     { key: 'gender', eyebrow: 'About you (optional)', title: 'What is your gender?', valid: true,
