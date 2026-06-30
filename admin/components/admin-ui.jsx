@@ -18,4 +18,10 @@ function Spinner() {
   return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spin"/></div>;
 }
 
-Object.assign(window, { Row, Field, Spinner });
+// Full-colour Sandbox mascot as a rounded forest tile (the PNG already has a
+// forest background, so it reads as an intentional brand chip on any surface).
+function Mascot({ size = 96, style }) {
+  return <img src="assets/mascot-full-crisp.png" alt="" style={{ height: size, width: 'auto', borderRadius: 18, display: 'block', ...style }}/>;
+}
+
+Object.assign(window, { Row, Field, Spinner, Mascot });

@@ -1,4 +1,4 @@
-/* global React, Row, Field, Spinner, signOut,
+/* global React, Row, Field, Spinner, Mascot, signOut,
    useDaySlots, useDayFields, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
    useDailyYardages, saveDailyYardages, clearDailyYardages,
    useLiveOnCourse, useCourseFinancials */
@@ -74,7 +74,7 @@ function ManagerPortal({ session, profile, courses }) {
         display: 'flex', flexDirection: 'column', padding: '22px 14px',
       }}>
         <div style={{ padding: '0 10px 16px' }}>
-          <img src="assets/lockup-full-cream.svg" alt="Sandbox" style={{ height: 26, display: 'block' }}/>
+          <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 22, display: 'block' }}/>
           <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6, marginTop: 6 }}>Course Partner</div>
         </div>
 
@@ -147,8 +147,8 @@ function LiveBoard({ course }) {
 
       {groups === null ? <Spinner/> : groups.length === 0 ? (
         <div className="card" style={{ padding: 44, textAlign: 'center' }}>
-          <img src="assets/mascot-full-forest.svg" alt="" style={{ height: 96, display: 'block', margin: '0 auto', opacity: 0.9 }}/>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', marginTop: 12 }}>Nobody on the course</div>
+          <Mascot size={104} style={{ margin: '0 auto' }}/>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', marginTop: 14 }}>Nobody on the course</div>
           <div style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>Groups appear here the moment they check in and start scoring.</div>
         </div>
       ) : (
@@ -443,7 +443,10 @@ function TeeTimesPanel({ course }) {
       <WindowFilter selected={liveWindowKeys} onToggle={toggleLiveWindow} hint={`${slotsInWindow.length} shown`}/>
       <div style={{ marginTop: 12 }}>
         {slotsInWindow.length === 0 ? (
-          <div className="card" style={{ padding: 24, textAlign: 'center', opacity: 0.7, fontSize: 14 }}>No live tee times in this view.</div>
+          <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+            <Mascot size={76} style={{ margin: '0 auto 10px' }}/>
+            <div style={{ fontSize: 14, opacity: 0.7 }}>No live tee times in this view.</div>
+          </div>
         ) : (
           <div className="card" style={{ overflow: 'hidden' }}>
             {slotsInWindow.map((s, i) => (
@@ -654,7 +657,10 @@ function YardagesPanel({ course }) {
         {err && <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 14px', borderRadius: 10 }}>{err}</div>}
 
         {draft === null ? <Spinner/> : draft.length === 0 ? (
-          <div style={{ fontSize: 14, opacity: 0.7, padding: '8px 0' }}>This course has no hole layout yet. Ask an admin to add the Sandbox 9 in Courses.</div>
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <Mascot size={72} style={{ margin: '0 auto 10px' }}/>
+            <div style={{ fontSize: 14, opacity: 0.7 }}>This course has no hole layout yet. Ask an admin to add the Sandbox 9 in Courses.</div>
+          </div>
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
