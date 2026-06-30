@@ -118,10 +118,17 @@ function SignUpView({ onBack, onSignInInstead }) {
           <Input value={email} onChange={setEmail} type="email" autoComplete="email" autoCapitalize="off" placeholder="you@example.com" enterKeyHint="next"/>
           <div style={{ marginTop: 8, fontSize: 12, fontFamily: 'var(--font-mono)', minHeight: 18, textAlign: 'left',
             color: emailStatus === 'taken' ? 'var(--loss-soft)' : 'rgba(234,226,206,0.6)' }}>
-            {emailStatus === 'taken' ? 'That email is already in use — sign in instead.'
+            {emailStatus === 'taken' ? 'Email already in use, use another or sign in.'
               : emailStatus === 'checking' ? 'Checking…'
               : (email && !emailOk ? 'That doesn’t look like an email yet.' : '')}
           </div>
+          {emailStatus === 'taken' && (
+            <button type="button" onClick={onSignInInstead} style={{
+              marginTop: 14, width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: 'var(--paper)', color: 'var(--forest)', fontWeight: 800, fontSize: 15,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>Sign in <Icon.ArrowRight size={16}/></button>
+          )}
         </div>
       ) },
     { key: 'password', eyebrow: 'Sign-in details', title: 'Create a password', hint: 'At least 6 characters', valid: password.length >= 6,
@@ -247,11 +254,13 @@ function SignUpView({ onBack, onSignInInstead }) {
                     {s.field}
                     {s.hint && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>{s.hint}</div>}
                   </div>
-                  {/* Next / submit, right under the field */}
-                  <Button variant="paper" size="lg" full disabled={!s.valid || busy} onClick={next} style={{ marginTop: 22 }}>
-                    {i < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
-                    {!busy && <Icon.ArrowRight size={16}/>}
-                  </Button>
+                  {/* Next / submit, right under the field (hidden when email is taken — the Sign in button takes over) */}
+                  {!(s.key === 'email' && emailStatus === 'taken') && (
+                    <Button variant="paper" size="lg" full disabled={!s.valid || busy} onClick={next} style={{ marginTop: 22 }}>
+                      {i < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
+                      {!busy && <Icon.ArrowRight size={16}/>}
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -260,14 +269,6 @@ function SignUpView({ onBack, onSignInInstead }) {
           {err && <div style={{ marginTop: 16, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
         </div>
       </div>
-
-      {/* Sign-in link pinned at the bottom */}
-      <button type="button" onClick={onSignInInstead} style={{
-        paddingBottom: 22, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
-      }}>
-        Already have an account? <u>Sign in</u>
-      </button>
     </div>
   );
 }
