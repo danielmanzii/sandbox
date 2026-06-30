@@ -41,7 +41,7 @@ function ManagerGate({ session, profile }) {
 function Splash() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center', justifyContent: 'center' }}>
-      <Mascot size={76}/>
+      <Mascot size={114}/>
       <div className="spin"/>
     </div>
   );
@@ -65,8 +65,8 @@ function LoginScreen() {
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <form onSubmit={submit} className="card" style={{ width: '100%', maxWidth: 380, padding: 32 }}>
-        <Mascot size={88} style={{ margin: '0 auto 16px' }}/>
-        <img src="assets/wordmark-forest.svg" alt="Sandbox" style={{ height: 26, display: 'block' }}/>
+        <Mascot size={132} style={{ margin: '0 auto 16px' }}/>
+        <img src="assets/wordmark-forest.svg" alt="Sandbox" style={{ height: 39, display: 'block' }}/>
         <div className="eyebrow" style={{ marginTop: 8 }}>Admin & course portal</div>
 
         <div style={{ marginTop: 24 }}>
@@ -95,7 +95,7 @@ function NotAuthorised({ email }) {
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 32, textAlign: 'center' }}>
-        <Mascot size={100} style={{ margin: '0 auto' }}/>
+        <Mascot size={150} style={{ margin: '0 auto' }}/>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', marginTop: 14 }}>Not authorised</div>
         <div style={{ fontSize: 14, opacity: 0.7, marginTop: 8, lineHeight: 1.5 }}>
           <strong>{email}</strong> isn't an admin account. Ask Daniel or Rob to grant access.
@@ -120,7 +120,7 @@ function Dashboard({ profile }) {
         display: 'flex', flexDirection: 'column', padding: '22px 14px',
       }}>
         <div style={{ padding: '0 10px 18px' }}>
-          <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 22, display: 'block' }}/>
+          <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 33, display: 'block' }}/>
           <div className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.6, marginTop: 6 }}>Admin</div>
         </div>
 
