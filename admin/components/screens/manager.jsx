@@ -301,19 +301,45 @@ function TeeTimesPanel({ course }) {
           </div>
         </div>
 
-        {/* Expected-revenue chip sitting above the price slider */}
-        <div style={{ flex: '1 1 230px', minWidth: 220, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ position: 'relative', background: 'rgba(28,73,42,0.07)', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
+        {/* Price slider — same structure as interval so the bars line up */}
+        <div style={{ flex: '1 1 230px', minWidth: 220 }}>
+          <div style={sliderHeading}>price per golfer?</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '10px 0 8px' }}>
+            <span style={sliderBig}>${price}</span>
+            <span style={{ fontSize: 14, opacity: 0.6 }}>per golfer</span>
+          </div>
+          <input type="range" min="0" max="75" step="1" value={price}
+            onChange={e => setPrice(Number(e.target.value))}
+            style={{ width: '100%', accentColor: 'var(--forest)' }}/>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.5, fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+            <span>$0</span><span>$75</span>
+          </div>
+        </div>
+
+        {/* Right column: cart toggle + expected daily revenue */}
+        <div style={{ flex: '1 1 230px', minWidth: 220, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
+              const on = includesCart === val;
+              return (
+                <button key={lbl} onClick={() => setIncludesCart(val)} style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                  border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.18)',
+                  background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
+                }}>{lbl}</button>
+              );
+            })}
+          </div>
+
+          <div style={{ position: 'relative', flex: 1, background: 'rgba(28,73,42,0.07)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <span className="eyebrow">expected daily revenue</span>
               <button onClick={() => setShowFormula(v => !v)} title="How is this calculated?" style={{
                 border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15, lineHeight: 1, opacity: showFormula ? 1 : 0.55, padding: 0,
               }}>👁</button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ ...sliderBig, fontSize: 30 }}>${revenue.toLocaleString('en-US')}</span>
-              <span style={{ fontSize: 12, opacity: 0.65 }}>based on average booking rate</span>
-            </div>
+            <div style={{ ...sliderBig, fontSize: 32, lineHeight: 1.05, marginTop: 4 }}>${revenue.toLocaleString('en-US')}</div>
+            <div style={{ fontSize: 12, opacity: 0.65, marginTop: 3 }}>based on average booking rate</div>
 
             {showFormula && (
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, zIndex: 6,
@@ -332,33 +358,6 @@ function TeeTimesPanel({ course }) {
               </div>
             )}
           </div>
-
-          {/* Price slider */}
-          <div style={sliderHeading}>price per golfer?</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '10px 0 8px' }}>
-            <span style={sliderBig}>${price}</span>
-            <span style={{ fontSize: 14, opacity: 0.6 }}>per golfer</span>
-          </div>
-          <input type="range" min="0" max="75" step="1" value={price}
-            onChange={e => setPrice(Number(e.target.value))}
-            style={{ width: '100%', accentColor: 'var(--forest)' }}/>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.5, fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-            <span>$0</span><span>$75</span>
-          </div>
-        </div>
-
-        {/* Walk-only / cart toggle — far right, stacked */}
-        <div style={{ flex: '0 0 150px', display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center' }}>
-          {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
-            const on = includesCart === val;
-            return (
-              <button key={lbl} onClick={() => setIncludesCart(val)} style={{
-                width: '100%', padding: '13px 10px', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 700,
-                border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.18)',
-                background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
-              }}>{lbl}</button>
-            );
-          })}
         </div>
       </div>
 
