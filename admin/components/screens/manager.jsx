@@ -210,7 +210,8 @@ function TeeTimesPanel({ course }) {
   const [includesCart, setIncludesCart] = React.useState(false);
   const [price, setPrice] = React.useState(Math.min(75, course.suggested_price || 22));
   const [windowKeys, setWindowKeys] = React.useState(() => new Set(['twilight']));
-  const [excluded, setExcluded] = React.useState(() => new Set()); // 'HH:MM' the manager removed
+  const [liveWindowKeys, setLiveWindowKeys] = React.useState(() => new Set(['all']));
+  const [excluded, setExcluded] = React.useState(() => new Set()); // 'HH:MM' turned off (light)
   const [showFormula, setShowFormula] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
@@ -220,7 +221,8 @@ function TeeTimesPanel({ course }) {
   const [fields] = useDayFields(course.id, dateStr);
   const [fill] = useCourseFillRate(course.id);
 
-  // Candidate times = union of every selected window, at the chosen interval.
+  // Candidate times = interval grid across the selected window(s), PLUS any
+  // existing live slots in those windows so they always show up in the grid.
   const candidates = React.useMemo(() => {
     const keys = windowKeys.has('all') ? new Set(['all']) : windowKeys;
     const set = new Set();
@@ -228,22 +230,20 @@ function TeeTimesPanel({ course }) {
       const w = TIME_WINDOWS.find(x => x.key === k);
       if (w) genTimes(w.start, w.end, intervalMin).forEach(t => set.add(t));
     });
+    (slots || []).forEach(s => {
+      if (s.status === 'open' && inWindows(minutesOfDay(s.starts_at), windowKeys)) set.add(slotHM(s.starts_at));
+    });
     return [...set].sort((a, b) => toMin(a) - toMin(b));
-  }, [windowKeys, intervalMin]);
+  }, [windowKeys, intervalMin, slots]);
 
-  // Map existing slots by their 'HH:MM' (only 'open' ones count as public).
-  const openByHM = React.useMemo(() => {
-    const m = {};
-    (slots || []).forEach(s => { if (s.status === 'open') m[slotHM(s.starts_at)] = s; });
-    return m;
-  }, [slots]);
-
-  const toOpen = candidates.filter(t => !excluded.has(t));
-  const newCount = toOpen.filter(t => !openByHM[t]).length;
+  // Two states only: a time is selected (dark) unless turned off (light).
+  const selectedTimes = candidates.filter(t => !excluded.has(t));
+  const selectedSet = new Set(selectedTimes);
+  const liveInScope = (slots || []).filter(s => s.status === 'open' && inWindows(minutesOfDay(s.starts_at), windowKeys));
 
   // Live "expected daily revenue" from this course's real fill rate.
   const rate = (fill && fill.rate != null && fill.sampleSlots >= 4) ? fill.rate : null;
-  const seats = toOpen.length * 4;
+  const seats = selectedTimes.length * 4;
   const full = seats * (Number(price) || 0);
   const expected = rate != null ? Math.round(seats * rate * (Number(price) || 0)) : null;
   const revenue = expected != null ? expected : full;
@@ -251,27 +251,41 @@ function TeeTimesPanel({ course }) {
   function toggleTime(t) {
     setExcluded(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; });
   }
-  function toggleWindow(k) {
-    setWindowKeys(prev => {
-      if (k === 'all') return new Set(['all']);
-      const n = new Set(prev); n.delete('all');
-      n.has(k) ? n.delete(k) : n.add(k);
-      return n.size ? n : new Set(['all']); // never empty
-    });
-  }
+  function selectAll(on) { setExcluded(on ? new Set() : new Set(candidates)); }
+  const mkToggle = (setter) => (k) => setter(prev => {
+    if (k === 'all') return new Set(['all']);
+    const n = new Set(prev); n.delete('all');
+    n.has(k) ? n.delete(k) : n.add(k);
+    return n.size ? n : new Set(['all']); // never empty
+  });
+  const toggleWindow = mkToggle(setWindowKeys);
+  const toggleLiveWindow = mkToggle(setLiveWindowKeys);
 
+  // Save makes the live schedule in the viewed window(s) EXACTLY the selected
+  // (dark) chips: publish selected, remove unselected live times (keeping any
+  // that already have players booked).
   async function saveChanges() {
-    if (!toOpen.length) { setErr('No times selected. Add at least one tee time.'); return; }
     setBusy(true); setErr(''); setMsg('');
     try {
-      await publishDayTimes({ courseId: course.id, dateStr, times: toOpen, price, includesCart });
-      setMsg(`Saved — ${toOpen.length} tee time${toOpen.length === 1 ? '' : 's'} live for golfers.`);
+      const toRemove = liveInScope.filter(s => !selectedSet.has(slotHM(s.starts_at)));
+      const removable = toRemove.filter(s => !(fields[s.id] && fields[s.id].length)); // protect booked
+      const keptBooked = toRemove.length - removable.length;
+
+      if (selectedTimes.length) {
+        await publishDayTimes({ courseId: course.id, dateStr, times: selectedTimes, price, includesCart });
+      }
+      for (const s of removable) { await deleteSlot(s.id); } // eslint-disable-line no-await-in-loop
+
+      const parts = [`${selectedTimes.length} tee time${selectedTimes.length === 1 ? '' : 's'} live`];
+      if (removable.length) parts.push(`${removable.length} removed`);
+      if (keptBooked) parts.push(`${keptBooked} kept (booked)`);
+      setMsg('Saved — ' + parts.join(' · ') + '.');
       reload();
     } catch (e) { setErr(e.message || 'Could not save.'); }
     setBusy(false);
   }
 
-  const slotsInWindow = (slots || []).filter(s => inWindows(minutesOfDay(s.starts_at), windowKeys));
+  const slotsInWindow = (slots || []).filter(s => inWindows(minutesOfDay(s.starts_at), liveWindowKeys));
 
   // Shared look for both sliders.
   const sliderHeading = { fontWeight: 700, fontSize: 15, color: 'var(--ink)' };
@@ -301,39 +315,8 @@ function TeeTimesPanel({ course }) {
           </div>
         </div>
 
-        {/* Expected-revenue chip sitting above the price slider */}
-        <div style={{ flex: '1 1 230px', minWidth: 220, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ position: 'relative', background: 'rgba(28,73,42,0.07)', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span className="eyebrow">expected daily revenue</span>
-              <button onClick={() => setShowFormula(v => !v)} title="How is this calculated?" style={{
-                border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15, lineHeight: 1, opacity: showFormula ? 1 : 0.55, padding: 0,
-              }}>👁</button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ ...sliderBig, fontSize: 30 }}>${revenue.toLocaleString('en-US')}</span>
-              <span style={{ fontSize: 12, opacity: 0.65 }}>based on average booking rate</span>
-            </div>
-
-            {showFormula && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, zIndex: 6,
-                background: 'var(--paper)', border: 'var(--hairline)', borderRadius: 12, boxShadow: '0 12px 30px rgba(14,28,19,0.16)',
-                padding: '14px 16px', fontSize: 12, lineHeight: 1.5 }}>
-                <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--forest)' }}>How this is calculated</div>
-                <div style={{ opacity: 0.8 }}>tee times × 4 players × price × avg booking rate</div>
-                <div style={{ fontFamily: 'var(--font-mono)', marginTop: 6, opacity: 0.8 }}>
-                  {toOpen.length} × 4 × ${Number(price) || 0}{rate != null ? ` × ${Math.round(rate * 100)}%` : ''} = ${revenue.toLocaleString('en-US')}
-                </div>
-                <div style={{ opacity: 0.55, marginTop: 6 }}>
-                  {rate != null
-                    ? `Avg booking rate is ${Math.round(rate * 100)}% from ${course.short_name}'s last 90 days (${fill.booked}/${fill.seats} seats).`
-                    : `No booking history yet — showing full potential ($${full.toLocaleString('en-US')}). The booking rate kicks in once rounds get booked.`}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Price slider */}
+        {/* Price slider — same structure as interval so the bars line up */}
+        <div style={{ flex: '1 1 230px', minWidth: 220 }}>
           <div style={sliderHeading}>price per golfer?</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '10px 0 8px' }}>
             <span style={sliderBig}>${price}</span>
@@ -347,65 +330,80 @@ function TeeTimesPanel({ course }) {
           </div>
         </div>
 
-        {/* Walk-only / cart toggle — far right, stacked */}
-        <div style={{ flex: '0 0 150px', display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center' }}>
-          {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
-            const on = includesCart === val;
-            return (
-              <button key={lbl} onClick={() => setIncludesCart(val)} style={{
-                width: '100%', padding: '13px 10px', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 700,
-                border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.18)',
-                background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
-              }}>{lbl}</button>
-            );
-          })}
+        {/* Right column: cart toggle + expected daily revenue */}
+        <div style={{ flex: '1 1 230px', minWidth: 220, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[['Walk only', false], ['Cart included', true]].map(([lbl, val]) => {
+              const on = includesCart === val;
+              return (
+                <button key={lbl} onClick={() => setIncludesCart(val)} style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                  border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.18)',
+                  background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
+                }}>{lbl}</button>
+              );
+            })}
+          </div>
+
+          <div style={{ position: 'relative', flex: 1, background: 'rgba(28,73,42,0.07)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span className="eyebrow">expected daily revenue</span>
+              <button onClick={() => setShowFormula(v => !v)} title="How is this calculated?" style={{
+                border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15, lineHeight: 1, opacity: showFormula ? 1 : 0.55, padding: 0,
+              }}>👁</button>
+            </div>
+            <div style={{ ...sliderBig, fontSize: 32, lineHeight: 1.05, marginTop: 4 }}>${revenue.toLocaleString('en-US')}</div>
+            <div style={{ fontSize: 12, opacity: 0.65, marginTop: 3 }}>based on average booking rate</div>
+
+            {showFormula && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, zIndex: 6,
+                background: 'var(--paper)', border: 'var(--hairline)', borderRadius: 12, boxShadow: '0 12px 30px rgba(14,28,19,0.16)',
+                padding: '14px 16px', fontSize: 12, lineHeight: 1.5 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--forest)' }}>How this is calculated</div>
+                <div style={{ opacity: 0.8 }}>tee times × 4 players × price × avg booking rate</div>
+                <div style={{ fontFamily: 'var(--font-mono)', marginTop: 6, opacity: 0.8 }}>
+                  {selectedTimes.length} × 4 × ${Number(price) || 0}{rate != null ? ` × ${Math.round(rate * 100)}%` : ''} = ${revenue.toLocaleString('en-US')}
+                </div>
+                <div style={{ opacity: 0.55, marginTop: 6 }}>
+                  {rate != null
+                    ? `Avg booking rate is ${Math.round(rate * 100)}% from ${course.short_name}'s last 90 days (${fill.booked}/${fill.seats} seats).`
+                    : `No booking history yet — showing full potential ($${full.toLocaleString('en-US')}). The booking rate kicks in once rounds get booked.`}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Window filter (multi-select) — above the cards */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '22px 0 12px' }}>
-        <span className="eyebrow" style={{ marginRight: 4 }}>View</span>
-        {TIME_WINDOWS.map(w => {
-          const on = windowKeys.has(w.key);
-          return (
-            <button key={w.key} onClick={() => toggleWindow(w.key)} style={{
-              padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-              border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
-              background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
-            }}>{w.label}</button>
-          );
-        })}
-        <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.55, fontFamily: 'var(--font-mono)' }}>select one or more</span>
-      </div>
+      {/* Window filter (multi-select) — drives the grid below */}
+      <WindowFilter selected={windowKeys} onToggle={toggleWindow} hint="select one or more"/>
 
-      {/* Draft notice + uniform grid */}
-      <div className="card" style={{ padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+      {/* Selection grid */}
+      <div className="card" style={{ padding: 20, marginTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontSize: 13, opacity: 0.7 }}>
-            {newCount > 0
-              ? <><strong>{newCount}</strong> new time{newCount === 1 ? '' : 's'} to publish — tap any to remove it.</>
-              : <>These times are set. Tap a faded one to add it back.</>}
+            <strong>{selectedTimes.length}</strong> selected — tap to toggle. Saving makes the live schedule exactly these times.
+            {liveInScope.length ? <span style={{ opacity: 0.7 }}> ({liveInScope.length} live now in view)</span> : null}
           </div>
-          <div style={{ fontSize: 12, opacity: 0.55 }}>Nothing is bookable until you press <strong>Save changes</strong>.</div>
+          <button onClick={() => selectAll(excluded.size > 0)} style={{
+            border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--forest)', padding: 0,
+          }}>{excluded.size > 0 ? 'Select all' : 'Clear all'}</button>
         </div>
 
         {slots === null ? <Spinner/> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8, marginTop: 14 }}>
             {candidates.map(t => {
-              const isOpen = !!openByHM[t];       // already public — managed in the list below
-              const isOff = !isOpen && excluded.has(t);
-              const base = {
-                height: 36, width: '100%', boxSizing: 'border-box', borderRadius: 9,
+              const on = !excluded.has(t);   // dark = selected · light = not
+              const st = {
+                height: 36, width: '100%', boxSizing: 'border-box', borderRadius: 9, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.18)',
+                background: on ? 'var(--forest)' : 'var(--paper)', color: on ? 'var(--cream)' : 'var(--ink-soft)',
               };
-              let st;
-              if (isOpen)      st = { ...base, cursor: 'default', border: '1px solid var(--forest)', background: 'var(--forest)', color: 'var(--cream)' };
-              else if (isOff)  st = { ...base, cursor: 'pointer', border: '1px dashed rgba(14,28,19,0.25)', background: 'transparent', color: 'var(--ink-soft)', opacity: 0.5, textDecoration: 'line-through' };
-              else             st = { ...base, cursor: 'pointer', border: '1px solid var(--forest)', background: 'rgba(28,73,42,0.08)', color: 'var(--forest)' };
               return (
-                <button key={t} onClick={isOpen ? undefined : () => toggleTime(t)} style={st}
-                  title={isOpen ? 'Already live — manage in the list below' : (isOff ? 'Tap to add back' : 'New time — tap to remove')}>
+                <button key={t} onClick={() => toggleTime(t)} style={st}
+                  title={on ? 'Selected — tap to remove' : 'Off — tap to add'}>
                   {hmLabel(toMin(t))}
                 </button>
               );
@@ -420,17 +418,40 @@ function TeeTimesPanel({ course }) {
         </div>
       </div>
 
-      {/* Manage already-live times in the selected window(s) */}
-      {slotsInWindow.length > 0 && (
-        <>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', margin: '24px 0 10px' }}>Live times · {dayLabel(`${dateStr}T12:00`)}</div>
+      {/* Live times list — its own window filter to sort by time of day */}
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', margin: '26px 0 10px' }}>Live times · {dayLabel(`${dateStr}T12:00`)}</div>
+      <WindowFilter selected={liveWindowKeys} onToggle={toggleLiveWindow} hint={`${slotsInWindow.length} shown`}/>
+      <div style={{ marginTop: 12 }}>
+        {slotsInWindow.length === 0 ? (
+          <div className="card" style={{ padding: 24, textAlign: 'center', opacity: 0.7, fontSize: 14 }}>No live tee times in this view.</div>
+        ) : (
           <div className="card" style={{ overflow: 'hidden' }}>
             {slotsInWindow.map((s, i) => (
               <SlotRow key={s.id} slot={s} players={fields[s.id] || []} last={i === slotsInWindow.length - 1} onSaved={reload} onError={setErr}/>
             ))}
           </div>
-        </>
-      )}
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Multi-select time-of-day window filter (All day / Morning / … / Night).
+function WindowFilter({ selected, onToggle, hint }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span className="eyebrow" style={{ marginRight: 4 }}>View</span>
+      {TIME_WINDOWS.map(w => {
+        const on = selected.has(w.key);
+        return (
+          <button key={w.key} onClick={() => onToggle(w.key)} style={{
+            padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+            border: on ? '1px solid var(--forest)' : '1px solid rgba(14,28,19,0.15)',
+            background: on ? 'var(--forest)' : 'transparent', color: on ? 'var(--cream)' : 'var(--ink-soft)',
+          }}>{w.label}</button>
+        );
+      })}
+      {hint && <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.55, fontFamily: 'var(--font-mono)' }}>{hint}</span>}
     </div>
   );
 }
