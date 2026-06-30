@@ -62,28 +62,33 @@ function LoginScreen() {
     // success → useSession picks up the new session and re-renders Root
   }
 
+  const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--cream)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, opacity: 0.85 };
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <form onSubmit={submit} className="card" style={{ width: '100%', maxWidth: 380, padding: 32 }}>
-        <Mascot size={132} style={{ margin: '0 auto 16px' }}/>
-        <img src="assets/wordmark-forest.svg" alt="Sandbox" style={{ height: 39, display: 'block' }}/>
-        <div className="eyebrow" style={{ marginTop: 8 }}>Admin & course portal</div>
+      <form onSubmit={submit} className="card" style={{ width: '100%', maxWidth: 380, padding: 36, background: 'var(--forest)', border: 'none', textAlign: 'center' }}>
+        <Mascot size={168} style={{ margin: '0 auto 18px' }}/>
+        <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 42, display: 'block', margin: '0 auto' }}/>
+        <div className="eyebrow" style={{ marginTop: 10, color: 'var(--cream)', opacity: 0.65 }}>Admin &amp; course portal</div>
 
-        <div style={{ marginTop: 24 }}>
-          <label className="label">Email</label>
+        <div style={{ marginTop: 26, textAlign: 'left' }}>
+          <label style={labelStyle}>Email</label>
           <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus placeholder="you@sbx.golf"/>
         </div>
-        <div style={{ marginTop: 14 }}>
-          <label className="label">Password</label>
+        <div style={{ marginTop: 14, textAlign: 'left' }}>
+          <label style={labelStyle}>Password</label>
           <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"/>
         </div>
 
-        {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 10 }}>{err}</div>}
+        {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--forest)', background: 'var(--cream)', padding: '10px 12px', borderRadius: 10, fontWeight: 600 }}>{err}</div>}
 
-        <button className="btn btn-forest" type="submit" disabled={busy || !email || !password} style={{ width: '100%', marginTop: 20 }}>
+        <button type="submit" disabled={busy || !email || !password} style={{
+          width: '100%', marginTop: 22, padding: '13px', borderRadius: 12, border: 'none', cursor: 'pointer',
+          background: 'var(--cream)', color: 'var(--forest)', fontWeight: 800, fontSize: 15,
+          opacity: (busy || !email || !password) ? 0.55 : 1,
+        }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <div style={{ fontSize: 12, opacity: 0.55, marginTop: 16, textAlign: 'center', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: 'var(--cream)', opacity: 0.6, marginTop: 16, lineHeight: 1.5 }}>
           Use your Sandbox account. Admin access only.
         </div>
       </form>
