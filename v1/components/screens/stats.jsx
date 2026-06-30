@@ -82,7 +82,7 @@ function StatsYou({ go }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           <ShotStat label="GIR" value={u.gir != null ? `${Math.round((u.gir || 0) * 100)}%` : '—'} sub="greens in reg"/>
           <ShotStat label="Fairways Hit" value={u.fairway != null ? `${Math.round(u.fairway * 100)}%` : '—'} sub="off the tee"/>
-          <ShotStat label="Avg Putts" value={u.putts ? u.putts.toFixed(2) : '—'} sub="per hole"/>
+          <ShotStat label="Avg Putts" value={u.putts ? u.putts.toFixed(2) : '—'} sub="per hole · 1v1"/>
         </div>
       ) : (
         <EmptyNote title="No shot data yet." body="Track stats during scoring to unlock fairways, greens, putts and more."/>

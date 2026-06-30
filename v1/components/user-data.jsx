@@ -69,19 +69,17 @@ function useUserStats(profileId) {
       let fairNum = 0, fairDen = 0;
       for (const h of holes || []) {
         const m = matchById[h.match_id];
-        if (!m) continue;
-        const userIsA = m.player_a === profileId || m.player_a2 === profileId;
-        // Putts are cumulative across BOTH formats (in 2v2 it's the team's
-        // putts on the holes you played).
-        const puttsV = userIsA ? h.player_a_putts : h.player_b_putts;
-        if (puttsV != null) { puttsSum += puttsV; puttsCount++; }
-        // GIR / proximity / fairway for 2v2 are per-player and come from
-        // hole_player_stats below; only read 1v1 here to avoid double-counting.
-        if (m.match_type === '2v2') continue;
+        // 2v2 GIR/fairway are per-player (your own ball) and come from
+        // hole_player_stats below. Putts stay 1v1-only — in a scramble the team
+        // putts one ball, so "your putts per hole" isn't well-defined.
+        if (!m || m.match_type === '2v2') continue;
+        const userIsA = m.player_a === profileId;
         const girV   = userIsA ? h.player_a_gir           : h.player_b_gir;
+        const puttsV = userIsA ? h.player_a_putts         : h.player_b_putts;
         const proxV  = userIsA ? h.player_a_proximity_ft  : h.player_b_proximity_ft;
         const fairV  = userIsA ? h.player_a_fairway        : h.player_b_fairway;
         if (girV !== null && girV !== undefined) { girDen++; if (girV) girNum++; }
+        if (puttsV != null) { puttsSum += puttsV; puttsCount++; }
         if (proxV  != null) { proxSum  += proxV;  proxCount++; }
         if (fairV) { fairDen++; if (fairV === 'hit') fairNum++; }
         holeCount++;
