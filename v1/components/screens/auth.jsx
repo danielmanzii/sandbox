@@ -31,29 +31,29 @@ function AuthScreens() {
 // ─── Welcome ─────────────────────────────────────────────────
 function WelcomeView({ onSignUp, onSignIn }) {
   return (
-    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '80px 28px 32px', color: 'var(--paper)' }}>
-      <Wordmark variant="white" size={160}/>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 28, whiteSpace: 'nowrap', color: 'var(--paper)' }}>
-        Pitch & Putt, Rated.
-      </div>
-      <div className="caption-serif" style={{ fontSize: 18, marginTop: 18, opacity: 0.85, maxWidth: 340, color: 'var(--paper)', lineHeight: 1.4 }}>
-        Miami's pitch &amp; putt, match play league.<br/>
-        Real matches, real ratings, real bragging rights.
+    <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '0 28px', color: 'var(--paper)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <Wordmark variant="white" size={190}/>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 26, whiteSpace: 'nowrap', color: 'var(--paper)' }}>
+          Pitch &amp; Putt, Rated.
+        </div>
+        <div className="caption-serif" style={{ fontSize: 18, marginTop: 16, opacity: 0.85, maxWidth: 340, color: 'var(--paper)', lineHeight: 1.4 }}>
+          Miami's pitch &amp; putt, match play league.<br/>
+          Real matches, real ratings, real bragging rights.
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 36, width: '100%', maxWidth: 360 }}>
+          <Button variant="paper" size="lg" full onClick={onSignUp}>
+            Create account
+            <Icon.ArrowRight size={16}/>
+          </Button>
+          <Button variant="outlineWhite" size="lg" full onClick={onSignIn}>
+            Sign In
+          </Button>
+        </div>
       </div>
 
-      <div style={{ flex: 1 }}/>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 32 }}>
-        <Button variant="paper" size="lg" full onClick={onSignUp}>
-          Create account
-          <Icon.ArrowRight size={16}/>
-        </Button>
-        <Button variant="outlineWhite" size="lg" full onClick={onSignIn}>
-          Sign In
-        </Button>
-      </div>
-
-      <div style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', marginTop: 20, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--paper)' }}>
+      <div style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', paddingBottom: 20, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--paper)' }}>
         v1 prototype · real data · real matches
       </div>
     </div>
@@ -422,79 +422,71 @@ function SignInView({ onBack, onSignUpInstead, onForgot }) {
     // AuthGate picks up the new session automatically.
   }
 
+  const inset = useKeyboardInset();
   return (
-    <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
+    <form onSubmit={submit} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '0 24px' }}>
       <BackButton onClick={onBack}/>
 
-      <div style={{ marginTop: 12 }}>
-        <Eyebrow color="var(--paper)">Welcome back</Eyebrow>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
-          Sign in.
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
+      }}>
+        <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
+          <Eyebrow color="var(--paper)">Welcome back</Eyebrow>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em' }}>
+            Sign in.
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28, textAlign: 'left' }}>
+            <Field label="Email or username">
+              <Input value={identity} onChange={setIdentity} type="text" autoComplete="username" autoCapitalize="off" placeholder="you@example.com or @handle"/>
+            </Field>
+            <Field label="Password">
+              <Input value={password} onChange={setPassword} type="password" autoComplete="current-password"/>
+            </Field>
+          </div>
+
+          {/* Remember me */}
+          <button type="button" onClick={() => setRemember(r => !r)} style={{
+            marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center',
+            color: 'var(--paper)', padding: 0, width: '100%',
+          }}>
+            <span style={{
+              width: 20, height: 20, borderRadius: 6,
+              background: remember ? 'var(--paper)' : 'transparent',
+              border: '1.5px solid var(--paper)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              {remember && (
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <path d="M2 7.5l3.2 3L12 3.5" stroke="var(--forest)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </span>
+            <span style={{ fontSize: 13, fontFamily: 'var(--font-body)', opacity: 0.9 }}>Remember me</span>
+          </button>
+
+          {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
+
+          <Button variant="paper" size="lg" full disabled={!identity || !password || busy} onClick={submit} style={{ marginTop: 22 }}>
+            {busy ? 'Signing in…' : 'Sign in'}
+            {!busy && <Icon.ArrowRight size={16}/>}
+          </Button>
+
+          <button type="button" onClick={onForgot} style={{
+            marginTop: 16, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+            color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+          }}>
+            Forgot your password?
+          </button>
+          <button type="button" onClick={onSignUpInstead} style={{
+            marginTop: 8, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+            color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+          }}>
+            New here? <u>Create an account</u>
+          </button>
         </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
-        <Field label="Email or username">
-          <Input value={identity} onChange={setIdentity} type="text" autoComplete="username" autoCapitalize="off" placeholder="you@example.com or @handle"/>
-        </Field>
-        <Field label="Password">
-          <Input value={password} onChange={setPassword} type="password" autoComplete="current-password"/>
-        </Field>
-      </div>
-
-      {/* Remember me */}
-      <button
-        type="button"
-        onClick={() => setRemember(r => !r)}
-        style={{
-          marginTop: 14,
-          display: 'flex', alignItems: 'center', gap: 10,
-          color: 'var(--paper)', textAlign: 'left',
-          padding: 0,
-        }}
-      >
-        <span style={{
-          width: 20, height: 20, borderRadius: 6,
-          background: remember ? 'var(--paper)' : 'transparent',
-          border: '1.5px solid var(--paper)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          {remember && (
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7.5l3.2 3L12 3.5" stroke="var(--forest)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          )}
-        </span>
-        <span style={{ fontSize: 13, fontFamily: 'var(--font-body)', opacity: 0.9 }}>
-          Remember me
-        </span>
-      </button>
-
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
-
-      <div style={{ flex: 1 }}/>
-
-      <Button variant="paper" size="lg" full disabled={!identity || !password || busy} onClick={submit} style={{ marginTop: 18 }}>
-        {busy ? 'Signing in…' : 'Sign in'}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
-
-      <button type="button" onClick={onForgot} style={{
-        marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
-        letterSpacing: '0.06em',
-      }}>
-        Forgot your password?
-      </button>
-
-      <button type="button" onClick={onSignUpInstead} style={{
-        marginTop: 8, fontSize: 13, fontFamily: 'var(--font-mono)',
-        color: 'var(--paper)', opacity: 0.7, textAlign: 'center',
-        letterSpacing: '0.06em',
-      }}>
-        New here? <u>Create an account</u>
-      </button>
     </form>
   );
 }
