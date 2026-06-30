@@ -20,6 +20,19 @@ function useManagedCourses(userId) {
   return [rows, load];
 }
 
+// Set of user_ids who manage at least one course (for the Users role split).
+function useManagerIds() {
+  const [ids, setIds] = React.useState(null);
+  React.useEffect(() => {
+    let on = true;
+    sbx.from('course_managers').select('user_id').then(({ data }) => {
+      if (on) setIds(new Set((data || []).map(r => r.user_id)));
+    });
+    return () => { on = false; };
+  }, []);
+  return ids;
+}
+
 // ─── Admin: assign / remove a course manager ────────────────────────────────
 async function addCourseManager({ userId, courseId, createdBy }) {
   const { error } = await sbx.from('course_managers')
@@ -364,7 +377,7 @@ function useCourseFinancials(courseId, course) {
 }
 
 Object.assign(window, {
-  useManagedCourses, addCourseManager, removeCourseManager,
+  useManagedCourses, useManagerIds, addCourseManager, removeCourseManager,
   useCourseSlots, useDaySlots, useDayFields, saveSlot, deleteSlot, publishDayTimes, useCourseFillRate,
   useDailyYardages, saveDailyYardages, clearDailyYardages,
   useLiveOnCourse, useCourseFinancials,
