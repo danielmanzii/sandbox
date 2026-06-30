@@ -85,12 +85,15 @@ function useUserStats(profileId) {
         holeCount++;
       }
 
-      // 2v2 per-player stats (fairway + GIR) from hole_player_stats.
+      // Per-player fairway/GIR from hole_player_stats. Fairway: all formats (it's
+      // only stored here). GIR: 2v2 ONLY — 1v1 GIR already came from match_holes
+      // above, so counting it here too would double it.
+      const ts2v2 = new Set(list.filter(m => m.match_type === '2v2').map(m => m.id));
       const { data: ps } = await sbx.from('hole_player_stats')
-        .select('fairway, gir').eq('player_id', profileId).in('match_id', matchIds);
+        .select('match_id, fairway, gir').eq('player_id', profileId).in('match_id', matchIds);
       for (const s of ps || []) {
         if (s.fairway) { fairDen++; if (s.fairway === 'hit') fairNum++; }
-        if (s.gir != null) { girDen++; if (s.gir) girNum++; }
+        if (s.gir != null && ts2v2.has(s.match_id)) { girDen++; if (s.gir) girNum++; }
       }
 
       if (girDen > 0) gir = girNum / girDen;
@@ -116,7 +119,7 @@ function useUserStats(profileId) {
       // Per-player rows for EVERYONE in these matches (we need partner data,
       // not just the user's, to compute rescues).
       const { data: psAll } = await sbx.from('hole_player_stats')
-        .select('match_id, hole_number, player_id, fairway, gir, ob').in('match_id', matchIds);
+        .select('match_id, hole_number, player_id, fairway, gir, ob, on_green').in('match_id', matchIds);
       const psMap = {};
       for (const s of psAll || []) psMap[`${s.match_id}|${s.hole_number}|${s.player_id}`] = s;
       const holesByMatch = {};
@@ -163,7 +166,8 @@ function useUserStats(profileId) {
               if (h.holed_by   != null) { finD++; if (h.holed_by   === profileId) finN++; }
               const pp = x.partnerId ? psMap[`${h.match_id}|${h.hole_number}|${x.partnerId}`] : null;
               if (pp && h.ball_player != null) {
-                const compromised = pp.gir === false || pp.ob === true || (pp.fairway && pp.fairway !== 'hit');
+                // Partner's ball was compromised: not on the green, OB, or off the fairway.
+                const compromised = pp.on_green === false || pp.ob === true || (pp.fairway && pp.fairway !== 'hit');
                 if (compromised) { clD++; if (h.ball_player === profileId && (teamRes === 'W' || teamRes === 'H')) clN++; }
               }
             }

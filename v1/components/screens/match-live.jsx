@@ -572,6 +572,10 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
   const [chosen, setChosen] = React.useState(init.chosen || null);  // { ball, zone, strokesToGreen }
   const [doneScore, setDoneScore] = React.useState(null); // shown instantly on finish, before DB echoes back
   const [history, setHistory] = React.useState(init.history || []); // prior states for one-step "Go Back"
+  // Whose ball the team took on each shot, in order. Powers PURE individual GIR:
+  // you only get a green-in-reg if YOUR ball was the one played on every shot up
+  // to the green — otherwise a scramble blends your tee with a partner's approach.
+  const [picks, setPicks] = React.useState(init.picks || []);
 
   // ── Shared-state sync bookkeeping ──
   // lastRev: the rev of the draft we last wrote or adopted (ignore its echo).
@@ -601,6 +605,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     setPuttCard(draft.puttCard || {});
     setChosen(draft.chosen || null);
     setHistory(draft.history || []);
+    setPicks(draft.picks || []);
     setDoneScore(null);
   }, [draft, meId]);
 
@@ -617,22 +622,23 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     if (phase === 'done') { onSaveDraft(null); return; }
     const rev = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     lastRev.current = rev;
-    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, rev, by: meId });
-  }, [stroke, card, phase, putts, puttCard, chosen, history]);
+    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, picks, rev, by: meId });
+  }, [stroke, card, phase, putts, puttCard, chosen, history, picks]);
 
   // Snapshot the current state before any forward move so "Go Back" undoes
   // exactly one shot / putt-round (not the whole hole).
-  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen }]);
+  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen, picks }]);
   const goBack = () => {
     if (!history.length) return;
     const prev = history[history.length - 1];
     setStroke(prev.stroke); setCard(prev.card); setPhase(prev.phase);
     setPutts(prev.putts); setPuttCard(prev.puttCard); setChosen(prev.chosen);
+    setPicks(prev.picks || []);
     setDoneScore(null); setHistory(history.slice(0, -1));
   };
 
   function reset() {
-    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]);
+    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]); setPicks([]);
   }
 
   // Hole finalized → show the team's score + a way to re-score. This is the
@@ -677,13 +683,23 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     yourTeam.forEach(p => {
       const c = card[p.id] || {}; const patch = {};
       if (c.fairway) patch.fairway = c.fairway;
-      // Persist green result explicitly (true/false) and OB per player so rescue
-      // stats (Clutch %) can tell "missed the green / went OB" from "untracked".
-      if (c.reached === true || c.reached === 'holed') { patch.gir = true; if (c.zone) patch.zone = c.zone; }
-      else if (c.reached === false) { patch.gir = false; }
+      // Persist green result + OB per player so rescue stats (Clutch %) can tell
+      // "missed the green / went OB" from "untracked". GIR is PURE + in regulation:
+      //   • in regulation = reached the green within par − 2 strokes
+      //     (par-3 by shot 1, par-4 by shot 2, par-5 by shot 3; stroke is 0-based)
+      //   • pure = YOUR ball was the one the team played on every shot up to here,
+      //     so a scramble can't credit you a green your partner's shot reached.
+      if (c.reached === true || c.reached === 'holed') {
+        patch.on_green = true;                              // raw: ball on the green (any shot)
+        const inReg = (stroke + 1) <= ((par || 3) - 2);
+        const pure  = picks.every(pk => pk === p.id);
+        patch.gir = inReg && pure;                          // pure green-in-regulation
+        if (c.zone) patch.zone = c.zone;
+      } else if (c.reached === false) { patch.on_green = false; patch.gir = false; }
       if (c.ob) patch.ob = true;
       if (Object.keys(patch).length) onSavePlayerStat(p.id, patch);
     });
+    setPicks(prev => [...prev, pid]); // record whose ball the team took this shot
     const c = card[pid] || {};
     // OB/penalty: the shot counts AND adds a 1-stroke penalty (skip one),
     // then re-hit — so shot 2 OB makes the next tracked shot #4.
