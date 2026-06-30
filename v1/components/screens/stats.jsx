@@ -53,75 +53,202 @@ function StatsLocked({ go }) {
   );
 }
 
+// Plain-language explainers for the tappable "i" on each advanced stat.
+const STAT_INFO = {
+  clutch: "When your partner's ball is compromised — they miss the green, go OB, or miss the fairway off the tee — Clutch % is how often YOUR ball bailed the team out: the team played your ball AND won or halved the hole. It only counts when the rescue actually saved the hole, so it can't be padded.",
+  shotEff: "Of the holes where the team picked a ball to play, the share where they played YOUR ball. 50% is an even partnership — above 50% means your ball is carrying the team, below means you're riding your partner's.",
+  finisher: "Of the team's holes that came down to a holed putt, how often YOU were the one who sank it. The closer rating.",
+  scrambling: "When you miss the green, how often you still win or halve the hole — your up-and-down grit under pressure.",
+  bounceBack: "Right after you LOSE a hole, how often you win the very next one. Pure momentum and mental resilience.",
+  conversion: "When you hit the green in regulation, how often you actually win the hole. Rewards capitalizing on your good shots.",
+  closer: "Your hole-win rate when the match is tight (all square or 1 up/down) or in the closing two holes. Performance when it matters most.",
+};
+
 function StatsYou({ go }) {
   const u = MOCK.USER;
-  const total = u.matchesTotal || 0;
-  const decided = (u.matchesW || 0) + (u.matchesL || 0);
-  const winRate = decided > 0 ? Math.round((u.matchesW / decided) * 100) + '%' : '—';
+  const f2 = u.fmt2v2 || {};
+  const f1 = u.fmt1v1 || {};
   const hasShotData = (u.gir > 0) || (u.putts > 0) || (u.fairway != null);
   const history = (MOCK.HISTORY || []);
 
   return (
     <div style={{ padding: '16px' }}>
-      {/* Real SBX hero (shared with Profile) */}
+      {/* SBX rating hero (shared with Profile) */}
       <RealSbxCard user={u} go={go} showDashboard={false}/>
 
-      {/* Summary tiles — all real */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
-        <StatTile label="Record" value={`${u.matchesW || 0}–${u.matchesL || 0}–${u.matchesH || 0}`} sub={`${total} matches`}/>
-        <StatTile label="Win rate" value={winRate} sub={decided > 0 ? `${u.matchesW} of ${decided}` : 'no matches yet'} highlight/>
-        <StatTile label="Matches" value={total} sub="played"/>
-        <StatTile label="Unbeaten" value={`${u.streak || 0}`} sub="current streak · 🔥" accent/>
+      {/* Shot stats — apply to both formats, so they lead */}
+      <SectionHeader eyebrow="Your game" title="Shot stats"/>
+      {hasShotData ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <ShotStat label="GIR" value={u.gir != null ? `${Math.round((u.gir || 0) * 100)}%` : '—'} sub="greens in reg"/>
+          <ShotStat label="Fairways Hit" value={u.fairway != null ? `${Math.round(u.fairway * 100)}%` : '—'} sub="off the tee"/>
+          <ShotStat label="Avg Putts" value={u.putts ? u.putts.toFixed(2) : '—'} sub="per hole · 1v1"/>
+        </div>
+      ) : (
+        <EmptyNote title="No shot data yet." body="Track stats during scoring to unlock fairways, greens, putts and more."/>
+      )}
+
+      {/* 2v2 */}
+      <SectionHeader eyebrow="Doubles" title="2v2 stats"/>
+      <RecordHero rec={f2} fmt="2v2"/>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+        <StatChip label="Win streak" fire value={`${f2.winStreak || 0}`} sub={f2.longestStreak ? `longest ${f2.longestStreak}` : 'current run'}/>
+        <StatChip label="Best win" value={f2.bestWin ? f2.bestWin.margin : '—'} sub={f2.bestWin && f2.bestWin.opp ? `vs ${formatHandle(f2.bestWin.opp)}` : 'biggest margin'}/>
+        <PctChip label="Clutch %" stat={f2.clutch} desc="saved the hole for your team" info={STAT_INFO.clutch}/>
+        <PctChip label="Shot efficiency" stat={f2.shotEff} desc="team played your ball" info={STAT_INFO.shotEff}/>
+        <PctChip label="Finisher %" stat={f2.finisher} desc="team putts you sank" info={STAT_INFO.finisher}/>
+        <StatChip label="Best partner" value={f2.bestPartner && f2.bestPartner.handle ? formatHandle(f2.bestPartner.handle) : '—'} sub={f2.bestPartner ? `${f2.bestPartner.winPct}% · ${f2.bestPartner.games} games` : 'min 2 games together'}/>
       </div>
 
-      {/* Shot-level stats: real when captured, honest empty otherwise */}
-      <div style={{ marginTop: 18 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Shot stats</div>
-        {hasShotData ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            <CoreStat label="Fairways" value={u.fairway != null ? `${Math.round(u.fairway * 100)}%` : '—'} sub="hit off the tee"/>
-            <CoreStat label="GIR" value={`${Math.round((u.gir || 0) * 100)}%`} sub="greens in reg"/>
-            <CoreStat label="Putts" value={(u.putts || 0).toFixed(2)} sub="per hole"/>
+      {/* 1v1 */}
+      <SectionHeader eyebrow="Singles" title="1v1 stats"/>
+      <RecordHero rec={f1} fmt="1v1"/>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+        <StatChip label="Win streak" fire value={`${f1.winStreak || 0}`} sub={f1.longestStreak ? `longest ${f1.longestStreak}` : 'current run'}/>
+        <StatChip label="Best win" value={f1.bestWin ? f1.bestWin.margin : '—'} sub={f1.bestWin && f1.bestWin.opp ? `vs ${formatHandle(f1.bestWin.opp)}` : 'biggest margin'}/>
+        <PctChip label="Scrambling %" stat={f1.scrambling} desc="missed green, still won/halved" info={STAT_INFO.scrambling}/>
+        <PctChip label="Bounce-back %" stat={f1.bounceBack} desc="won the hole after a loss" info={STAT_INFO.bounceBack}/>
+        <PctChip label="Conversion %" stat={f1.conversion} desc="GIR holes you won" info={STAT_INFO.conversion}/>
+        <PctChip label="Closer %" stat={f1.closer} desc="tight / closing holes won" info={STAT_INFO.closer}/>
+      </div>
+
+      {/* Match history */}
+      <SectionHeader eyebrow="Recent" title="Match history"/>
+      {history.length > 0 ? (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          {history.slice(0, 8).map((r, i) => <MatchRow key={r.id} r={r} go={go} last={i === Math.min(history.length, 8) - 1}/>)}
+        </div>
+      ) : (
+        <EmptyNote title="No matches yet." body="Your match history shows up here after your first game."/>
+      )}
+    </div>
+  );
+}
+
+// ─── On-brand stat building blocks ────────────────────────────────────
+function SectionHeader({ eyebrow, title }) {
+  return (
+    <div style={{ marginTop: 24, marginBottom: 12 }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{eyebrow}</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, letterSpacing: '-0.02em', color: 'var(--forest)', marginTop: 3 }}>{title}</div>
+    </div>
+  );
+}
+
+// Forest-gradient mini stat (shot stats row).
+function ShotStat({ label, value, sub }) {
+  return (
+    <div style={{ background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 60%, var(--moss) 100%)', color: 'var(--cream)', borderRadius: 16, padding: '13px 12px', position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <div style={{ position: 'relative' }}>
+        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>{label}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, marginTop: 5 }}>{value}</div>
+        <div style={{ fontSize: 9, opacity: 0.65, marginTop: 3 }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+// Forest-gradient record hero with a W/H/L proportion bar = the win rate.
+function RecordHero({ rec, fmt }) {
+  const W = rec.W || 0, L = rec.L || 0, H = rec.H || 0, total = W + L + H;
+  const wr = rec.winRate;
+  return (
+    <div style={{ background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)', color: 'var(--cream)', borderRadius: 'var(--radius-card-lg)', padding: 20, position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.65 }}>Record · {fmt}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 0.85, letterSpacing: '-0.02em', marginTop: 6 }}>{W}–{L}–{H}</div>
           </div>
-        ) : (
-          <div className="card" style={{ padding: 20, textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>No shot data yet.</div>
-            <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>
-              GIR, putts, proximity, and ball-selection intel appear here as you track rounds during scoring.
+          {total > 0 && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 0.9 }}>{wr}%</div>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7 }}>win rate</div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Match history — real */}
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
-        {history.length > 0 ? (
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {history.slice(0, 8).map((r, i) => <MatchRow key={r.id} r={r} go={go} last={i === Math.min(history.length, 8) - 1}/>)}
-          </div>
+          )}
+        </div>
+        {total > 0 ? (
+          <>
+            <div style={{ display: 'flex', gap: 3, marginTop: 16, height: 9, borderRadius: 999, overflow: 'hidden' }}>
+              {W > 0 && <div style={{ flex: W, background: 'var(--cream)' }}/>}
+              {H > 0 && <div style={{ flex: H, background: 'rgba(234,226,206,0.45)' }}/>}
+              {L > 0 && <div style={{ flex: L, background: 'rgba(14,28,19,0.5)' }}/>}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.75, marginTop: 8, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+              {W} W · {L} L · {H} H — {total} {total === 1 ? 'match' : 'matches'}
+            </div>
+          </>
         ) : (
-          <div className="card" style={{ padding: '24px 20px', textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', lineHeight: 1, marginBottom: 6 }}>No matches yet.</div>
-            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.6 }}>Your match history shows up here after your first game.</div>
-          </div>
+          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 10 }}>No {fmt} matches yet — go play one.</div>
         )}
       </div>
     </div>
   );
 }
 
-function CoreStat({ label, value, sub, accent }) {
+// Non-percentage chip (win streak, best win, best partner).
+function StatChip({ label, value, sub, fire }) {
   return (
-    <div style={{
-      background: accent ? 'var(--forest)' : 'var(--paper)',
-      color: accent ? 'var(--cream)' : 'var(--ink)',
-      border: accent ? 'none' : 'var(--hairline)',
-      borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-sm)',
-    }}>
-      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.6 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, marginTop: 4 }}>{value}</div>
-      <div style={{ fontSize: 9, opacity: 0.6, marginTop: 3, fontWeight: 600 }}>{sub}</div>
+    <div className="card" style={{ padding: '13px 15px' }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}{fire ? ' 🔥' : ''}</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, color: 'var(--forest)', marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+      <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, fontFamily: 'var(--font-mono)', letterSpacing: '0.03em', color: 'var(--forest)' }}>{sub}</div>
+    </div>
+  );
+}
+
+// Percentage chip with a fill bar + tappable "i" explainer.
+function PctChip({ label, stat, desc, info }) {
+  const has = stat && stat.pct != null;
+  return (
+    <div className="card" style={{ padding: '13px 15px', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</span>
+        {info && <InfoDot title={label} text={info}/>}
+      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, color: 'var(--forest)', marginTop: 6 }}>{has ? `${stat.pct}%` : '—'}</div>
+      <div style={{ height: 5, borderRadius: 999, background: 'rgba(14,28,19,0.08)', marginTop: 8, overflow: 'hidden' }}>
+        <div style={{ width: has ? `${stat.pct}%` : '0%', height: '100%', background: 'var(--forest)', borderRadius: 999 }}/>
+      </div>
+      <div style={{ fontSize: 10, opacity: 0.6, marginTop: 6, color: 'var(--forest)', lineHeight: 1.3 }}>
+        {desc}{has ? ` · ${stat.sample} ${stat.sample === 1 ? 'hole' : 'holes'}` : ''}
+      </div>
+    </div>
+  );
+}
+
+// Tappable "i" → centered explainer modal.
+function InfoDot({ title, text }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <button onClick={(e) => { e.stopPropagation(); setOpen(true); }} style={{
+        width: 18, height: 18, borderRadius: 999, flexShrink: 0,
+        border: '1px solid rgba(14,28,19,0.3)', background: 'transparent', color: 'var(--forest)',
+        fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, lineHeight: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>i</button>
+      {open && (
+        <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(14,28,19,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--canvas)', borderRadius: 20, padding: 22, maxWidth: 340, boxShadow: 'var(--shadow-md)' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--forest)', opacity: 0.6 }}>What it means</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', marginTop: 6, lineHeight: 1 }}>{title}</div>
+            <div className="caption-serif" style={{ fontSize: 15, color: 'var(--ink)', opacity: 0.85, marginTop: 10, lineHeight: 1.45 }}>{text}</div>
+            <button onClick={() => setOpen(false)} style={{ marginTop: 16, width: '100%', padding: '11px', borderRadius: 12, background: 'var(--forest)', color: 'var(--cream)', border: 'none', fontWeight: 800, fontSize: 13 }}>Got it</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function EmptyNote({ title, body }) {
+  return (
+    <div className="card" style={{ padding: '22px 20px', textAlign: 'center' }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', lineHeight: 1 }}>{title}</div>
+      <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>{body}</div>
     </div>
   );
 }
@@ -152,22 +279,6 @@ function MatchRow({ r, last, go }) {
         <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>{r.course}</div>
       </div>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: isL ? 'rgba(14,28,19,0.5)' : 'var(--forest)' }}>{r.margin}</div>
-    </div>
-  );
-}
-
-function StatTile({ label, value, sub, highlight, accent }) {
-  return (
-    <div style={{
-      background: highlight ? 'var(--cream)' : accent ? 'var(--forest)' : 'var(--paper)',
-      color: highlight ? 'var(--forest)' : accent ? 'var(--cream)' : 'var(--ink)',
-      borderRadius: 18, padding: '14px 16px',
-      border: highlight || accent ? 'none' : 'var(--hairline)',
-      boxShadow: accent ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-    }}>
-      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</div>
-      <div className="display-num" style={{ fontSize: 28, marginTop: 8 }}>{value}</div>
-      <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{sub}</div>
     </div>
   );
 }
