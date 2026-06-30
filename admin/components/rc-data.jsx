@@ -104,8 +104,47 @@ async function saveRcHoles(teeId, holes) {
   if (error) throw rcErr(error);
 }
 
+// Save a whole scorecard at once (the Quick-entry tool).
+//   course: { name, city, state, holes }
+//   tees:   [{ name, color, rating, slope, yards: [perHole…] }]
+//   par:    [perHole…]   hcp: [perHole…]
+async function saveFullScorecard({ course, tees, par, hcp }) {
+  const holes = Number(course.holes) || 18;
+  const courseId = await saveRcCourse(course);
+  const parTotal = par.reduce((s, p) => s + (Number(p) || 0), 0) || null;
+
+  for (const t of tees) {
+    if (!t.name || !t.name.trim()) continue;
+    const total = (t.yards || []).reduce((s, y) => s + (Number(y) || 0), 0) || null;
+    const { data, error } = await sbx.from('rc_tees').upsert({
+      course_id: courseId,
+      name: t.name.trim(),
+      color: t.color ? t.color.trim() : null,
+      par: parTotal,
+      yards: total,
+      rating: numOrNull(t.rating),
+      slope: numOrNull(t.slope),
+    }, { onConflict: 'course_id,name' }).select('id').single();
+    if (error) throw rcErr(error);
+
+    const holeRows = [];
+    for (let i = 0; i < holes; i++) {
+      holeRows.push({
+        tee_id: data.id,
+        hole_number: i + 1,
+        par: numOrNull(par[i]),
+        yards: numOrNull((t.yards || [])[i]),
+        hcp: numOrNull(hcp[i]),
+      });
+    }
+    const { error: hErr } = await sbx.from('rc_holes').upsert(holeRows, { onConflict: 'tee_id,hole_number' });
+    if (hErr) throw rcErr(hErr);
+  }
+  return courseId;
+}
+
 Object.assign(window, {
   useRcCourses, saveRcCourse, deleteRcCourse,
   useRcTees, saveRcTee, deleteRcTee,
-  loadRcHoles, saveRcHoles,
+  loadRcHoles, saveRcHoles, saveFullScorecard,
 });
