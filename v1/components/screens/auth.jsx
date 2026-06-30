@@ -10,7 +10,7 @@ function AuthScreens() {
       position: 'absolute', inset: 0,
       background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
       color: 'var(--paper)',
-      overflow: 'auto',
+      overflow: 'hidden',
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Decorative grain + mascot */}
@@ -161,34 +161,34 @@ function SignUpView({ onBack, onSignInInstead }) {
               transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
             }}>
               {steps.map((s, i) => (
-                <div key={s.key} aria-hidden={i !== step} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 4px' }}>
+                <div key={s.key} aria-hidden={i !== step} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 4px', opacity: i === step ? 1 : 0, transition: 'opacity 0.3s ease', pointerEvents: i === step ? 'auto' : 'none' }}>
                   <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>{s.eyebrow}</div>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1.08, letterSpacing: '-0.02em' }}>{s.title}</div>
-                  <div style={{ marginTop: 24, opacity: i === step ? 1 : 0, transition: 'opacity 0.3s ease', pointerEvents: i === step ? 'auto' : 'none' }}>
+                  <div style={{ marginTop: 22 }}>
                     {s.field}
                     {s.hint && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>{s.hint}</div>}
                   </div>
+                  {/* Next / submit, right under the field */}
+                  <Button variant="paper" size="lg" full disabled={!s.valid || busy} onClick={next} style={{ marginTop: 22 }}>
+                    {i < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
+                    {!busy && <Icon.ArrowRight size={16}/>}
+                  </Button>
                 </div>
               ))}
             </div>
           </div>
+
+          {err && <div style={{ marginTop: 16, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
         </div>
       </div>
 
-      {/* Bottom actions */}
-      <div style={{ paddingBottom: 24 }}>
-        {err && <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--loss-soft)', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12, textAlign: 'center' }}>{err}</div>}
-        <Button variant="paper" size="lg" full disabled={!cur.valid || busy} onClick={next}>
-          {step < last ? 'Next' : (busy ? 'Creating…' : 'Create account')}
-          {!busy && <Icon.ArrowRight size={16}/>}
-        </Button>
-        <button type="button" onClick={onSignInInstead} style={{
-          marginTop: 14, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
-          color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
-        }}>
-          Already have an account? <u>Sign in</u>
-        </button>
-      </div>
+      {/* Sign-in link pinned at the bottom */}
+      <button type="button" onClick={onSignInInstead} style={{
+        paddingBottom: 22, fontSize: 13, fontFamily: 'var(--font-mono)', width: '100%',
+        color: 'var(--paper)', opacity: 0.7, textAlign: 'center', letterSpacing: '0.06em',
+      }}>
+        Already have an account? <u>Sign in</u>
+      </button>
     </div>
   );
 }
@@ -691,7 +691,7 @@ function Select({ value, onChange, options }) {
 function BackButton({ onClick }) {
   return (
     <button type="button" onClick={onClick} style={{
-      position: 'absolute', top: 20, left: 20,
+      position: 'absolute', top: 20, left: 20, zIndex: 20,
       width: 38, height: 38, borderRadius: 999,
       background: 'rgba(255,255,255,0.08)',
       border: '1px solid rgba(234,226,206,0.2)',
