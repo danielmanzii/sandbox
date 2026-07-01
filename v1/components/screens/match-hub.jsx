@@ -191,6 +191,7 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   const [course, setCourse] = React.useState(''); // pp: free text
   const [holes, setHoles]   = React.useState(null);
   const [matchType, setMatchType] = React.useState(null);
+  const [step, setStep]     = React.useState(0);
   const [busy, setBusy]     = React.useState(false);
   const [err, setErr]       = React.useState('');
 
