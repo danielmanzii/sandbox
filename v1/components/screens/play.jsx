@@ -32,10 +32,10 @@ function PlayHeader({ tab, go }) {
 
       <div style={{ display: 'flex', gap: 6, marginTop: 18, padding: 4, background: 'rgba(14,28,19,0.06)', borderRadius: 999 }}>
         <SegmentButton active={tab === 'sbx'} onClick={() => go({ screen: 'events', playTab: 'sbx' })}>
-          SBX Matches
+          Pitch &amp; Putt
         </SegmentButton>
         <SegmentButton active={tab === 'challenge'} onClick={() => go({ screen: 'events', playTab: 'challenge' })}>
-          Challenge Friends
+          Casual
         </SegmentButton>
       </div>
     </div>
