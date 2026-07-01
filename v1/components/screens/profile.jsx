@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut, ShareResultCard, shareResult, plainMargin */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -1251,93 +1251,36 @@ function MatchScorecardSheet({ match, ownerId, onClose }) {
     return h.result === youSide ? 'W' : 'L';
   }
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }}/>
-      <div style={{ position: 'relative', background: 'var(--paper)', borderRadius: '24px 24px 0 0', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.15)', margin: '14px auto 0' }}/>
-        <div style={{ padding: '14px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(14,28,19,0.07)' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)' }}>Scorecard</div>
-          <button onClick={onClose} style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(14,28,19,0.07)', border: 'none', fontSize: 12, fontWeight: 700, color: 'var(--forest)', cursor: 'pointer' }}>Close</button>
-        </div>
+  const margin = match.margin || '';
+  const plain = plainMargin ? plainMargin(margin) : margin;
+  const headline = isW ? `W ${margin}` : isL ? `L ${margin}` : 'Halved';
+  const summary = isW ? `Beat ${match.opp} · ${plain}`
+    : isL ? `${match.opp} took it · ${plain}`
+    : 'All square — matched hole for hole.';
+  const subline = `You vs ${match.opp}`;
+  const cells = (detail && detail.holes) ? detail.holes.map(h => ({ n: h.hole_number, lab: h.result ? holeResult(h) : '' })) : [];
 
-        <div style={{ overflowY: 'auto', flex: 1, padding: '20px 16px 32px' }}>
-          {/* Result hero */}
-          <div style={{
-            background: isW
-              ? `linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)`
-              : isL ? 'rgba(14,28,19,0.05)' : 'var(--paper)',
-            color: isW ? 'var(--cream)' : 'var(--forest)',
-            borderRadius: 20, padding: '24px 20px',
-            textAlign: 'center', marginBottom: 20,
-            border: !isW ? '1px solid rgba(14,28,19,0.1)' : 'none',
-            boxShadow: isW ? 'var(--shadow-md)' : 'none',
-            position: 'relative', overflow: 'hidden',
-          }}>
-            {isW && <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>}
-            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: isW ? 0.7 : 0.5, letterSpacing: '0.16em', textTransform: 'uppercase', position: 'relative' }}>
-              {match.week} · Match play
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 72, lineHeight: 0.82, marginTop: 10, letterSpacing: '-0.03em', position: 'relative' }}>
-              {isW ? 'WIN' : isL ? 'LOSS' : 'TIED'}
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, marginTop: 10, letterSpacing: '-0.01em', opacity: 0.85, position: 'relative' }}>
-              {match.margin}
-            </div>
-            <div style={{ fontSize: 13, fontFamily: 'var(--font-mono)', marginTop: 8, opacity: isW ? 0.7 : 0.5, letterSpacing: '0.04em', position: 'relative' }}>
-              vs {match.opp}
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(14,28,19,0.62)' }}/>
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '9% 20px 28px', overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 20, opacity: 0.8 }}>Loading…</div>
+        ) : (
+          <div style={{ width: '100%', maxWidth: 420, margin: '0 auto' }}>
+            <ShareResultCard headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={cells.length}/>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => shareResult && shareResult({ youWon: isW, halved: !isW && !isL, margin, theirLabel: match.opp })}
+                style={{ flex: 1, padding: 15, borderRadius: 14, border: 'none', cursor: 'pointer', background: 'var(--cream)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
+                Share scorecard
+              </button>
+              <button onClick={onClose}
+                style={{ flex: 1, padding: 15, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(234,226,206,0.45)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
+                Back
+              </button>
             </div>
           </div>
-
-          {/* Hole grid (if detail loaded) */}
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '16px 0', opacity: 0.4, fontSize: 13 }}>Loading details…</div>
-          ) : detail && detail.holes.length > 0 ? (
-            <div>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
-                Hole by hole
-              </div>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {detail.holes.map(h => {
-                  const r = holeResult(h);
-                  let bg, fg, border;
-                  if (r === 'W')     { bg = 'var(--forest)'; fg = 'var(--cream)'; border = 'none'; }
-                  else if (r === 'L') { bg = 'var(--cream)'; fg = 'var(--forest)'; border = 'none'; }
-                  else if (r === 'H') { bg = 'var(--paper)'; fg = 'var(--forest)'; border = '1px solid rgba(28,73,42,0.25)'; }
-                  else               { bg = 'transparent'; fg = 'rgba(14,28,19,0.3)'; border = '1px solid rgba(14,28,19,0.08)'; }
-                  return (
-                    <div key={h.hole_number} style={{
-                      width: 44, height: 52, borderRadius: 10,
-                      background: bg, color: fg, border,
-                      display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', justifyContent: 'center', gap: 2,
-                    }}>
-                      <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.65 }}>{h.hole_number}</span>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, lineHeight: 1 }}>{r || '·'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              {/* Summary counts */}
-              {(() => {
-                const won = detail.holes.filter(h => holeResult(h) === 'W').length;
-                const halved = detail.holes.filter(h => holeResult(h) === 'H').length;
-                const lost = detail.holes.filter(h => holeResult(h) === 'L').length;
-                return (
-                  <div style={{ display: 'flex', gap: 16, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.75, marginTop: 14, letterSpacing: '0.06em' }}>
-                    <span><strong style={{ fontSize: 14, fontFamily: 'var(--font-display)' }}>{won}</strong> WON</span>
-                    <span><strong style={{ fontSize: 14, fontFamily: 'var(--font-display)' }}>{halved}</strong> HALVED</span>
-                    <span><strong style={{ fontSize: 14, fontFamily: 'var(--font-display)' }}>{lost}</strong> LOST</span>
-                  </div>
-                );
-              })()}
-            </div>
-          ) : detail ? (
-            <div style={{ textAlign: 'center', opacity: 0.35, fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
-              HOLE DETAIL NOT AVAILABLE FOR THIS MATCH
-            </div>
-          ) : null}
-        </div>
+        )}
       </div>
     </div>
   );
