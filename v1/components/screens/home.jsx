@@ -15,9 +15,10 @@ function useLastMatchCard(userId) {
       if (!m) { if (on) setState(false); return; }
       const { data: holes } = await sbx.from('match_holes').select('hole_number, result').eq('match_id', m.id).order('hole_number');
       const ids = [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean);
-      const { data: ps } = await sbx.from('profiles').select('id, first_name, handle').in('id', ids);
+      const { data: ps } = await sbx.from('profiles').select('id, first_name, handle, avatar_url').in('id', ids);
       const byId = {}; (ps || []).forEach(p => { byId[p.id] = p; });
       const nm = id => { const p = byId[id]; return p ? (p.first_name || p.handle) : 'Player'; };
+      const av = id => { const p = byId[id]; return { name: nm(id), avatar: p && p.avatar_url }; };
       const youAreA = m.player_a === userId || m.player_a2 === userId;
       const is2v2 = m.match_type === '2v2';
       const teamA = [m.player_a, m.player_a2].filter(Boolean).map(nm).join(' + ');
@@ -37,7 +38,13 @@ function useLastMatchCard(userId) {
         const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
         return { n: h.hole_number, lab: h.result == null ? '' : w ? 'W' : l ? 'L' : 'H' };
       });
-      if (on) setState({ matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes });
+      const teamAids = [m.player_a, m.player_a2].filter(Boolean);
+      const teamBids = [m.player_b, m.player_b2].filter(Boolean);
+      const mu = {
+        yours: (youAreA ? teamAids : teamBids).map(av),
+        theirs: (youAreA ? teamBids : teamAids).map(av),
+      };
+      if (on) setState({ matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes, matchup: mu });
     })();
     return () => { on = false; };
   }, [userId]);
@@ -184,7 +191,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       {lastMatch && (
         <div style={{ padding: '20px 16px 0' }}>
           <Eyebrow style={{ marginBottom: 10 }}>Your last match</Eyebrow>
-          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles}/>
+          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles} matchup={lastMatch.matchup}/>
           <button onClick={() => go({ screen: 'matchDetail', matchId: lastMatch.matchId })} style={{
             marginTop: 10, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer',
             color: 'var(--forest)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
