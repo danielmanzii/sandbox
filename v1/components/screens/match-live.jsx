@@ -179,14 +179,7 @@ function MatchLive({ matchId, profile, tier, onExit }) {
         }}>
           <Icon.ArrowLeft size={16} color="currentColor"/>
         </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.55, color: 'var(--forest)' }}>
-            {match.course_name || 'Match'} · {match.total_holes} holes · {match.match_type || '1v1'}
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)', marginTop: 2 }}>
-            {is2v2 ? `${teamAName} vs ${teamBName}` : `You vs ${theirTeamLabel}`}
-          </div>
-        </div>
+        <div style={{ flex: 1 }}/>
         <StateBadge state={state} youAreA={youAreA}/>
       </div>
 
@@ -543,14 +536,21 @@ function FairwayCross({ value, onPick }) {
       </button>
     );
   };
+  const FW_LABEL = { long: 'Past the fairway', short: 'Short of the fairway', left: 'To the left', right: 'To the right', hit: 'On the fairway' };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 9,
-      gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
-      <Btn v="long"  area="long"  dir="up"/>
-      <Btn v="left"  area="left"  dir="left"/>
-      <Btn v="hit"   area="hit"/>
-      <Btn v="right" area="right" dir="right"/>
-      <Btn v="short" area="short" dir="down"/>
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 9,
+        gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
+        <Btn v="long"  area="long"  dir="up"/>
+        <Btn v="left"  area="left"  dir="left"/>
+        <Btn v="hit"   area="hit"/>
+        <Btn v="right" area="right" dir="right"/>
+        <Btn v="short" area="short" dir="down"/>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, fontWeight: 700,
+        color: value === 'hit' ? '#8FE0A0' : 'var(--cream)', opacity: value ? 0.95 : 0.45 }}>
+        {value ? FW_LABEL[value] : 'Where did it land?'}
+      </div>
     </div>
   );
 }
@@ -728,19 +728,28 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
       });
     };
-    const missed = (pid) => {
-      const next = { ...puttCard, [pid]: 'missed' };
-      if (yourTeam.every(p => next[p.id] === 'missed')) { pushHistory(); setPutts(putts + 1); setPuttCard({}); } // new round
-      else setPuttCard(next);
+    // Selecting ✓/✕ only marks a pending choice — nothing commits until Confirm.
+    const setPending = (pid, val) => setPuttCard(prev => ({ ...prev, [pid]: val }));
+    const allChosen = yourTeam.every(p => puttCard[p.id]);
+    const confirmPutt = () => {
+      const holer = yourTeam.find(p => puttCard[p.id] === 'made');
+      if (holer) { finish(holer.id); return; }
+      pushHistory(); setPutts(putts + 1); setPuttCard({}); // all missed → next putt round
     };
     return (
       <SfWrap count={count} onBack={goBack} canBack={history.length > 0} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {yourTeam.map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
-              onMade={() => finish(p.id)} onMissed={() => missed(p.id)}/>
+              onMade={() => setPending(p.id, 'made')} onMissed={() => setPending(p.id, 'missed')}/>
           ))}
         </div>
+        <button onClick={confirmPutt} disabled={!allChosen} style={{
+          marginTop: 12, width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+          background: allChosen ? 'var(--cream)' : 'rgba(234,226,206,0.22)',
+          color: allChosen ? 'var(--forest)' : 'var(--cream)', fontWeight: 800, fontSize: 13,
+          cursor: allChosen ? 'pointer' : 'default', opacity: allChosen ? 1 : 0.55,
+        }}>Confirm →</button>
       </SfWrap>
     );
   }
@@ -810,14 +819,14 @@ function YouReadout({ label, labelPlayers, count }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <TeamLabel players={labelPlayers} fallback={label || 'Your team'}/>
-        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>Strokes so far</span>
+        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>{n === 0 ? 'Tee it up' : 'Playing this hole…'}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
           {n === 0 ? '–' : n}
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, opacity: 0.7, lineHeight: 1.3 }}>
-          {n === 0 ? 'Tee it up' : 'Playing this hole…'}
+          strokes so far
         </div>
       </div>
     </div>
@@ -995,9 +1004,9 @@ function ScoreWheel({ label, labelPlayers, value, par, onChange }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <TeamLabel players={labelPlayers} fallback={label}/>
-        {sel != null && shape && shape !== 'par' && (
-          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
-        )}
+        {sel != null
+          ? (shape && shape !== 'par' && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>)
+          : <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>How many strokes?</span>}
       </div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 2px 2px' }} className="scroll-hide">
         {nums.map(n => {
@@ -1029,7 +1038,7 @@ function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
   // A live running count for THIS hole, only while no final score is in yet.
   const liveOn = value == null && live && live.holeNumber === holeNumber && !live.done && live.strokes > 0;
   const big = value != null ? value : (liveOn ? live.strokes : '–');
-  const sub = value != null ? 'Logged by their team'
+  const sub = value != null ? `logged by ${label || 'their team'}`
             : liveOn ? `Currently playing Shot ${live.strokes + 1}`
             : 'Waiting for their score…';
   return (
@@ -1046,10 +1055,10 @@ function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {liveOn && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#7BD389', flexShrink: 0 }}/>}
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
             {big}
           </div>
         </div>
