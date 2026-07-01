@@ -188,7 +188,7 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
         /* Decided — shareable 3D result card + confirm + actions, centred lower */
         <div style={{ flex: 1, padding: '0 16px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '7%' }}>
           <ResultCard cardRef={shareCardRef} match={match} state={state} youAreA={youAreA} is2v2={is2v2}
-            yourTeamLabel={yourTeamLabel} theirTeamLabel={theirTeamLabel} holes={holes}/>
+            yourTeamLabel={yourTeamLabel} theirTeamLabel={theirTeamLabel} holes={holes} yourTeam={yourTeam} theirTeam={theirTeam}/>
           <ResultConfirm match={match} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>
           {(match.confirmed_a && match.confirmed_b) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 0 34px' }}>
@@ -1336,9 +1336,20 @@ async function shareCardImage(node, args) {
 // tap to flip → the back is just the Sandbox wordmark. Takes already-computed
 // display pieces so it works on the live match-over screen AND profile history.
 //   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
-const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles }, captureRef) {
+const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles, matchup }, captureRef) {
   const tiltRef = React.useRef(null);
   const frontRef = React.useRef(null);
+  const avEl = (p, i) => {
+    const initial = ((p.name || '?').replace(/^@/, '')[0] || '?').toUpperCase();
+    return (
+      <div key={i} style={{ width: 28, height: 28, borderRadius: 999, marginLeft: i ? -9 : 0, overflow: 'hidden',
+        background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--font-display)', fontSize: 13, boxShadow: '0 0 0 2px rgba(14,28,19,0.4)' }}>
+        {p.avatar ? <img src={p.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/> : initial}
+      </div>
+    );
+  };
+  const hasMatchup = matchup && ((matchup.yours && matchup.yours.length) || (matchup.theirs && matchup.theirs.length));
   const flipping = React.useRef(false);
   const start = React.useRef({ x: 0, y: 0, down: false });
   const [face, setFace] = React.useState('front');
@@ -1426,9 +1437,17 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
                 background: 'radial-gradient(300px circle at var(--mx,50%) var(--my,0%), rgba(234,226,206,0.22), transparent 60%)' }}/>
               <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
               <div style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                   <span className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.7 }}>Match result</span>
-                  <img src="assets/monogram-cream.svg" alt="" style={{ height: 26, opacity: 0.9 }}/>
+                  {hasMatchup ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ display: 'flex' }}>{(matchup.yours || []).map(avEl)}</div>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, fontWeight: 700 }}>vs</span>
+                      <div style={{ display: 'flex' }}>{(matchup.theirs || []).map(avEl)}</div>
+                    </div>
+                  ) : (
+                    <img src="assets/monogram-cream.svg" alt="" style={{ height: 26, opacity: 0.9 }}/>
+                  )}
                 </div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>{headline}</div>
                 <div style={{ fontSize: 14, opacity: 0.88, marginTop: 8 }}>{summary}</div>
@@ -1472,7 +1491,7 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
 });
 
 // Match-live wrapper: compute the display pieces from live match state.
-function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabel, holes, cardRef }) {
+function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabel, holes, cardRef, yourTeam, theirTeam }) {
   const youWon = (state.up > 0 && youAreA) || (state.up < 0 && !youAreA);
   const halved = state.up === 0;
   const margin = match.final_margin || state.margin || '';
@@ -1483,7 +1502,11 @@ function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabe
     : `${theirTeamLabel} took it · ${plain}`;
   const subline = `${is2v2 ? `${yourTeamLabel} vs ${theirTeamLabel}` : `You vs ${theirTeamLabel}`} · ${match.course_name || 'Sandbox'}`;
   const cells = holes.map(h => ({ n: h.hole_number, lab: h.result == null ? '' : resultLabel(h.result, youAreA) }));
-  return <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={match.total_holes}/>;
+  const matchup = {
+    yours: (yourTeam || []).map(p => ({ name: p.name, avatar: p.avatar })),
+    theirs: (theirTeam || []).map(p => ({ name: p.name, avatar: p.avatar })),
+  };
+  return <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={match.total_holes} matchup={matchup}/>;
 }
 
 // ─── Full-screen message ─────────────────────────────────────

@@ -809,6 +809,11 @@ function MatchDetailScreen({ go, matchId, profile }) {
     const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
     return { n: h.hole_number, lab: h.result == null ? '' : w ? 'W' : l ? 'L' : 'H' };
   });
+  const toAv = (p) => ({ name: p.first_name || p.handle, avatar: p.avatar_url });
+  const matchup = {
+    yours: (youAreA ? teamA : teamB).map(toAv),
+    theirs: (youAreA ? teamB : teamA).map(toAv),
+  };
 
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -823,7 +828,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
       {/* 3D result card, centred a little lower */}
       <div style={{ flex: showHoles ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2% 16px 0' }}>
         <div style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
-          <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={holes.length}/>
+          <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={holes.length} matchup={matchup}/>
 
           {/* Still in progress → jump back in */}
           {!decided && isParticipant && (
