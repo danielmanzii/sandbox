@@ -1207,7 +1207,7 @@ function MatchHistorySheet({ history, ownerId, go, onClose }) {
                   row={r}
                   last={i === history.length - 1}
                   onOpenProfile={(h) => { onClose(); go && go({ screen: 'profile', viewingHandle: h }); }}
-                  onOpenCard={() => setSelectedMatch(r)}
+                  onOpenCard={() => { onClose(); go && go({ screen: 'matchDetail', matchId: r.id }); }}
                 />
               ))}
             </div>

@@ -2,7 +2,7 @@
 // Live 1v1 match screen. Real-time synced via Supabase channels.
 // Match-play scoring: lower score wins the hole; state = holes_up (A) vs (B).
 
-function MatchLive({ matchId, profile, tier, onExit }) {
+function MatchLive({ matchId, profile, tier, onExit, go }) {
   const isMember = tier === 'league' || tier === 'plus' || tier === 'stats';
   const [match, setMatch]   = React.useState(null);
   const [holes, setHoles]   = React.useState([]);
@@ -189,19 +189,25 @@ function MatchLive({ matchId, profile, tier, onExit }) {
           <ResultCard match={match} state={state} youAreA={youAreA} is2v2={is2v2}
             yourTeamLabel={yourTeamLabel} theirTeamLabel={theirTeamLabel} holes={holes}/>
           <ResultConfirm match={match} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>
-          <div style={{ display: 'flex', gap: 10, padding: '16px 0 34px' }}>
-            <button onClick={() => shareResult({
-              youWon: (state.up > 0 && youAreA) || (state.up < 0 && !youAreA),
-              halved: state.up === 0, margin: match.final_margin || state.margin, theirLabel: theirTeamLabel,
-            })} style={{ flex: 1, padding: 15, borderRadius: 14, border: 'none', cursor: 'pointer',
-              background: 'var(--forest)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
-              Share scorecard
-            </button>
-            <button onClick={onExit} style={{ flex: 1, padding: 15, borderRadius: 14, cursor: 'pointer',
-              background: 'transparent', border: '1px solid rgba(14,28,19,0.2)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
-              Back to hub
-            </button>
-          </div>
+          {(match.confirmed_a && match.confirmed_b) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 0 34px' }}>
+              <button onClick={() => shareResult({
+                youWon: (state.up > 0 && youAreA) || (state.up < 0 && !youAreA),
+                halved: state.up === 0, margin: match.final_margin || state.margin, theirLabel: theirTeamLabel,
+              })} style={{ width: '100%', padding: 15, borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: 'var(--forest)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
+                Share scorecard
+              </button>
+              <button onClick={() => go && go({ screen: 'matchDetail', matchId })} style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer',
+                background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
+                Hole by hole details
+              </button>
+              <button onClick={onExit} style={{ width: '100%', padding: 13, borderRadius: 14, cursor: 'pointer',
+                background: 'transparent', border: 'none', color: 'var(--forest)', opacity: 0.6, fontWeight: 800, fontSize: 13 }}>
+                Exit
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -1305,12 +1311,18 @@ async function shareResult({ youWon, halved, margin, theirLabel }) {
 //   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
 function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
   const tiltRef = React.useRef(null);
+  const frontRef = React.useRef(null);
   const flipping = React.useRef(false);
   const start = React.useRef({ x: 0, y: 0, down: false });
   const [face, setFace] = React.useState('front');
+  const [cardH, setCardH] = React.useState(null); // lock both faces to the front's height
   const [flip, setFlip] = React.useState({ transform: 'rotateX(0deg) rotateY(0deg)', transition: 'transform 0.3s ease' });
   const cols = Math.min(totalHoles || (cells ? cells.length : 9) || 9, 9);
   const TILT = 18; // degrees at the card edge — noticeably 3D
+
+  React.useLayoutEffect(() => {
+    if (face === 'front' && frontRef.current) setCardH(frontRef.current.offsetHeight);
+  }, [face, cells, headline, summary, subline]);
 
   function onDown(e) {
     start.current = { x: e.clientX, y: e.clientY, down: true };
@@ -1362,7 +1374,7 @@ function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
   }
 
   const faceVisual = {
-    borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
+    borderRadius: 'var(--radius-card-lg)', overflow: 'hidden', boxSizing: 'border-box',
     background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
     color: 'var(--cream)', boxShadow: '0 26px 54px rgba(14,28,19,0.45)',
   };
@@ -1374,7 +1386,7 @@ function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
           transform: 'rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg))' }}>
         <div style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
           {face === 'front' ? (
-            <div style={{ ...faceVisual, position: 'relative', padding: '22px 22px 18px' }}>
+            <div ref={frontRef} style={{ ...faceVisual, position: 'relative', padding: '22px 22px 18px' }}>
               <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
                 background: 'radial-gradient(300px circle at var(--mx,50%) var(--my,0%), rgba(234,226,206,0.22), transparent 60%)' }}/>
               <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
@@ -1413,7 +1425,7 @@ function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
               </div>
             </div>
           ) : (
-            <div style={{ ...faceVisual, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, padding: 20 }}>
+            <div style={{ ...faceVisual, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: cardH || 300, padding: 20 }}>
               <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
               <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ width: '75%', position: 'relative' }}/>
             </div>

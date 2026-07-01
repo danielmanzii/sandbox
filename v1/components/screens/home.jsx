@@ -1,5 +1,48 @@
-/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useNotifications, useMyBookings, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
+/* global React, Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark, MOCK, sbx, ShareResultCard, plainMargin, useLiveEvent, useNextEventForUser, useNextMajor, useUpcomingEvents, useActiveMatchForUser, useMyPendingInvites, useMyPendingEventInvites, useFriendFeed, useNewFollowers, useNotifications, useMyBookings, useFriendsRegisteredForEvents, formatHandle, acceptInvite, declineInvite */
 // Home screen — next event, live leaderboard, activity
+
+// Most-recent completed match → the shareable card pieces (null=loading, false=none).
+function useLastMatchCard(userId) {
+  const [state, setState] = React.useState(null);
+  React.useEffect(() => {
+    if (!userId) { setState(false); return undefined; }
+    let on = true;
+    (async () => {
+      const { data: ms } = await sbx.from('matches').select('*')
+        .or(`player_a.eq.${userId},player_a2.eq.${userId},player_b.eq.${userId},player_b2.eq.${userId}`)
+        .eq('status', 'completed').order('completed_at', { ascending: false }).limit(1);
+      const m = ms && ms[0];
+      if (!m) { if (on) setState(false); return; }
+      const { data: holes } = await sbx.from('match_holes').select('hole_number, result').eq('match_id', m.id).order('hole_number');
+      const ids = [m.player_a, m.player_a2, m.player_b, m.player_b2].filter(Boolean);
+      const { data: ps } = await sbx.from('profiles').select('id, first_name, handle').in('id', ids);
+      const byId = {}; (ps || []).forEach(p => { byId[p.id] = p; });
+      const nm = id => { const p = byId[id]; return p ? (p.first_name || p.handle) : 'Player'; };
+      const youAreA = m.player_a === userId || m.player_a2 === userId;
+      const is2v2 = m.match_type === '2v2';
+      const teamA = [m.player_a, m.player_a2].filter(Boolean).map(nm).join(' + ');
+      const teamB = [m.player_b, m.player_b2].filter(Boolean).map(nm).join(' + ');
+      const theirLabel = youAreA ? teamB : teamA;
+      const yourLabel = youAreA ? teamA : teamB;
+      const won = (m.result === 'A' && youAreA) || (m.result === 'B' && !youAreA);
+      const halved = m.result === 'H';
+      const margin = m.final_margin || '';
+      const plain = plainMargin ? plainMargin(margin) : margin;
+      const headline = halved ? 'Halved' : won ? `W ${margin}` : `L ${margin}`;
+      const summary = halved ? 'All square — matched hole for hole.'
+        : won ? `Beat ${theirLabel} · ${plain}` : `${theirLabel} took it · ${plain}`;
+      const subline = `${is2v2 ? `${yourLabel} vs ${theirLabel}` : `You vs ${theirLabel}`} · ${m.course_name || 'Sandbox'}`;
+      const cells = (holes || []).map(h => {
+        const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+        const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+        return { n: h.hole_number, lab: h.result == null ? '' : w ? 'W' : l ? 'L' : 'H' };
+      });
+      if (on) setState({ matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes });
+    })();
+    return () => { on = false; };
+  }, [userId]);
+  return state;
+}
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
 // `liveMode=true` still falls back to a mock live event for design-
@@ -15,6 +58,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [major]                = useNextMajor();
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
+  const lastMatch              = useLastMatchCard(profile && profile.id);
   const [pendingInvites]       = useMyPendingInvites(profile && profile.id);
   const [pendingEventInvites]  = useMyPendingEventInvites(profile && profile.id);
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
@@ -201,6 +245,18 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           sub="this mo"
         />
       </div>
+
+      {/* Your last match — the shareable 3D card, right on the home page */}
+      {lastMatch && (
+        <div style={{ padding: '20px 16px 0' }}>
+          <Eyebrow style={{ marginBottom: 10 }}>Your last match</Eyebrow>
+          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles}/>
+          <button onClick={() => go({ screen: 'matchDetail', matchId: lastMatch.matchId })} style={{
+            marginTop: 10, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--forest)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
+          }}>View match <Icon.ArrowRight size={12}/></button>
+        </div>
+      )}
 
       {/* Major banner — only shown when there's an upcoming Major in the DB */}
       {major && (
