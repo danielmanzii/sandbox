@@ -1312,11 +1312,43 @@ async function shareResult(args) {
 
 // Capture the result card DOM node as a PNG and share it as an image (falls back
 // to a text share, then to a download, so it always does *something*).
+// html-to-image can't reliably inline cross-origin images (the Supabase
+// avatar URLs) during capture, so they come out blank. Fetch every <img>
+// ourselves, swap in a data: URL, capture, then restore the originals.
+async function inlineImages(node) {
+  const imgs = Array.from(node.querySelectorAll('img'));
+  const restore = [];
+  await Promise.all(imgs.map(async (img) => {
+    const src = img.getAttribute('src') || '';
+    if (!src || src.indexOf('data:') === 0) return;
+    try {
+      const res = await fetch(src, { mode: 'cors', cache: 'force-cache' });
+      const blob = await res.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(blob);
+      });
+      restore.push([img, src]);
+      img.setAttribute('src', dataUrl);
+      await new Promise((resolve) => {
+        if (img.complete && img.naturalWidth) return resolve();
+        img.onload = img.onerror = () => resolve();
+      });
+    } catch (_) { /* leave the original src; better a fallback than a crash */ }
+  }));
+  return () => restore.forEach(([img, src]) => img.setAttribute('src', src));
+}
+
 async function shareCardImage(node, args) {
   const H = window.htmlToImage;
   if (!node || !H || !H.toBlob) { return shareResult(args); }
+  let restore = () => {};
   try {
-    const blob = await H.toBlob(node, { pixelRatio: 2.5, cacheBust: true, backgroundColor: '#0E2818' });
+    restore = await inlineImages(node);
+    const blob = await H.toBlob(node, { pixelRatio: 2.5, backgroundColor: '#0E2818' });
+    restore(); restore = () => {};
     if (!blob) return shareResult(args);
     const file = new File([blob], 'sandbox-result.png', { type: 'image/png' });
     const caption = shareCaption(args || {});
@@ -1330,6 +1362,7 @@ async function shareCardImage(node, args) {
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 4000);
   } catch (_) { shareResult(args); }
+  finally { restore(); }
 }
 
 // Reusable flippable 3D card. Tilts toward the pointer/finger (glare follows);
