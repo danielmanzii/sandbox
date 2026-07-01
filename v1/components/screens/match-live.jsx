@@ -1352,7 +1352,7 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
   }, [face, cells, headline, summary, subline]);
 
   function onDown(e) {
-    start.current = { x: e.clientX, y: e.clientY, down: true };
+    start.current = { x: e.clientX, y: e.clientY, t: (performance.now ? performance.now() : Date.now()), down: true };
     const el = tiltRef.current; if (el) el.style.transition = 'none';
   }
   function onMove(e) {
@@ -1373,9 +1373,17 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
     if (!start.current.down) return;
     start.current.down = false;
     const dx = e.clientX - start.current.x, dy = e.clientY - start.current.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const dist = Math.max(adx, ady);
+    const dt = (performance.now ? performance.now() : Date.now()) - start.current.t;
+    const v = dist / Math.max(dt, 1); // px per ms
     springBack();
-    if (Math.max(Math.abs(dx), Math.abs(dy)) > 44) {
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    // Only a deliberate flick flips: clearly one direction AND either a fast
+    // swipe or a long deliberate drag. Slow tilting-around never flips.
+    const dominant = dist > Math.min(adx, ady) * 1.7;
+    const flick = (dist > 80 && v > 0.7) || dist > 190;
+    if (dominant && flick) {
+      const dir = adx > ady ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
       doFlip(dir);
     }
   }
