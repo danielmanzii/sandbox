@@ -1347,7 +1347,9 @@ async function shareCardImage(node, args) {
   let restore = () => {};
   try {
     restore = await inlineImages(node);
-    const blob = await H.toBlob(node, { pixelRatio: 2.5, backgroundColor: '#0E2818' });
+    // No backgroundColor → the PNG keeps a transparent alpha channel, so the
+    // card's rounded corners (and around the circular avatars) cut out clean.
+    const blob = await H.toBlob(node, { pixelRatio: 2.5 });
     restore(); restore = () => {};
     if (!blob) return shareResult(args);
     const file = new File([blob], 'sandbox-result.png', { type: 'image/png' });
