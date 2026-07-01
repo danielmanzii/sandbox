@@ -727,17 +727,33 @@ function MatchDetailScreen({ go, matchId, profile }) {
   const cardRef = React.useRef(null);
   const topRef = React.useRef(null);
   const accordionRef = React.useRef(null);
+  const innerRef = React.useRef(null);
+  const exitRef = React.useRef(null);
+  const [holesMax, setHolesMax] = React.useState(0);
   const meId = profile && profile.id;
 
-  // Open the accordion, then scroll it up into view so it isn't cramped at the
-  // bottom. Close → ease back to the top.
+  // Scroll so the Exit button sits above the bottom dock after opening.
+  function scrollHolesUp() {
+    const el = exitRef.current || accordionRef.current;
+    if (!el) return;
+    const sc = el.closest && el.closest('.screen-enter');
+    if (!sc) { el.scrollIntoView({ behavior: 'smooth', block: 'end' }); return; }
+    const er = el.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    const DOCK = 120; // room for the tab bar + a little breathing space
+    const delta = er.bottom - (sr.bottom - DOCK);
+    if (delta > 0) sc.scrollBy({ top: delta, behavior: 'smooth' });
+  }
+
+  // Animate to the content's real height (fixed 640 made the open feel abrupt),
+  // then scroll it up into view. Close → collapse + ease back to the top.
   function toggleHoles() {
     setShowHoles(prev => {
       const next = !prev;
+      setHolesMax(next && innerRef.current ? innerRef.current.scrollHeight + 8 : 0);
       window.setTimeout(() => {
-        if (next && accordionRef.current) accordionRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        else if (!next && topRef.current) topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, next ? 420 : 60);
+        if (next) scrollHolesUp();
+        else if (topRef.current) topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, next ? 430 : 60);
       return next;
     });
   }
@@ -858,8 +874,8 @@ function MatchDetailScreen({ go, matchId, profile }) {
             </button>
 
             {/* Accordion: hole-by-hole (tap a hole for its logged stats) */}
-            <div ref={accordionRef} style={{ maxHeight: showHoles ? 640 : 0, overflow: 'hidden', transition: 'max-height 0.4s ease' }}>
-              <div style={{ paddingTop: 4 }}>
+            <div ref={accordionRef} style={{ maxHeight: holesMax, overflow: 'hidden', transition: 'max-height 0.42s ease' }}>
+              <div ref={innerRef} style={{ paddingTop: 4 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
                   <Stat label="Holes won" value={holesWon}/>
                   <Stat label="Lost" value={holesLost}/>
@@ -887,7 +903,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
             </div>
 
             {/* Exit sits below whatever's expanded */}
-            <button onClick={() => go({ screen: 'stats' })}
+            <button ref={exitRef} onClick={() => go({ screen: 'stats' })}
               style={{ width: '100%', padding: 13, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: 'none', color: 'var(--forest)', opacity: 0.6, fontWeight: 800, fontSize: 13 }}>
               Exit
             </button>
