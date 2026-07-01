@@ -1305,86 +1305,119 @@ async function shareResult({ youWon, halved, margin, theirLabel }) {
 //   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
 function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
   const tiltRef = React.useRef(null);
-  const [flipped, setFlipped] = React.useState(false);
-  const moved = React.useRef(false);
-  const start = React.useRef({ x: 0, y: 0 });
+  const flipping = React.useRef(false);
+  const start = React.useRef({ x: 0, y: 0, down: false });
+  const [face, setFace] = React.useState('front');
+  const [flip, setFlip] = React.useState({ transform: 'rotateX(0deg) rotateY(0deg)', transition: 'transform 0.3s ease' });
   const cols = Math.min(totalHoles || (cells ? cells.length : 9) || 9, 9);
+  const TILT = 18; // degrees at the card edge — noticeably 3D
 
-  function pt(e) { return e.touches ? e.touches[0] : e; }
-  function onDown(e) { moved.current = false; const p = pt(e); start.current = { x: p.clientX, y: p.clientY }; }
+  function onDown(e) {
+    start.current = { x: e.clientX, y: e.clientY, down: true };
+    const el = tiltRef.current; if (el) el.style.transition = 'none';
+  }
   function onMove(e) {
-    const el = tiltRef.current; if (!el) return;
-    const p = pt(e);
-    if (Math.abs(p.clientX - start.current.x) > 6 || Math.abs(p.clientY - start.current.y) > 6) moved.current = true;
+    const el = tiltRef.current; if (!el || !start.current.down) return;
     const rect = el.getBoundingClientRect();
-    const cx = p.clientX - rect.left, cy = p.clientY - rect.top;
-    el.style.setProperty('--tx', `${((cy - rect.height / 2) / (rect.height / 2)) * -7}deg`);
-    el.style.setProperty('--ty', `${((cx - rect.width / 2) / (rect.width / 2)) * 7}deg`);
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    el.style.setProperty('--tx', `${((cy - rect.height / 2) / (rect.height / 2)) * -TILT}deg`);
+    el.style.setProperty('--ty', `${((cx - rect.width / 2) / (rect.width / 2)) * TILT}deg`);
     el.style.setProperty('--mx', `${cx}px`);
     el.style.setProperty('--my', `${cy}px`);
   }
-  function reset() { const el = tiltRef.current; if (el) { el.style.setProperty('--tx', '0deg'); el.style.setProperty('--ty', '0deg'); } }
-  function onClick() { if (!moved.current) setFlipped(f => !f); }
+  function springBack() {
+    const el = tiltRef.current; if (!el) return;
+    el.style.transition = 'transform 0.55s cubic-bezier(0.22,1,0.36,1)';
+    el.style.setProperty('--tx', '0deg'); el.style.setProperty('--ty', '0deg');
+  }
+  function onUp(e) {
+    if (!start.current.down) return;
+    start.current.down = false;
+    const dx = e.clientX - start.current.x, dy = e.clientY - start.current.y;
+    springBack();
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > 44) {
+      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+      doFlip(dir);
+    }
+  }
+  function onLeave() { if (start.current.down) { start.current.down = false; springBack(); } }
+
+  // Swipe flips the card 180° in the swiped direction and lands the new side
+  // upright (swap content while edge-on at the midpoint).
+  function doFlip(dir) {
+    if (flipping.current) return;
+    flipping.current = true;
+    const DUR = 230;
+    const half  = { right: 'rotateY(90deg)',  left: 'rotateY(-90deg)',  up: 'rotateX(90deg)',  down: 'rotateX(-90deg)' }[dir];
+    const enter = { right: 'rotateY(-90deg)', left: 'rotateY(90deg)',   up: 'rotateX(-90deg)', down: 'rotateX(90deg)' }[dir];
+    setFlip({ transition: `transform ${DUR}ms ease-in`, transform: half });
+    setTimeout(() => {
+      setFace(f => (f === 'front' ? 'back' : 'front'));
+      setFlip({ transition: 'none', transform: enter });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setFlip({ transition: `transform ${DUR}ms ease-out`, transform: 'rotateX(0deg) rotateY(0deg)' });
+        setTimeout(() => { flipping.current = false; }, DUR);
+      }));
+    }, DUR);
+  }
 
   const faceVisual = {
     borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
     background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-    color: 'var(--cream)', boxShadow: '0 24px 50px rgba(14,28,19,0.42)',
+    color: 'var(--cream)', boxShadow: '0 26px 54px rgba(14,28,19,0.45)',
   };
-  const hidden = { backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' };
 
   return (
-    <div style={{ perspective: 1000, marginBottom: 4 }}>
-      <div ref={tiltRef} onPointerDown={onDown} onPointerMove={onMove} onPointerLeave={reset} onPointerUp={reset} onClick={onClick}
-        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.15s ease', cursor: 'pointer', touchAction: 'none',
+    <div style={{ perspective: 680, marginBottom: 4 }}>
+      <div ref={tiltRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onLeave}
+        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out', touchAction: 'none', cursor: 'grab',
           transform: 'rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg))' }}>
-        <div style={{ position: 'relative', transformStyle: 'preserve-3d', transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
-          transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
-          {/* FRONT */}
-          <div style={{ ...faceVisual, ...hidden, position: 'relative', padding: '22px 22px 18px' }}>
-            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-              background: 'radial-gradient(300px circle at var(--mx,50%) var(--my,0%), rgba(234,226,206,0.20), transparent 60%)' }}/>
-            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-            <div style={{ position: 'relative' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.7 }}>Match result</span>
-                <img src="assets/monogram-cream.svg" alt="" style={{ height: 26, opacity: 0.9 }}/>
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>{headline}</div>
-              <div style={{ fontSize: 14, opacity: 0.88, marginTop: 8 }}>{summary}</div>
-              {subline && <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{subline}</div>}
+        <div style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
+          {face === 'front' ? (
+            <div style={{ ...faceVisual, position: 'relative', padding: '22px 22px 18px' }}>
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: 'radial-gradient(300px circle at var(--mx,50%) var(--my,0%), rgba(234,226,206,0.22), transparent 60%)' }}/>
+              <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.7 }}>Match result</span>
+                  <img src="assets/monogram-cream.svg" alt="" style={{ height: 26, opacity: 0.9 }}/>
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>{headline}</div>
+                <div style={{ fontSize: 14, opacity: 0.88, marginTop: 8 }}>{summary}</div>
+                {subline && <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{subline}</div>}
 
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 5, marginTop: 16 }}>
-                {(cells || []).map(c => {
-                  const won = c.lab === 'W', halv = c.lab === 'H';
-                  return (
-                    <div key={c.n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                      <div style={{ fontSize: 8, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>H{c.n}</div>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontFamily: 'var(--font-display)', fontSize: 12,
-                        background: won ? 'var(--cream)' : halv ? 'transparent' : (c.lab ? 'rgba(234,226,206,0.16)' : 'transparent'),
-                        color: won ? 'var(--forest)' : 'var(--cream)',
-                        border: (halv || !c.lab) ? '1.5px solid rgba(234,226,206,0.4)' : 'none',
-                        opacity: c.lab ? 1 : 0.4,
-                      }}>{c.lab}</div>
-                    </div>
-                  );
-                })}
-              </div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 5, marginTop: 16 }}>
+                  {(cells || []).map(c => {
+                    const won = c.lab === 'W', halv = c.lab === 'H';
+                    return (
+                      <div key={c.n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{ fontSize: 8, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>H{c.n}</div>
+                        <div style={{
+                          width: 22, height: 22, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'var(--font-display)', fontSize: 12,
+                          background: won ? 'var(--cream)' : halv ? 'transparent' : (c.lab ? 'rgba(234,226,206,0.16)' : 'transparent'),
+                          color: won ? 'var(--forest)' : 'var(--cream)',
+                          border: (halv || !c.lab) ? '1.5px solid rgba(234,226,206,0.4)' : 'none',
+                          opacity: c.lab ? 1 : 0.4,
+                        }}>{c.lab}</div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
-                <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 15, opacity: 0.85 }}/>
-                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Tap to flip ↻</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+                  <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 15, opacity: 0.85 }}/>
+                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Swipe to flip ⇄</span>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* BACK — just the wordmark, ~75% of the face */}
-          <div style={{ ...faceVisual, ...hidden, position: 'absolute', inset: 0, transform: 'rotateY(180deg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-            <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ width: '75%', position: 'relative' }}/>
-          </div>
+          ) : (
+            <div style={{ ...faceVisual, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, padding: 20 }}>
+              <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+              <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ width: '75%', position: 'relative' }}/>
+            </div>
+          )}
         </div>
       </div>
     </div>
