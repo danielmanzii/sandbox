@@ -191,6 +191,7 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   const [course, setCourse] = React.useState(''); // pp: free text
   const [holes, setHoles]   = React.useState(null);
   const [matchType, setMatchType] = React.useState(null);
+  const [step, setStep]     = React.useState(0);
   const [busy, setBusy]     = React.useState(false);
   const [err, setErr]       = React.useState('');
 
@@ -215,16 +216,9 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
   const selCourse = rcCourses.find(c => c.id === courseId);
   const selTee    = selCourse && selCourse.tees.find(t => t.id === teeId);
 
-  // ── Step gating: each section appears only once the prior one is chosen. ──
+  // ── Step gating ──
   const courseDone = isRegular ? !!courseId : !!course.trim();
-  const teeDone    = !isRegular ? true
-    : !courseId ? false
-    : (selCourse && selCourse.tees.length === 0) ? true
-    : !!teeId;
   const showTees   = isRegular && !!courseId && selCourse && selCourse.tees.length > 0;
-  const showHoles  = courseDone && teeDone;
-  const showType   = showHoles && !!holes;
-  const showCreate = showType && !!matchType;
 
   const filteredCourses = q.trim()
     ? rcCourses.filter(c => `${c.name} ${c.city || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
@@ -262,29 +256,6 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
     setBusy(false); onCreated(data);
   }
 
-  // Forest-gradient step card (Challenge Friends look): grain, pill eyebrow,
-  // display title, then the picker. `done` swaps the eyebrow to a ✓ chip.
-  const StepCard = ({ eyebrow, title, done, children }) => (
-    <div className="step-reveal" style={{
-      position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-card-lg)',
-      background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 45%, var(--moss) 100%)',
-      color: 'var(--cream)', padding: 20, boxShadow: 'var(--shadow-md)',
-    }}>
-      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-      <div style={{ position: 'relative' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999,
-          background: 'var(--forest)', color: 'var(--cream)', fontSize: 10, fontWeight: 800,
-          letterSpacing: '0.16em', textTransform: 'uppercase',
-        }}>
-          {done && <span style={{ fontSize: 11, lineHeight: 1 }}>✓</span>}{eyebrow}
-        </div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 0.95, marginTop: 10, marginBottom: 14, letterSpacing: '-0.01em' }}>{title}</div>
-        {children}
-      </div>
-    </div>
-  );
-
   // Selectable control on the forest gradient: cream when chosen, translucent otherwise.
   const pick = (on) => ({
     background: on ? 'var(--cream)' : 'rgba(255,255,255,0.08)',
@@ -292,130 +263,184 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
     border: on ? 'none' : '1px solid rgba(234,226,206,0.18)',
   });
 
+  // ── One question per screen (same format as Create account) ──
+  // Tees only appear for a regular course that actually has tee sets.
+  const courseField = isRegular ? (
+    <div style={{ textAlign: 'left' }}>
+      {rcCourses.length > 5 && (
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search courses…" className="on-forest-input" style={{
+          width: '100%', padding: '12px 14px', borderRadius: 12, marginBottom: 10,
+          background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
+          color: 'var(--cream)', fontSize: 15, outline: 'none',
+        }}/>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+        {rcCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>Loading courses…</div>}
+        {rcCourses.length > 0 && filteredCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>No courses match “{q}”.</div>}
+        {filteredCourses.map(c => {
+          const on = courseId === c.id;
+          return (
+            <button key={c.id} onClick={() => { setCourseId(c.id); setTeeId(c.tees[0] ? c.tees[0].id : null); }} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left',
+              padding: '13px 14px', borderRadius: 12, ...pick(on),
+            }}>
+              <span>
+                <span style={{ display: 'block', fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>{c.name}</span>
+                {c.city && <span style={{ display: 'block', fontSize: 11, opacity: 0.7, marginTop: 2 }}>{c.city}</span>}
+              </span>
+              {on && <Icon.ArrowRight size={15} color="var(--forest)"/>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : (
+    <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Killian Greens" className="on-forest-input" style={{
+      width: '100%', padding: '15px 14px', borderRadius: 14, textAlign: 'center',
+      background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
+      color: 'var(--cream)', fontSize: 18, outline: 'none',
+    }}/>
+  );
+
+  const steps = [
+    { key: 'course', eyebrow: 'Where', title: 'Where are you playing?', valid: courseDone, field: courseField },
+  ];
+  if (showTees) {
+    steps.push({ key: 'tees', eyebrow: 'Tees', title: 'Which tees?', valid: !!teeId, field: (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {selCourse.tees.map(t => {
+          const on = teeId === t.id;
+          return (
+            <button key={t.id} onClick={() => setTeeId(t.id)} style={{
+              flex: 1, minWidth: 90, padding: '14px 10px', borderRadius: 14,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ...pick(on),
+            }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 800 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || '#999', display: 'inline-block' }}/>
+                {t.name}
+              </span>
+              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
+            </button>
+          );
+        })}
+      </div>
+    ) });
+  }
+  steps.push({ key: 'holes', eyebrow: 'Length', title: 'How many holes?', valid: !!holes, field: (
+    <div style={{ display: 'flex', gap: 10 }}>
+      {[9, 18].map(n => (
+        <button key={n} onClick={() => setHoles(n)} style={{
+          flex: 1, padding: '18px', borderRadius: 14, fontSize: 16, fontWeight: 800, lineHeight: 1.1, ...pick(holes === n),
+        }}>{n}-hole{isRegular && n === 9 ? ' (front)' : ''}</button>
+      ))}
+    </div>
+  ) });
+  steps.push({ key: 'format', eyebrow: 'Format', title: '1v1 or 2v2?', valid: !!matchType, field: (
+    <div style={{ display: 'flex', gap: 10 }}>
+      {[['1v1', '1v1'], ['2v2', '2v2 · Scramble']].map(([v, l]) => (
+        <button key={v} onClick={() => setMatchType(v)} style={{
+          flex: 1, padding: '18px', borderRadius: 14, fontSize: 15, fontWeight: 800, lineHeight: 1.1, ...pick(matchType === v),
+        }}>{l}</button>
+      ))}
+    </div>
+  ) });
+
+  const last = steps.length - 1;
+  const safeStep = Math.min(step, last);
+  const cur = steps[safeStep];
+  // If the Tees step disappears (e.g. course swapped for one with no tees),
+  // don't leave the pointer past the end.
+  React.useEffect(() => { if (step > last) setStep(last); }, [step, last]);
+
+  // Keyboard-aware lift (matches the sign-up flow): raise the centered content
+  // by half the on-screen keyboard height when a field is focused.
+  const inset = useMatchKbInset();
+  function blur() { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  function next() {
+    if (!cur || !cur.valid || busy) return;
+    blur();
+    if (safeStep < last) { setErr(''); setStep(safeStep + 1); }
+    else create();
+  }
+  function back() {
+    blur();
+    if (safeStep === 0) onCancel();
+    else { setErr(''); setStep(safeStep - 1); }
+  }
+
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 16px 24px' }}>
-      <button onClick={onCancel} style={{
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <button onClick={back} style={{
         position: 'absolute', top: 52, left: 16, zIndex: 5, width: 38, height: 38, borderRadius: 999,
-        background: 'var(--paper)', border: 'var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)',
+        background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(234,226,206,0.2)', color: 'var(--cream)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <div style={{ padding: '0 4px' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>New match</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-          Set it up.
-        </div>
-        <div className="caption-serif" style={{ fontSize: 15, color: 'var(--forest)', opacity: 0.7, marginTop: 6, lineHeight: 1.4 }}>
-          One step at a time — pick a course, then we’ll reveal the rest.
-        </div>
-      </div>
+      {/* Centered content — lifts up by half the keyboard height when focused */}
+      <div style={{
+        position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '0 24px', transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
+      }}>
+        <div style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}>
+          {/* Progress */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 24 }}>
+            {steps.map((s, i) => (
+              <div key={s.key} style={{
+                width: i === safeStep ? 22 : 7, height: 7, borderRadius: 99,
+                background: i <= safeStep ? 'var(--cream)' : 'rgba(234,226,206,0.28)',
+                transition: 'width 0.35s ease, background 0.35s ease',
+              }}/>
+            ))}
+          </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20 }}>
-        {/* ── Step 1 · Course ── */}
-        <StepCard eyebrow="Course" title={courseDone ? (isRegular ? selCourse.name : course.trim()) : 'Where are you playing?'} done={courseDone}>
-          {isRegular ? (
-            <>
-              {rcCourses.length > 5 && (
-                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search courses…" className="on-forest-input" style={{
-                  width: '100%', padding: '11px 14px', borderRadius: 10, marginBottom: 10,
-                  background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
-                  color: 'var(--cream)', fontSize: 14, outline: 'none',
-                }}/>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
-                {rcCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>Loading courses…</div>}
-                {rcCourses.length > 0 && filteredCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>No courses match “{q}”.</div>}
-                {filteredCourses.map(c => {
-                  const on = courseId === c.id;
-                  return (
-                    <button key={c.id} onClick={() => { setCourseId(c.id); setTeeId(c.tees[0] ? c.tees[0].id : null); }} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left',
-                      padding: '13px 14px', borderRadius: 12, ...pick(on),
-                    }}>
-                      <span>
-                        <span style={{ display: 'block', fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>{c.name}</span>
-                        {c.city && <span style={{ display: 'block', fontSize: 11, opacity: 0.7, marginTop: 2 }}>{c.city}</span>}
-                      </span>
-                      {on && <Icon.ArrowRight size={15} color="var(--forest)"/>}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <input value={course} onChange={e => setCourse(e.target.value)} placeholder="e.g. Killian Greens" className="on-forest-input" style={{
-              width: '100%', padding: '13px 14px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
-              color: 'var(--cream)', fontSize: 15, outline: 'none',
-            }}/>
-          )}
-        </StepCard>
-
-        {/* ── Step 2 · Tees ── */}
-        {showTees && (
-          <StepCard eyebrow="Tees" title={teeId ? `${selTee.name} tees` : 'Which tees?'} done={!!teeId}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {selCourse.tees.map(t => {
-                const on = teeId === t.id;
-                return (
-                  <button key={t.id} onClick={() => setTeeId(t.id)} style={{
-                    flex: 1, minWidth: 90, padding: '12px 10px', borderRadius: 12,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ...pick(on),
-                  }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 999, background: t.color || '#999', display: 'inline-block' }}/>
-                      {t.name}
-                    </span>
-                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>{t.yards}y · {t.rating}/{t.slope}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </StepCard>
-        )}
-
-        {/* ── Step 3 · Holes ── */}
-        {showHoles && (
-          <StepCard eyebrow="Holes" title={holes ? `${holes} holes` : 'How many holes?'} done={!!holes}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[9, 18].map(n => (
-                <button key={n} onClick={() => setHoles(n)} style={{
-                  flex: 1, padding: '14px', borderRadius: 12, fontSize: 15, fontWeight: 800, lineHeight: 1.1, ...pick(holes === n),
-                }}>{n}-hole{isRegular && n === 9 ? ' (front)' : ''}</button>
+          {/* Sliding questions */}
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{
+              display: 'flex', width: `${steps.length * 100}%`,
+              transform: `translateX(-${safeStep * (100 / steps.length)}%)`,
+              transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}>
+              {steps.map((s, i) => (
+                <div key={s.key} aria-hidden={i !== safeStep} style={{ width: `${100 / steps.length}%`, flexShrink: 0, padding: '0 4px', opacity: i === safeStep ? 1 : 0, transition: 'opacity 0.3s ease', pointerEvents: i === safeStep ? 'auto' : 'none' }}>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>{s.eyebrow}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1.08, letterSpacing: '-0.02em' }}>{s.title}</div>
+                  <div style={{ marginTop: 22 }}>{s.field}</div>
+                  <Button variant="paper" size="lg" full disabled={!s.valid || busy} onClick={next} style={{ marginTop: 22 }}>
+                    {i < last ? 'Next' : (busy ? 'Creating…' : 'Create match')}
+                    {!busy && <Icon.ArrowRight size={16}/>}
+                  </Button>
+                </div>
               ))}
             </div>
-          </StepCard>
-        )}
+          </div>
 
-        {/* ── Step 4 · Match type ── */}
-        {showType && (
-          <StepCard eyebrow="Format" title={matchType ? (matchType === '2v2' ? '2v2 · Scramble' : '1v1 match') : '1v1 or 2v2?'} done={!!matchType}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['1v1', '1v1'], ['2v2', '2v2 · Scramble']].map(([v, l]) => (
-                <button key={v} onClick={() => setMatchType(v)} style={{
-                  flex: 1, padding: '14px', borderRadius: 12, fontSize: 14, fontWeight: 800, lineHeight: 1.1, ...pick(matchType === v),
-                }}>{l}</button>
-              ))}
-            </div>
-          </StepCard>
-        )}
-      </div>
-
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
-
-      <div style={{ flex: 1, minHeight: 16 }}/>
-
-      {showCreate && (
-        <div className="step-reveal">
-          <Button variant="forest" size="lg" full disabled={busy} onClick={create}>
-            {busy ? 'Creating…' : 'Create match'}
-            {!busy && <Icon.ArrowRight size={16}/>}
-          </Button>
+          {err && <div style={{ marginTop: 16, fontSize: 13, color: '#E7B8A7', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
         </div>
-      )}
+      </div>
     </div>
   );
+}
+
+// Keyboard inset (visual viewport) — lift centered content above the keyboard.
+function useMatchKbInset() {
+  const [inset, setInset] = React.useState(0);
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const onResize = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    onResize();
+    return () => { vv.removeEventListener('resize', onResize); vv.removeEventListener('scroll', onResize); };
+  }, []);
+  return inset;
 }
 
 // ─── Lobby roster (who's on each team) ───────────────────────────────
@@ -627,43 +652,44 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <div style={{ position: 'relative' }}>
-        <Eyebrow color="var(--cream)">Share this code</Eyebrow>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 0.95, marginTop: 10 }}>
+      {/* Centered column — same formatting as the setup wizard */}
+      <div style={{ position: 'relative', width: '100%', maxWidth: 380, margin: '0 auto', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>Share this code</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1.02 }}>
           {is2v2 ? <>Waiting on<br/>the other three…</> : <>Waiting on<br/>your opponent…</>}
         </div>
         <div style={{ fontSize: 13, opacity: 0.8, marginTop: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
           {filled}/{required} PLAYERS IN
         </div>
-      </div>
 
-      {/* Live roster — who's on each side as seats fill */}
-      {is2v2 && (
-        <div style={{ position: 'relative', marginTop: 18 }}>
-          <LobbyRoster match={match} profile={profile} people={people}/>
+        {/* Live roster — who's on each side as seats fill */}
+        {is2v2 && (
+          <div style={{ width: '100%', marginTop: 18 }}>
+            <LobbyRoster match={match} profile={profile} people={people}/>
+          </div>
+        )}
+
+        <div style={{ flex: 1, minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.2em' }}>MATCH CODE</div>
+          <div style={{
+            fontFamily: 'var(--font-display)', fontSize: 56, letterSpacing: '0.04em',
+            marginTop: 4, color: 'var(--cream)', whiteSpace: 'nowrap', maxWidth: '100%',
+          }}>{match.join_code}</div>
+          <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
+            Players tap <b>Joining someone else?</b> under Challenge Friends and type this code. {is2v2 ? 'Each player picks a team as they join.' : ''}
+          </div>
+
+          {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
+          <ShareCodeButton code={match.join_code} mode={is2v2 ? '2v2' : '1v1'}/>
+
+          {/* Invite by username — pushes a notification to that player */}
+          <InviteByHandle matchId={match.id} profile={profile}/>
         </div>
-      )}
 
-      <div style={{ position: 'relative', flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.2em' }}>MATCH CODE</div>
-        <div style={{
-          fontFamily: 'var(--font-display)', fontSize: 56, letterSpacing: '0.04em',
-          marginTop: 4, color: 'var(--cream)', whiteSpace: 'nowrap', maxWidth: '100%',
-        }}>{match.join_code}</div>
-        <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
-          Players tap <b>Joining someone else?</b> under Challenge Friends and type this code. {is2v2 ? 'Each player picks a team as they join.' : ''}
-        </div>
-
-        {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
-        <ShareCodeButton code={match.join_code} mode={is2v2 ? '2v2' : '1v1'}/>
-
-        {/* Invite by username — pushes a notification to that player */}
-        <InviteByHandle matchId={match.id} profile={profile}/>
+        <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
+          Cancel match
+        </Button>
       </div>
-
-      <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
-        Cancel match
-      </Button>
     </div>
   );
 }
@@ -827,6 +853,7 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
   const [err, setErr]   = React.useState('');
   const [stage, setStage] = React.useState('code');  // code | pick | waiting
   const [lobbyMatch, setLobbyMatch] = React.useState(null);
+  const inset = useMatchKbInset();
 
   async function submit() {
     const c = code.trim().toUpperCase();
@@ -868,49 +895,58 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
   }
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px' }}>
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <button onClick={onCancel} style={{
         position: 'absolute', top: 52, left: 16, zIndex: 5,
         width: 38, height: 38, borderRadius: 999,
-        background: 'var(--paper)', border: 'var(--hairline)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--forest)',
+        background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(234,226,206,0.2)',
+        color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <Eyebrow color="var(--forest)">Join a match</Eyebrow>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-        Enter the code.
+      {/* Centered — lifts above the keyboard when the field is focused */}
+      <div style={{
+        position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '0 24px', transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
+      }}>
+        <div style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>Join a match</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1.08, letterSpacing: '-0.02em' }}>Enter the code.</div>
+
+          <div style={{ marginTop: 22 }}>
+            <input
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="ABC123"
+              maxLength={8}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              className="on-forest-input"
+              style={{
+                width: '100%', padding: '22px 14px', borderRadius: 16,
+                background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
+                color: 'var(--cream)', fontSize: 40,
+                textAlign: 'center', letterSpacing: '0.2em',
+                fontFamily: 'var(--font-display)',
+                outline: 'none', textTransform: 'uppercase',
+              }}
+            />
+          </div>
+
+          {err && <div style={{ marginTop: 16, fontSize: 13, color: '#E7B8A7', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
+
+          <Button variant="paper" size="lg" full disabled={code.trim().length < 4 || busy} onClick={submit} style={{ marginTop: 22 }}>
+            {busy ? 'Joining…' : 'Join match'}
+            {!busy && <Icon.ArrowRight size={16}/>}
+          </Button>
+        </div>
       </div>
-
-      <div style={{ marginTop: 32 }}>
-        <input
-          value={code}
-          onChange={e => setCode(e.target.value.toUpperCase())}
-          placeholder="ABC123"
-          maxLength={8}
-          autoCapitalize="characters"
-          autoCorrect="off"
-          style={{
-            width: '100%', padding: '24px 14px', borderRadius: 16,
-            background: 'var(--paper)', border: 'var(--hairline-strong)',
-            color: 'var(--forest)', fontSize: 40,
-            textAlign: 'center', letterSpacing: '0.2em',
-            fontFamily: 'var(--font-display)',
-            outline: 'none', textTransform: 'uppercase',
-          }}
-        />
-      </div>
-
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
-
-      <div style={{ flex: 1 }}/>
-
-      <Button variant="forest" size="lg" full disabled={code.trim().length < 4 || busy} onClick={submit}>
-        {busy ? 'Joining…' : 'Join match'}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
     </div>
   );
 }
