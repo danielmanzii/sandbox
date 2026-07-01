@@ -724,6 +724,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
   const [err, setErr] = React.useState('');
   const [selHole, setSelHole] = React.useState(null);
   const [showHoles, setShowHoles] = React.useState(false);
+  const cardRef = React.useRef(null);
   const meId = profile && profile.id;
 
   if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
@@ -791,7 +792,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
       {/* 3D result card, centred a little lower */}
       <div style={{ flex: showHoles ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2% 16px 0' }}>
         <div style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
-          <ShareResultCard headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={holes.length}/>
+          <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={holes.length}/>
 
           {/* Still in progress → jump back in */}
           {!decided && isParticipant && (
@@ -830,15 +831,47 @@ function MatchDetailScreen({ go, matchId, profile }) {
           {/* Actions */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
             {decided && bothConfirmed && (
-              <button onClick={() => shareResult && shareResult({ youWon: won, halved, margin, theirLabel })}
+              <button onClick={() => shareCardImage(cardRef.current, { youWon: won, halved, margin, theirLabel })}
                 style={{ width: '100%', padding: 15, borderRadius: 14, border: 'none', cursor: 'pointer', background: 'var(--forest)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
                 Share scorecard
               </button>
             )}
             <button onClick={() => setShowHoles(s => !s)}
-              style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
+              style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {showHoles ? 'Hide hole details' : 'Hole by hole details'}
+              <span style={{ transition: 'transform 0.3s ease', transform: showHoles ? 'rotate(180deg)' : 'none', display: 'inline-flex' }}><Icon.Chevron dir="down" size={14} color="var(--forest)"/></span>
             </button>
+
+            {/* Accordion: hole-by-hole (tap a hole for its logged stats) */}
+            <div style={{ maxHeight: showHoles ? 640 : 0, overflow: 'hidden', transition: 'max-height 0.4s ease' }}>
+              <div style={{ paddingTop: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                  <Stat label="Holes won" value={holesWon}/>
+                  <Stat label="Lost" value={holesLost}/>
+                  <Stat label="Halved" value={holesHalved}/>
+                </div>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole · tap for detail</div>
+                <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(holes.length, 9)}, 1fr)`, gap: 4 }}>
+                  {holes.map(h => {
+                    const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+                    const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+                    const lab = h.result == null ? '·' : w ? 'W' : l ? 'L' : 'H';
+                    const bg = w ? 'var(--forest)' : l ? '#C44536' : h.result === 'H' ? 'var(--paper)' : 'transparent';
+                    const col = w ? 'var(--cream)' : l ? '#FFFFFF' : 'var(--forest)';
+                    return (
+                      <button key={h.hole_number} onClick={() => setSelHole(h)} style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'transparent', border: 'none', padding: '2px 0', cursor: 'pointer',
+                      }}>
+                        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>{h.hole_number}</div>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13 }}>{lab}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Exit sits below whatever's expanded */}
             <button onClick={() => go({ screen: 'stats' })}
               style={{ width: '100%', padding: 13, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: 'none', color: 'var(--forest)', opacity: 0.6, fontWeight: 800, fontSize: 13 }}>
               Exit
@@ -846,35 +879,6 @@ function MatchDetailScreen({ go, matchId, profile }) {
           </div>
         </div>
       </div>
-
-      {/* Hole-by-hole — tap a hole for its stats (revealed by the button) */}
-      {showHoles && holes.length > 0 && (
-        <div style={{ padding: '20px 16px 40px', maxWidth: 460, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-            <Stat label="Holes won" value={holesWon}/>
-            <Stat label="Lost" value={holesLost}/>
-            <Stat label="Halved" value={holesHalved}/>
-          </div>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole · tap for detail</div>
-          <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(holes.length, 9)}, 1fr)`, gap: 4 }}>
-            {holes.map(h => {
-              const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
-              const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
-              const lab = h.result == null ? '·' : w ? 'W' : l ? 'L' : 'H';
-              const bg = w ? 'var(--forest)' : l ? '#C44536' : h.result === 'H' ? 'var(--paper)' : 'transparent';
-              const col = w ? 'var(--cream)' : l ? '#FFFFFF' : 'var(--forest)';
-              return (
-                <button key={h.hole_number} onClick={() => setSelHole(h)} style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'transparent', border: 'none', padding: '2px 0', cursor: 'pointer',
-                }}>
-                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>{h.hole_number}</div>
-                  <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13 }}>{lab}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {selHole && (
         <HoleStatSheet hole={selHole} youAreA={youAreA} is2v2={is2v2} byId={data.byId}

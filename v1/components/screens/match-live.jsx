@@ -113,6 +113,7 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
   }, [hasData, state.decided, state.up, state.margin, match && match.status, matchId]);
 
   const [confirmingCancel, setConfirmingCancel] = React.useState(false);
+  const shareCardRef = React.useRef(null);
   async function doCancelMatch() {
     await sbx.from('matches').update({ status: 'abandoned', completed_at: new Date().toISOString() }).eq('id', matchId);
     try { localStorage.removeItem('spp_active_match'); } catch {}
@@ -186,12 +187,12 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
       {matchDecided ? (
         /* Decided — shareable 3D result card + confirm + actions, centred lower */
         <div style={{ flex: 1, padding: '0 16px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '7%' }}>
-          <ResultCard match={match} state={state} youAreA={youAreA} is2v2={is2v2}
+          <ResultCard cardRef={shareCardRef} match={match} state={state} youAreA={youAreA} is2v2={is2v2}
             yourTeamLabel={yourTeamLabel} theirTeamLabel={theirTeamLabel} holes={holes}/>
           <ResultConfirm match={match} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>
           {(match.confirmed_a && match.confirmed_b) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 0 34px' }}>
-              <button onClick={() => shareResult({
+              <button onClick={() => shareCardImage(shareCardRef.current, {
                 youWon: (state.up > 0 && youAreA) || (state.up < 0 && !youAreA),
                 halved: state.up === 0, margin: match.final_margin || state.margin, theirLabel: theirTeamLabel,
               })} style={{ width: '100%', padding: 15, borderRadius: 14, border: 'none', cursor: 'pointer',
@@ -1293,11 +1294,15 @@ function plainMargin(margin) {
   return m;
 }
 
-async function shareResult({ youWon, halved, margin, theirLabel }) {
+function shareCaption({ youWon, halved, margin }) {
   const line = halved ? 'We halved our Sandbox match.'
     : youWon ? `Won my Sandbox match ${margin || ''}!`.trim()
     : `Lost a close one ${margin || ''} in my Sandbox match.`.trim();
-  const text = `${line} ⛳ Pitch & putt, rated. sbx.golf`;
+  return `${line} ⛳ Pitch & putt, rated. sbx.golf`;
+}
+
+async function shareResult(args) {
+  const text = shareCaption(args || {});
   const url = 'https://sbx.golf';
   try {
     if (navigator.share) { await navigator.share({ title: 'Sandbox', text, url }); return; }
@@ -1305,11 +1310,33 @@ async function shareResult({ youWon, halved, margin, theirLabel }) {
   } catch (_) { /* user dismissed the share sheet */ }
 }
 
+// Capture the result card DOM node as a PNG and share it as an image (falls back
+// to a text share, then to a download, so it always does *something*).
+async function shareCardImage(node, args) {
+  const H = window.htmlToImage;
+  if (!node || !H || !H.toBlob) { return shareResult(args); }
+  try {
+    const blob = await H.toBlob(node, { pixelRatio: 2.5, cacheBust: true, backgroundColor: '#0E2818' });
+    if (!blob) return shareResult(args);
+    const file = new File([blob], 'sandbox-result.png', { type: 'image/png' });
+    const caption = shareCaption(args || {});
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Sandbox', text: caption });
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'sandbox-result.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+  } catch (_) { shareResult(args); }
+}
+
 // Reusable flippable 3D card. Tilts toward the pointer/finger (glare follows);
 // tap to flip → the back is just the Sandbox wordmark. Takes already-computed
 // display pieces so it works on the live match-over screen AND profile history.
 //   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
-function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
+const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles }, captureRef) {
   const tiltRef = React.useRef(null);
   const frontRef = React.useRef(null);
   const flipping = React.useRef(false);
@@ -1384,7 +1411,7 @@ function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
       <div ref={tiltRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onLeave}
         style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out', touchAction: 'none', cursor: 'grab',
           transform: 'rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg))' }}>
-        <div style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
+        <div ref={captureRef} style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
           {face === 'front' ? (
             <div ref={frontRef} style={{ ...faceVisual, position: 'relative', padding: '22px 22px 18px' }}>
               <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -1434,10 +1461,10 @@ function ShareResultCard({ headline, summary, subline, cells, totalHoles }) {
       </div>
     </div>
   );
-}
+});
 
 // Match-live wrapper: compute the display pieces from live match state.
-function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabel, holes }) {
+function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabel, holes, cardRef }) {
   const youWon = (state.up > 0 && youAreA) || (state.up < 0 && !youAreA);
   const halved = state.up === 0;
   const margin = match.final_margin || state.margin || '';
@@ -1448,7 +1475,7 @@ function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabe
     : `${theirTeamLabel} took it · ${plain}`;
   const subline = `${is2v2 ? `${yourTeamLabel} vs ${theirTeamLabel}` : `You vs ${theirTeamLabel}`} · ${match.course_name || 'Sandbox'}`;
   const cells = holes.map(h => ({ n: h.hole_number, lab: h.result == null ? '' : resultLabel(h.result, youAreA) }));
-  return <ShareResultCard headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={match.total_holes}/>;
+  return <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={match.total_holes}/>;
 }
 
 // ─── Full-screen message ─────────────────────────────────────
@@ -1543,4 +1570,4 @@ function resultLabel(result, youAreA) {
   return youWon ? 'W' : 'L';
 }
 
-Object.assign(window, { MatchLive, ShareResultCard, shareResult, plainMargin });
+Object.assign(window, { MatchLive, ShareResultCard, shareResult, shareCardImage, plainMargin });
