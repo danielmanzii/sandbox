@@ -1298,7 +1298,7 @@ function shareCaption({ youWon, halved, margin }) {
   const line = halved ? 'We halved our Sandbox match.'
     : youWon ? `Won my Sandbox match ${margin || ''}!`.trim()
     : `Lost a close one ${margin || ''} in my Sandbox match.`.trim();
-  return `${line} ⛳ Pitch & putt, rated. sbx.golf`;
+  return `${line} ⛳ https://sbx.golf`;
 }
 
 async function shareResult(args) {
