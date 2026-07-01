@@ -725,7 +725,22 @@ function MatchDetailScreen({ go, matchId, profile }) {
   const [selHole, setSelHole] = React.useState(null);
   const [showHoles, setShowHoles] = React.useState(false);
   const cardRef = React.useRef(null);
+  const topRef = React.useRef(null);
+  const accordionRef = React.useRef(null);
   const meId = profile && profile.id;
+
+  // Open the accordion, then scroll it up into view so it isn't cramped at the
+  // bottom. Close → ease back to the top.
+  function toggleHoles() {
+    setShowHoles(prev => {
+      const next = !prev;
+      window.setTimeout(() => {
+        if (next && accordionRef.current) accordionRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        else if (!next && topRef.current) topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, next ? 420 : 60);
+      return next;
+    });
+  }
 
   if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
   if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Match not found.</div>;
@@ -782,7 +797,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ padding: '50px 16px 6px', display: 'flex', alignItems: 'center' }}>
+      <div ref={topRef} style={{ padding: '50px 16px 6px', display: 'flex', alignItems: 'center' }}>
         <button onClick={() => go({ screen: 'stats' })} style={{
           width: 38, height: 38, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)',
           color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -836,14 +851,14 @@ function MatchDetailScreen({ go, matchId, profile }) {
                 Share scorecard
               </button>
             )}
-            <button onClick={() => setShowHoles(s => !s)}
+            <button onClick={toggleHoles}
               style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {showHoles ? 'Hide hole details' : 'Hole by hole details'}
               <span style={{ transition: 'transform 0.3s ease', transform: showHoles ? 'rotate(180deg)' : 'none', display: 'inline-flex' }}><Icon.Chevron dir="down" size={14} color="var(--forest)"/></span>
             </button>
 
             {/* Accordion: hole-by-hole (tap a hole for its logged stats) */}
-            <div style={{ maxHeight: showHoles ? 640 : 0, overflow: 'hidden', transition: 'max-height 0.4s ease' }}>
+            <div ref={accordionRef} style={{ maxHeight: showHoles ? 640 : 0, overflow: 'hidden', transition: 'max-height 0.4s ease' }}>
               <div style={{ paddingTop: 4 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
                   <Stat label="Holes won" value={holesWon}/>
