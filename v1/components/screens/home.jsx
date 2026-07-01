@@ -209,18 +209,14 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           boxShadow: 'var(--shadow-md)', display: 'block',
         }}>
           <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-          {/* Flamingo mascot accent */}
+          {/* Flamingo mascot accent — kept fully in frame */}
           <img src="assets/mascot-full-cream.svg" alt="" style={{
-            position: 'absolute', right: -16, bottom: -28, height: 160, opacity: 0.16,
+            position: 'absolute', right: 12, bottom: 10, height: 120, opacity: 0.18,
             transform: 'rotate(6deg)', pointerEvents: 'none',
           }}/>
-          <div style={{ position: 'relative', maxWidth: '72%' }}>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Ranked &amp; unranked</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, marginTop: 8, letterSpacing: '-0.01em' }}>Book your next match</div>
-            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>Challenge a friend or get matched — nine holes.</div>
-            <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em' }}>
-              Go to Play <Icon.ArrowRight size={14}/>
-            </div>
+          <div style={{ position: 'relative' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>Book your next match</div>
+            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 8, maxWidth: '68%' }}>Challenge a friend or get matched — nine holes.</div>
           </div>
         </button>
       </div>
