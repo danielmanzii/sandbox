@@ -2,7 +2,7 @@
 // Live 1v1 match screen. Real-time synced via Supabase channels.
 // Match-play scoring: lower score wins the hole; state = holes_up (A) vs (B).
 
-function MatchLive({ matchId, profile, tier, onExit }) {
+function MatchLive({ matchId, profile, tier, onExit, go }) {
   const isMember = tier === 'league' || tier === 'plus' || tier === 'stats';
   const [match, setMatch]   = React.useState(null);
   const [holes, setHoles]   = React.useState([]);
@@ -112,8 +112,9 @@ function MatchLive({ matchId, profile, tier, onExit }) {
     }
   }, [hasData, state.decided, state.up, state.margin, match && match.status, matchId]);
 
-  async function cancelMatch() {
-    if (!window.confirm('Cancel this match? All scores so far will be lost and the match will be marked abandoned.')) return;
+  const [confirmingCancel, setConfirmingCancel] = React.useState(false);
+  const shareCardRef = React.useRef(null);
+  async function doCancelMatch() {
     await sbx.from('matches').update({ status: 'abandoned', completed_at: new Date().toISOString() }).eq('id', matchId);
     try { localStorage.removeItem('spp_active_match'); } catch {}
     onExit();
@@ -179,96 +180,123 @@ function MatchLive({ matchId, profile, tier, onExit }) {
         }}>
           <Icon.ArrowLeft size={16} color="currentColor"/>
         </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.55, color: 'var(--forest)' }}>
-            {match.course_name || 'Match'} · {match.total_holes} holes · {match.match_type || '1v1'}
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)', marginTop: 2 }}>
-            {is2v2 ? `${teamAName} vs ${teamBName}` : `You vs ${theirTeamLabel}`}
-          </div>
-        </div>
+        <div style={{ flex: 1 }}/>
         <StateBadge state={state} youAreA={youAreA}/>
       </div>
 
-      {/* Decided — final result banner */}
-      {matchDecided && <FinalBanner match={match} state={state} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>}
-
-      {/* Dual result confirmation — gates SBX + points */}
-      {matchDecided && <ResultConfirm match={match} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>}
-
-      {/* Current hole card */}
-      {!matchDecided && (
-        <div style={{ padding: '0 16px' }}>
-          <HoleCard
-            key={hole.hole_number}
-            hole={hole}
-            youAreA={youAreA}
-            is2v2={is2v2}
-            isMember={isMember}
-            isRegular={match.format === 'regular'}
-            initialMode={scoreMode}
-            yourTeam={yourTeam}
-            theirTeam={theirTeam}
-            yourTeamLabel={yourTeamLabel}
-            theirTeamLabel={theirTeamLabel}
-            liveOpp={liveOpp}
-            draft={youAreA ? hole.draft_a : hole.draft_b}
-            meId={profile.id}
-            onSaveDraft={(d) => saveDraft(matchId, hole.hole_number, youAreA ? 'a' : 'b', d)}
-            onLiveScore={broadcastLive}
-            onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
-            onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
-            onSaveStat={(col, value) => saveHoleStat(matchId, hole.hole_number, col, value)}
-            onSavePlayerStat={(playerId, patch) => savePlayerHoleStat(matchId, hole.hole_number, playerId, patch)}
-            onAdvance={() => {
-              const next = holes.find(h => h.hole_number > currentHole && h.result == null);
-              if (next) setCurrentHole(next.hole_number);
-            }}
-          />
+      {matchDecided ? (
+        /* Decided — shareable 3D result card + confirm + actions, centred lower */
+        <div style={{ flex: 1, padding: '0 16px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: '7%' }}>
+          <ResultCard cardRef={shareCardRef} match={match} state={state} youAreA={youAreA} is2v2={is2v2}
+            yourTeamLabel={yourTeamLabel} theirTeamLabel={theirTeamLabel} holes={holes}/>
+          <ResultConfirm match={match} youAreA={youAreA} theirTeamLabel={theirTeamLabel}/>
+          {(match.confirmed_a && match.confirmed_b) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 0 34px' }}>
+              <button onClick={() => shareCardImage(shareCardRef.current, {
+                youWon: (state.up > 0 && youAreA) || (state.up < 0 && !youAreA),
+                halved: state.up === 0, margin: match.final_margin || state.margin, theirLabel: theirTeamLabel,
+              })} style={{ width: '100%', padding: 15, borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: 'var(--forest)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
+                Share scorecard
+              </button>
+              <button onClick={() => go && go({ screen: 'matchDetail', matchId })} style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer',
+                background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
+                Hole by hole details
+              </button>
+              <button onClick={onExit} style={{ width: '100%', padding: 13, borderRadius: 14, cursor: 'pointer',
+                background: 'transparent', border: 'none', color: 'var(--forest)', opacity: 0.6, fontWeight: 800, fontSize: 13 }}>
+                Exit
+              </button>
+            </div>
+          )}
         </div>
+      ) : (
+        <>
+          {/* Current hole card */}
+          <div style={{ padding: '0 16px' }}>
+            <HoleCard
+              key={hole.hole_number}
+              hole={hole}
+              youAreA={youAreA}
+              is2v2={is2v2}
+              isMember={isMember}
+              isRegular={match.format === 'regular'}
+              initialMode={scoreMode}
+              yourTeam={yourTeam}
+              theirTeam={theirTeam}
+              yourTeamLabel={yourTeamLabel}
+              theirTeamLabel={theirTeamLabel}
+              liveOpp={liveOpp}
+              draft={youAreA ? hole.draft_a : hole.draft_b}
+              meId={profile.id}
+              onSaveDraft={(d) => saveDraft(matchId, hole.hole_number, youAreA ? 'a' : 'b', d)}
+              onLiveScore={broadcastLive}
+              onYourScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'a' : 'b', score)}
+              onOpponentScore={(score) => saveScore(matchId, hole.hole_number, youAreA ? 'b' : 'a', score)}
+              onSaveStat={(col, value) => saveHoleStat(matchId, hole.hole_number, col, value)}
+              onSavePlayerStat={(playerId, patch) => savePlayerHoleStat(matchId, hole.hole_number, playerId, patch)}
+              onAdvance={() => {
+                const next = holes.find(h => h.hole_number > currentHole && h.result == null);
+                if (next) setCurrentHole(next.hole_number);
+              }}
+            />
+          </div>
+
+          {/* Hole-by-hole strip */}
+          <div style={{ padding: '20px 16px 0' }}>
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8, paddingLeft: 4 }}>
+              Scorecard
+            </div>
+            <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(match.total_holes, 9)}, 1fr)`, gap: 4 }}>
+              {holes.map(h => (
+                <button key={h.hole_number} onClick={() => setCurrentHole(h.hole_number)} style={{
+                  padding: '10px 0', borderRadius: 10,
+                  background: h.hole_number === currentHole ? 'var(--forest)' : 'transparent',
+                  color: h.hole_number === currentHole ? 'var(--cream)' : 'var(--forest)',
+                  border: h.hole_number === currentHole ? 'none' : '1px solid rgba(14,28,19,0.08)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                }}>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.04em' }}>H{h.hole_number}</div>
+                  <ResultBadge result={h.result} youAreA={youAreA}/>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Footer: cancel + back */}
+          <div style={{ flex: 1 }}/>
+          <div style={{ padding: '24px 16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button onClick={() => setConfirmingCancel(true)} style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'var(--loss)', opacity: 0.85, fontWeight: 700, padding: '8px 12px', borderRadius: 8,
+            }}>
+              Cancel match
+            </button>
+            <button onClick={onExit} style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'var(--forest)', opacity: 0.5, fontWeight: 700, padding: '8px 12px',
+            }}>
+              Back to hub
+            </button>
+          </div>
+        </>
       )}
 
-      {/* Hole-by-hole strip */}
-      <div style={{ padding: '20px 16px 0' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8, paddingLeft: 4 }}>
-          Scorecard
+      {/* Cancel confirmation — branded */}
+      {confirmingCancel && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 60, background: 'rgba(14,28,19,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div className="card" style={{ padding: 26, textAlign: 'center', maxWidth: 340, width: '100%' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)', lineHeight: 1 }}>Cancel this match?</div>
+            <div className="caption-serif" style={{ fontSize: 14, opacity: 0.75, marginTop: 10, lineHeight: 1.5 }}>
+              All scores so far will be lost and the match marked abandoned. This can’t be undone.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
+              <button onClick={doCancelMatch} style={{ width: '100%', padding: 14, borderRadius: 14, border: 'none', cursor: 'pointer', background: 'var(--loss)', color: 'var(--paper)', fontWeight: 800, fontSize: 15 }}>Yes, cancel match</button>
+              <button onClick={() => setConfirmingCancel(false)} style={{ width: '100%', padding: 14, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(14,28,19,0.2)', color: 'var(--forest)', fontWeight: 800, fontSize: 15 }}>Keep playing</button>
+            </div>
+          </div>
         </div>
-        <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(match.total_holes, 9)}, 1fr)`, gap: 4 }}>
-          {holes.map(h => (
-            <button key={h.hole_number} onClick={() => setCurrentHole(h.hole_number)} style={{
-              padding: '10px 0', borderRadius: 10,
-              background: h.hole_number === currentHole ? 'var(--forest)' : 'transparent',
-              color: h.hole_number === currentHole ? 'var(--cream)' : 'var(--forest)',
-              border: h.hole_number === currentHole ? 'none' : '1px solid rgba(14,28,19,0.08)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            }}>
-              <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.04em' }}>H{h.hole_number}</div>
-              <ResultBadge result={h.result} youAreA={youAreA}/>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Footer: cancel + back */}
-      <div style={{ flex: 1 }}/>
-      <div style={{ padding: '24px 16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        {!matchDecided ? (
-          <button onClick={cancelMatch} style={{
-            fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
-            color: 'var(--loss)', opacity: 0.85, fontWeight: 700,
-            padding: '8px 12px', borderRadius: 8,
-          }}>
-            Cancel match
-          </button>
-        ) : <span/>}
-        <button onClick={onExit} style={{
-          fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
-          color: 'var(--forest)', opacity: 0.5, fontWeight: 700,
-          padding: '8px 12px',
-        }}>
-          Back to hub
-        </button>
-      </div>
+      )}
     </div>
   );
 }
@@ -314,13 +342,21 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
   const yourScore = youAreA ? hole.player_a_score : hole.player_b_score;
   const oppScore  = youAreA ? hole.player_b_score : hole.player_a_score;
   const [showStats, setShowStats] = React.useState(initialMode === 'stats'); // 1v1 expander default-open if they chose +stats
-  const [mode, setMode] = React.useState(initialMode || 'quick'); // 'quick' | 'stats'
   const hasTeam   = (yourTeam || []).length >= 1; // 1 (1v1) or 2 (2v2)
-  // A teammate started a detailed hole → both of us see that shared shot flow,
-  // regardless of our own toggle, so we never diverge on one team score.
   const hasDraft  = !!(draft && draft.phase && draft.phase !== 'done');
-  React.useEffect(() => { if (hasDraft && mode !== 'stats') setMode('stats'); }, [hasDraft]);
-  const statsMode = (mode === 'stats' || hasDraft) && hasTeam;
+  // The toggle now fully controls the mode — you can switch back to Quick Score
+  // at any time. Open in stats on mount if that's the saved mode or a draft is
+  // already in progress (e.g. a teammate started the hole).
+  const [mode, setMode] = React.useState(() => (initialMode === 'stats' || hasDraft) ? 'stats' : 'quick');
+  const [statsSeq, setStatsSeq] = React.useState(0);      // bump to remount ShotFlow at stroke 1
+  const [freshStats, setFreshStats] = React.useState(false);
+  const statsMode = mode === 'stats' && hasTeam;
+  function toQuick() { setMode('quick'); }
+  function toStats() {
+    // (Re)entering stats restarts the shot flow from the first stroke.
+    if (mode !== 'stats') { if (onSaveDraft) onSaveDraft(null); setFreshStats(true); setStatsSeq(s => s + 1); }
+    setMode('stats');
+  }
   const statPrefixEarly = youAreA ? 'player_a' : 'player_b';
 
   // Your per-hole stats (1v1 only). In 2v2, team-level stats need per-shot
@@ -364,7 +400,7 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
         {hasTeam && (
           <div style={{ display: 'flex', gap: 6, marginTop: 18, padding: 4, background: 'rgba(14,28,19,0.28)', borderRadius: 999 }}>
             {[['quick', 'Quick Score'], ['stats', '+ Track Stats']].map(([k, l]) => (
-              <button key={k} onClick={() => setMode(k)} style={{
+              <button key={k} onClick={() => (k === 'stats' ? toStats() : toQuick())} style={{
                 flex: 1, padding: '8px', borderRadius: 999,
                 background: mode === k ? 'var(--cream)' : 'transparent',
                 color: mode === k ? 'var(--forest)' : 'var(--cream)',
@@ -376,15 +412,16 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
 
         {/* Track-stats callout — directly under the toggle, in quick mode (1v1 + 2v2) */}
         {!statsMode && hasTeam && (
-          <TeamCapture onTrackStats={() => setMode('stats')}/>
+          <TeamCapture onTrackStats={toStats}/>
         )}
 
         {statsMode ? (
           <div style={{ marginTop: 16 }}>
             <ShotFlow
+              key={statsSeq}
               yourTeam={yourTeam} par={hole.par || 3} savedScore={yourScore}
               isRegular={isRegular} isMember={isMember}
-              draft={draft} meId={meId} yourTeamLabel={yourTeamLabel}
+              draft={freshStats ? null : draft} meId={meId} yourTeamLabel={yourTeamLabel}
               onLiveScore={onLiveScore}
               onSaveDraft={onSaveDraft}
               onSavePlayerStat={onSavePlayerStat}
@@ -543,14 +580,21 @@ function FairwayCross({ value, onPick }) {
       </button>
     );
   };
+  const FW_LABEL = { long: 'Past the fairway', short: 'Short of the fairway', left: 'To the left', right: 'To the right', hit: 'On the fairway' };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 9,
-      gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
-      <Btn v="long"  area="long"  dir="up"/>
-      <Btn v="left"  area="left"  dir="left"/>
-      <Btn v="hit"   area="hit"/>
-      <Btn v="right" area="right" dir="right"/>
-      <Btn v="short" area="short" dir="down"/>
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 38px)', gridTemplateRows: 'repeat(3, 38px)', gap: 9,
+        gridTemplateAreas: '". long ." "left hit right" ". short ."', width: 'max-content', margin: '0 auto' }}>
+        <Btn v="long"  area="long"  dir="up"/>
+        <Btn v="left"  area="left"  dir="left"/>
+        <Btn v="hit"   area="hit"/>
+        <Btn v="right" area="right" dir="right"/>
+        <Btn v="short" area="short" dir="down"/>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, fontWeight: 700,
+        color: value === 'hit' ? '#8FE0A0' : 'var(--cream)', opacity: value ? 0.95 : 0.45 }}>
+        {value ? FW_LABEL[value] : 'Where did it land?'}
+      </div>
     </div>
   );
 }
@@ -728,19 +772,28 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
       });
     };
-    const missed = (pid) => {
-      const next = { ...puttCard, [pid]: 'missed' };
-      if (yourTeam.every(p => next[p.id] === 'missed')) { pushHistory(); setPutts(putts + 1); setPuttCard({}); } // new round
-      else setPuttCard(next);
+    // Selecting ✓/✕ only marks a pending choice — nothing commits until Confirm.
+    const setPending = (pid, val) => setPuttCard(prev => ({ ...prev, [pid]: val }));
+    const allChosen = yourTeam.every(p => puttCard[p.id]);
+    const confirmPutt = () => {
+      const holer = yourTeam.find(p => puttCard[p.id] === 'made');
+      if (holer) { finish(holer.id); return; }
+      pushHistory(); setPutts(putts + 1); setPuttCard({}); // all missed → next putt round
     };
     return (
       <SfWrap count={count} onBack={goBack} canBack={history.length > 0} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {yourTeam.map(p => (
             <PuttCard key={p.id} player={p} result={puttCard[p.id]}
-              onMade={() => finish(p.id)} onMissed={() => missed(p.id)}/>
+              onMade={() => setPending(p.id, 'made')} onMissed={() => setPending(p.id, 'missed')}/>
           ))}
         </div>
+        <button onClick={confirmPutt} disabled={!allChosen} style={{
+          marginTop: 12, width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+          background: allChosen ? 'var(--cream)' : 'rgba(234,226,206,0.22)',
+          color: allChosen ? 'var(--forest)' : 'var(--cream)', fontWeight: 800, fontSize: 13,
+          cursor: allChosen ? 'pointer' : 'default', opacity: allChosen ? 1 : 0.55,
+        }}>Confirm →</button>
       </SfWrap>
     );
   }
@@ -810,14 +863,14 @@ function YouReadout({ label, labelPlayers, count }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <TeamLabel players={labelPlayers} fallback={label || 'Your team'}/>
-        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>Strokes so far</span>
+        <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>{n === 0 ? 'Tee it up' : 'Playing this hole…'}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(234,226,206,0.12)', border: '1px solid rgba(234,226,206,0.35)' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: n === 0 ? 0.5 : 1 }}>
           {n === 0 ? '–' : n}
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 10, opacity: 0.7, lineHeight: 1.3 }}>
-          {n === 0 ? 'Tee it up' : 'Playing this hole…'}
+          strokes so far
         </div>
       </div>
     </div>
@@ -995,9 +1048,9 @@ function ScoreWheel({ label, labelPlayers, value, par, onChange }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <TeamLabel players={labelPlayers} fallback={label}/>
-        {sel != null && shape && shape !== 'par' && (
-          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>
-        )}
+        {sel != null
+          ? (shape && shape !== 'par' && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85 }}>{SHAPE_LABEL[shape]}</span>)
+          : <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700 }}>How many strokes?</span>}
       </div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 2px 2px' }} className="scroll-hide">
         {nums.map(n => {
@@ -1029,7 +1082,7 @@ function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
   // A live running count for THIS hole, only while no final score is in yet.
   const liveOn = value == null && live && live.holeNumber === holeNumber && !live.done && live.strokes > 0;
   const big = value != null ? value : (liveOn ? live.strokes : '–');
-  const sub = value != null ? 'Logged by their team'
+  const sub = value != null ? `logged by ${label || 'their team'}`
             : liveOn ? `Currently playing Shot ${live.strokes + 1}`
             : 'Waiting for their score…';
   return (
@@ -1046,10 +1099,10 @@ function OppReadout({ label, labelPlayers, value, par, live, holeNumber }) {
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, background: 'rgba(14,28,19,0.3)', border: liveOn ? '1px solid rgba(123,211,137,0.4)' : '1px solid rgba(234,226,206,0.14)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {liveOn && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#7BD389', flexShrink: 0 }}/>}
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, minWidth: 40, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, textAlign: 'center', opacity: (value == null && !liveOn) ? 0.4 : 1 }}>
             {big}
           </div>
         </div>
@@ -1151,6 +1204,8 @@ function ResultBadge({ result, youAreA }) {
 function ResultConfirm({ match, youAreA, theirTeamLabel }) {
   const [busy, setBusy] = React.useState(false);
   const [err, setErr]   = React.useState('');
+  const is2v2     = match.match_type === '2v2';
+  const sideWord  = is2v2 ? 'teams' : 'players';
   const mySide    = youAreA ? 'a' : 'b';
   const iConfirmed     = mySide === 'a' ? match.confirmed_a : match.confirmed_b;
   const theyConfirmed  = mySide === 'a' ? match.confirmed_b : match.confirmed_a;
@@ -1184,8 +1239,9 @@ function ResultConfirm({ match, youAreA, theirTeamLabel }) {
         ) : (
           <>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>Confirm the result</div>
-            <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4, marginBottom: 12 }}>
-              Both teams confirm before it counts toward SBX. {theyConfirmed ? `${theirTeamLabel} already confirmed.` : ''}
+            <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4, marginBottom: 12, textAlign: 'center', lineHeight: 1.5 }}>
+              Both {sideWord} confirm before it counts toward SBX.
+              {theyConfirmed && <><br/>{theirTeamLabel} already confirmed.</>}
             </div>
             {err && <div style={{ fontSize: 12, color: 'var(--loss)', marginBottom: 8 }}>{err}</div>}
             <Button variant="forest" full onClick={confirm} disabled={busy}>
@@ -1223,6 +1279,211 @@ function FinalBanner({ match, state, youAreA, theirTeamLabel }) {
       </div>
     </div>
   );
+}
+
+// ─── Shareable 3D result card ────────────────────────────────
+// Plain-English wording for a match-play margin ("2&1" → "2 up with 1 to play").
+function plainMargin(margin) {
+  if (!margin) return '';
+  const m = String(margin).trim();
+  const amp = m.match(/^(\d+)\s*&\s*(\d+)$/);
+  if (amp) return `${amp[1]} up with ${amp[2]} to play`;
+  const up = m.match(/^(\d+)\s*up$/i);
+  if (up) return `${up[1]} up on the last`;
+  if (/^as$/i.test(m) || /halv/i.test(m)) return 'all square';
+  return m;
+}
+
+function shareCaption({ youWon, halved, margin }) {
+  const line = halved ? 'We halved our Sandbox match.'
+    : youWon ? `Won my Sandbox match ${margin || ''}!`.trim()
+    : `Lost a close one ${margin || ''} in my Sandbox match.`.trim();
+  return `${line} ⛳ Pitch & putt, rated. sbx.golf`;
+}
+
+async function shareResult(args) {
+  const text = shareCaption(args || {});
+  const url = 'https://sbx.golf';
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Sandbox', text, url }); return; }
+    if (navigator.clipboard) { await navigator.clipboard.writeText(`${text} ${url}`); alert('Result copied — paste it anywhere to share.'); }
+  } catch (_) { /* user dismissed the share sheet */ }
+}
+
+// Capture the result card DOM node as a PNG and share it as an image (falls back
+// to a text share, then to a download, so it always does *something*).
+async function shareCardImage(node, args) {
+  const H = window.htmlToImage;
+  if (!node || !H || !H.toBlob) { return shareResult(args); }
+  try {
+    const blob = await H.toBlob(node, { pixelRatio: 2.5, cacheBust: true, backgroundColor: '#0E2818' });
+    if (!blob) return shareResult(args);
+    const file = new File([blob], 'sandbox-result.png', { type: 'image/png' });
+    const caption = shareCaption(args || {});
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Sandbox', text: caption });
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'sandbox-result.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+  } catch (_) { shareResult(args); }
+}
+
+// Reusable flippable 3D card. Tilts toward the pointer/finger (glare follows);
+// tap to flip → the back is just the Sandbox wordmark. Takes already-computed
+// display pieces so it works on the live match-over screen AND profile history.
+//   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
+const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles }, captureRef) {
+  const tiltRef = React.useRef(null);
+  const frontRef = React.useRef(null);
+  const flipping = React.useRef(false);
+  const start = React.useRef({ x: 0, y: 0, down: false });
+  const [face, setFace] = React.useState('front');
+  const [cardH, setCardH] = React.useState(null); // lock both faces to the front's height
+  const [flip, setFlip] = React.useState({ transform: 'rotateX(0deg) rotateY(0deg)', transition: 'transform 0.3s ease' });
+  const cols = Math.min(totalHoles || (cells ? cells.length : 9) || 9, 9);
+  const TILT = 18; // degrees at the card edge — noticeably 3D
+
+  React.useLayoutEffect(() => {
+    if (face === 'front' && frontRef.current) setCardH(frontRef.current.offsetHeight);
+  }, [face, cells, headline, summary, subline]);
+
+  function onDown(e) {
+    start.current = { x: e.clientX, y: e.clientY, t: (performance.now ? performance.now() : Date.now()), down: true };
+    const el = tiltRef.current; if (el) el.style.transition = 'none';
+  }
+  function onMove(e) {
+    const el = tiltRef.current; if (!el || !start.current.down) return;
+    const rect = el.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    el.style.setProperty('--tx', `${((cy - rect.height / 2) / (rect.height / 2)) * -TILT}deg`);
+    el.style.setProperty('--ty', `${((cx - rect.width / 2) / (rect.width / 2)) * TILT}deg`);
+    el.style.setProperty('--mx', `${cx}px`);
+    el.style.setProperty('--my', `${cy}px`);
+  }
+  function springBack() {
+    const el = tiltRef.current; if (!el) return;
+    el.style.transition = 'transform 0.55s cubic-bezier(0.22,1,0.36,1)';
+    el.style.setProperty('--tx', '0deg'); el.style.setProperty('--ty', '0deg');
+  }
+  function onUp(e) {
+    if (!start.current.down) return;
+    start.current.down = false;
+    const dx = e.clientX - start.current.x, dy = e.clientY - start.current.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const dist = Math.max(adx, ady);
+    const dt = (performance.now ? performance.now() : Date.now()) - start.current.t;
+    const v = dist / Math.max(dt, 1); // px per ms
+    springBack();
+    // Only a deliberate flick flips: clearly one direction AND either a fast
+    // swipe or a long deliberate drag. Slow tilting-around never flips.
+    const dominant = dist > Math.min(adx, ady) * 1.7;
+    const flick = (dist > 80 && v > 0.7) || dist > 190;
+    if (dominant && flick) {
+      const dir = adx > ady ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+      doFlip(dir);
+    }
+  }
+  function onLeave() { if (start.current.down) { start.current.down = false; springBack(); } }
+
+  // Swipe flips the card 180° in the swiped direction and lands the new side
+  // upright (swap content while edge-on at the midpoint).
+  function doFlip(dir) {
+    if (flipping.current) return;
+    flipping.current = true;
+    const DUR = 230;
+    const half  = { right: 'rotateY(90deg)',  left: 'rotateY(-90deg)',  up: 'rotateX(90deg)',  down: 'rotateX(-90deg)' }[dir];
+    const enter = { right: 'rotateY(-90deg)', left: 'rotateY(90deg)',   up: 'rotateX(-90deg)', down: 'rotateX(90deg)' }[dir];
+    setFlip({ transition: `transform ${DUR}ms ease-in`, transform: half });
+    setTimeout(() => {
+      setFace(f => (f === 'front' ? 'back' : 'front'));
+      setFlip({ transition: 'none', transform: enter });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setFlip({ transition: `transform ${DUR}ms ease-out`, transform: 'rotateX(0deg) rotateY(0deg)' });
+        setTimeout(() => { flipping.current = false; }, DUR);
+      }));
+    }, DUR);
+  }
+
+  const faceVisual = {
+    borderRadius: 'var(--radius-card-lg)', overflow: 'hidden', boxSizing: 'border-box',
+    background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+    color: 'var(--cream)', boxShadow: '0 26px 54px rgba(14,28,19,0.45)',
+  };
+
+  return (
+    <div style={{ perspective: 680, marginBottom: 4 }}>
+      <div ref={tiltRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onLeave}
+        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out', touchAction: 'none', cursor: 'grab',
+          transform: 'rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg))' }}>
+        <div ref={captureRef} style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
+          {face === 'front' ? (
+            <div ref={frontRef} style={{ ...faceVisual, position: 'relative', padding: '22px 22px 18px' }}>
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: 'radial-gradient(300px circle at var(--mx,50%) var(--my,0%), rgba(234,226,206,0.22), transparent 60%)' }}/>
+              <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span className="eyebrow" style={{ color: 'var(--cream)', opacity: 0.7 }}>Match result</span>
+                  <img src="assets/monogram-cream.svg" alt="" style={{ height: 26, opacity: 0.9 }}/>
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>{headline}</div>
+                <div style={{ fontSize: 14, opacity: 0.88, marginTop: 8 }}>{summary}</div>
+                {subline && <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{subline}</div>}
+
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 5, marginTop: 16 }}>
+                  {(cells || []).map(c => {
+                    const won = c.lab === 'W', halv = c.lab === 'H';
+                    return (
+                      <div key={c.n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{ fontSize: 8, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>H{c.n}</div>
+                        <div style={{
+                          width: 22, height: 22, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'var(--font-display)', fontSize: 12,
+                          background: won ? 'var(--cream)' : halv ? 'transparent' : (c.lab ? 'rgba(234,226,206,0.16)' : 'transparent'),
+                          color: won ? 'var(--forest)' : 'var(--cream)',
+                          border: (halv || !c.lab) ? '1.5px solid rgba(234,226,206,0.4)' : 'none',
+                          opacity: c.lab ? 1 : 0.4,
+                        }}>{c.lab}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+                  <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 15, opacity: 0.85 }}/>
+                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Swipe to flip ⇄</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ ...faceVisual, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: cardH || 300, padding: 20 }}>
+              <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+              <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ width: '75%', position: 'relative' }}/>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Match-live wrapper: compute the display pieces from live match state.
+function ResultCard({ match, state, youAreA, is2v2, yourTeamLabel, theirTeamLabel, holes, cardRef }) {
+  const youWon = (state.up > 0 && youAreA) || (state.up < 0 && !youAreA);
+  const halved = state.up === 0;
+  const margin = match.final_margin || state.margin || '';
+  const plain = plainMargin(margin);
+  const headline = halved ? 'Halved' : youWon ? `W ${margin}` : `L ${margin}`;
+  const summary = halved ? 'All square — matched hole for hole.'
+    : youWon ? `Beat ${theirTeamLabel} · ${plain}`
+    : `${theirTeamLabel} took it · ${plain}`;
+  const subline = `${is2v2 ? `${yourTeamLabel} vs ${theirTeamLabel}` : `You vs ${theirTeamLabel}`} · ${match.course_name || 'Sandbox'}`;
+  const cells = holes.map(h => ({ n: h.hole_number, lab: h.result == null ? '' : resultLabel(h.result, youAreA) }));
+  return <ShareResultCard ref={cardRef} headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={match.total_holes}/>;
 }
 
 // ─── Full-screen message ─────────────────────────────────────
@@ -1317,4 +1578,4 @@ function resultLabel(result, youAreA) {
   return youWon ? 'W' : 'L';
 }
 
-Object.assign(window, { MatchLive });
+Object.assign(window, { MatchLive, ShareResultCard, shareResult, shareCardImage, plainMargin });
