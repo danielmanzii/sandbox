@@ -163,33 +163,13 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </button>
       </div>
 
-      {/* Your next round status (paired / match set / finding partner) */}
+      {/* Priority — an active match or an upcoming booking sits at the very top */}
       {nextBooking && <NextRoundStatus booking={nextBooking} go={go}/>}
-
-      {/* Book a round — primary network action (twilight tee times) */}
-      <div style={{ padding: '16px 16px 0' }}>
-        <button onClick={() => go({ screen: 'book' })} style={{
-          width: '100%', textAlign: 'left', border: 'none',
-          borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
-          background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-          color: 'var(--cream)', padding: 20, position: 'relative',
-          boxShadow: 'var(--shadow-md)', display: 'block',
-        }}>
-          <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-          {/* Clay golfer accent */}
-          <img src="assets/clay-golfer.png" alt="" style={{
-            position: 'absolute', right: -14, bottom: -10, height: 130, opacity: 0.9,
-            pointerEvents: 'none', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.25))',
-          }}/>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ flex: 1, maxWidth: '70%' }}>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Twilight tee times</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, marginTop: 8, letterSpacing: '-0.01em' }}>Book a round</div>
-              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>Nine holes near you, done in under an hour.</div>
-            </div>
-          </div>
-        </button>
-      </div>
+      {activeMatch && (
+        <div style={{ padding: '16px 16px 0' }}>
+          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={false}/>
+        </div>
+      )}
 
       {/* Match invite banners — pending invites the signed-in user got */}
       {pendingInvites && pendingInvites.length > 0 && (
@@ -200,22 +180,42 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </div>
       )}
 
-      {/* Next-up card */}
-      <div style={{ padding: '16px 16px 0' }}>
-        {nextEvent ? (
-          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={nextEventIsRegistered}/>
-        ) : nextLoading ? (
-          <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>
-        ) : (
-          <button onClick={() => go({ screen: 'events' })} className="card" style={{ width: '100%', textAlign: 'left', padding: 22, borderRadius: 22 }}>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Up Next</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', lineHeight: 1, letterSpacing: '-0.01em' }}>Nothing on your card yet.</div>
-            <div className="caption-serif" style={{ fontSize: 14, color: 'var(--ink)', opacity: 0.7, marginTop: 8 }}>Browse the schedule and grab a spot.</div>
-            <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--forest)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              See events <Icon.ArrowRight size={12}/>
+      {/* Your last match — the shareable 3D card, right at the top */}
+      {lastMatch && (
+        <div style={{ padding: '20px 16px 0' }}>
+          <Eyebrow style={{ marginBottom: 10 }}>Your last match</Eyebrow>
+          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles}/>
+          <button onClick={() => go({ screen: 'matchDetail', matchId: lastMatch.matchId })} style={{
+            marginTop: 10, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--forest)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
+          }}>View match <Icon.ArrowRight size={12}/></button>
+        </div>
+      )}
+
+      {/* Book your next match → Play */}
+      <div style={{ padding: '18px 16px 0' }}>
+        <button onClick={() => go({ screen: 'events' })} style={{
+          width: '100%', textAlign: 'left', border: 'none',
+          borderRadius: 'var(--radius-card-lg)', overflow: 'hidden',
+          background: 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+          color: 'var(--cream)', padding: 22, position: 'relative',
+          boxShadow: 'var(--shadow-md)', display: 'block',
+        }}>
+          <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+          {/* Flamingo mascot accent */}
+          <img src="assets/mascot-full-cream.svg" alt="" style={{
+            position: 'absolute', right: -16, bottom: -28, height: 160, opacity: 0.16,
+            transform: 'rotate(6deg)', pointerEvents: 'none',
+          }}/>
+          <div style={{ position: 'relative', maxWidth: '72%' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', opacity: 0.7, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Ranked &amp; unranked</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 0.95, marginTop: 8, letterSpacing: '-0.01em' }}>Book your next match</div>
+            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 6 }}>Challenge a friend or get matched — nine holes.</div>
+            <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em' }}>
+              Go to Play <Icon.ArrowRight size={14}/>
             </div>
-          </button>
-        )}
+          </div>
+        </button>
       </div>
 
       {/* Quick stats strip — real values from MOCK.USER (overridden by useRealUserSync) */}
@@ -245,18 +245,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           sub="this mo"
         />
       </div>
-
-      {/* Your last match — the shareable 3D card, right on the home page */}
-      {lastMatch && (
-        <div style={{ padding: '20px 16px 0' }}>
-          <Eyebrow style={{ marginBottom: 10 }}>Your last match</Eyebrow>
-          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles}/>
-          <button onClick={() => go({ screen: 'matchDetail', matchId: lastMatch.matchId })} style={{
-            marginTop: 10, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--forest)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
-          }}>View match <Icon.ArrowRight size={12}/></button>
-        </div>
-      )}
 
       {/* Major banner — only shown when there's an upcoming Major in the DB */}
       {major && (
@@ -349,27 +337,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
                 last={i === feed.length - 1}
                 onOpen={() => go({ screen: 'profile', viewingHandle: a.actor.handle })}
               />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Upcoming events teaser */}
-      <div style={{ padding: '28px 0 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 20px' }}>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Up Next</div>
-          <button onClick={() => go({ screen: 'events' })} style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Browse all →</button>
-        </div>
-        {upcomingLoading ? (
-          <div style={{ padding: '0 20px', fontSize: 12, color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>
-        ) : upcomingForTeaser.length === 0 ? (
-          <div style={{ padding: '0 20px', fontSize: 13, color: 'var(--forest)', opacity: 0.6, fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
-            No upcoming events yet — check back soon.
-          </div>
-        ) : (
-          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 16px 4px' }} className="scroll-hide">
-            {upcomingForTeaser.map(e => (
-              <MiniEventCard key={e.id} event={e} go={go} friendsHere={friendsByEvent[e.id] || []}/>
             ))}
           </div>
         )}
