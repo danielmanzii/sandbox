@@ -652,43 +652,44 @@ function WaitingForOpponentView({ match: initial, profile, onCancel, onReady }) 
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <div style={{ position: 'relative' }}>
-        <Eyebrow color="var(--cream)">Share this code</Eyebrow>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 0.95, marginTop: 10 }}>
+      {/* Centered column — same formatting as the setup wizard */}
+      <div style={{ position: 'relative', width: '100%', maxWidth: 380, margin: '0 auto', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>Share this code</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1.02 }}>
           {is2v2 ? <>Waiting on<br/>the other three…</> : <>Waiting on<br/>your opponent…</>}
         </div>
         <div style={{ fontSize: 13, opacity: 0.8, marginTop: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
           {filled}/{required} PLAYERS IN
         </div>
-      </div>
 
-      {/* Live roster — who's on each side as seats fill */}
-      {is2v2 && (
-        <div style={{ position: 'relative', marginTop: 18 }}>
-          <LobbyRoster match={match} profile={profile} people={people}/>
+        {/* Live roster — who's on each side as seats fill */}
+        {is2v2 && (
+          <div style={{ width: '100%', marginTop: 18 }}>
+            <LobbyRoster match={match} profile={profile} people={people}/>
+          </div>
+        )}
+
+        <div style={{ flex: 1, minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.2em' }}>MATCH CODE</div>
+          <div style={{
+            fontFamily: 'var(--font-display)', fontSize: 56, letterSpacing: '0.04em',
+            marginTop: 4, color: 'var(--cream)', whiteSpace: 'nowrap', maxWidth: '100%',
+          }}>{match.join_code}</div>
+          <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
+            Players tap <b>Joining someone else?</b> under Challenge Friends and type this code. {is2v2 ? 'Each player picks a team as they join.' : ''}
+          </div>
+
+          {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
+          <ShareCodeButton code={match.join_code} mode={is2v2 ? '2v2' : '1v1'}/>
+
+          {/* Invite by username — pushes a notification to that player */}
+          <InviteByHandle matchId={match.id} profile={profile}/>
         </div>
-      )}
 
-      <div style={{ position: 'relative', flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.6, letterSpacing: '0.2em' }}>MATCH CODE</div>
-        <div style={{
-          fontFamily: 'var(--font-display)', fontSize: 56, letterSpacing: '0.04em',
-          marginTop: 4, color: 'var(--cream)', whiteSpace: 'nowrap', maxWidth: '100%',
-        }}>{match.join_code}</div>
-        <div style={{ fontSize: 13, opacity: 0.75, marginTop: 12, textAlign: 'center', maxWidth: 280 }}>
-          Players tap <b>Joining someone else?</b> under Challenge Friends and type this code. {is2v2 ? 'Each player picks a team as they join.' : ''}
-        </div>
-
-        {/* Share via OS share sheet (text/whatsapp/etc); falls back to copy */}
-        <ShareCodeButton code={match.join_code} mode={is2v2 ? '2v2' : '1v1'}/>
-
-        {/* Invite by username — pushes a notification to that player */}
-        <InviteByHandle matchId={match.id} profile={profile}/>
+        <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
+          Cancel match
+        </Button>
       </div>
-
-      <Button variant="outlineCream" size="lg" full onClick={cancelMatch}>
-        Cancel match
-      </Button>
     </div>
   );
 }
@@ -852,6 +853,7 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
   const [err, setErr]   = React.useState('');
   const [stage, setStage] = React.useState('code');  // code | pick | waiting
   const [lobbyMatch, setLobbyMatch] = React.useState(null);
+  const inset = useMatchKbInset();
 
   async function submit() {
     const c = code.trim().toUpperCase();
@@ -893,49 +895,58 @@ function JoinMatchView({ profile, onCancel, onJoined, initialCode }) {
   }
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '92px 24px 24px' }}>
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      color: 'var(--cream)', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <button onClick={onCancel} style={{
         position: 'absolute', top: 52, left: 16, zIndex: 5,
         width: 38, height: 38, borderRadius: 999,
-        background: 'var(--paper)', border: 'var(--hairline)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--forest)',
+        background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(234,226,206,0.2)',
+        color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Icon.ArrowLeft size={16} color="currentColor"/>
       </button>
 
-      <Eyebrow color="var(--forest)">Join a match</Eyebrow>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, marginTop: 10, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
-        Enter the code.
+      {/* Centered — lifts above the keyboard when the field is focused */}
+      <div style={{
+        position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '0 24px', transform: `translateY(-${inset / 2}px)`, transition: 'transform 0.28s ease',
+      }}>
+        <div style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.6, marginBottom: 12 }}>Join a match</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1.08, letterSpacing: '-0.02em' }}>Enter the code.</div>
+
+          <div style={{ marginTop: 22 }}>
+            <input
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="ABC123"
+              maxLength={8}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              className="on-forest-input"
+              style={{
+                width: '100%', padding: '22px 14px', borderRadius: 16,
+                background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(234,226,206,0.18)',
+                color: 'var(--cream)', fontSize: 40,
+                textAlign: 'center', letterSpacing: '0.2em',
+                fontFamily: 'var(--font-display)',
+                outline: 'none', textTransform: 'uppercase',
+              }}
+            />
+          </div>
+
+          {err && <div style={{ marginTop: 16, fontSize: 13, color: '#E7B8A7', background: 'rgba(155,58,46,0.2)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
+
+          <Button variant="paper" size="lg" full disabled={code.trim().length < 4 || busy} onClick={submit} style={{ marginTop: 22 }}>
+            {busy ? 'Joining…' : 'Join match'}
+            {!busy && <Icon.ArrowRight size={16}/>}
+          </Button>
+        </div>
       </div>
-
-      <div style={{ marginTop: 32 }}>
-        <input
-          value={code}
-          onChange={e => setCode(e.target.value.toUpperCase())}
-          placeholder="ABC123"
-          maxLength={8}
-          autoCapitalize="characters"
-          autoCorrect="off"
-          style={{
-            width: '100%', padding: '24px 14px', borderRadius: 16,
-            background: 'var(--paper)', border: 'var(--hairline-strong)',
-            color: 'var(--forest)', fontSize: 40,
-            textAlign: 'center', letterSpacing: '0.2em',
-            fontFamily: 'var(--font-display)',
-            outline: 'none', textTransform: 'uppercase',
-          }}
-        />
-      </div>
-
-      {err && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--loss)', background: 'rgba(155,58,46,0.08)', padding: '10px 12px', borderRadius: 12 }}>{err}</div>}
-
-      <div style={{ flex: 1 }}/>
-
-      <Button variant="forest" size="lg" full disabled={code.trim().length < 4 || busy} onClick={submit}>
-        {busy ? 'Joining…' : 'Join match'}
-        {!busy && <Icon.ArrowRight size={16}/>}
-      </Button>
     </div>
   );
 }
