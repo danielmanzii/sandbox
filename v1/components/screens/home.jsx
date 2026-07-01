@@ -209,11 +209,18 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           boxShadow: 'var(--shadow-md)', display: 'block',
         }}>
           <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-          {/* Flamingo mascot accent — kept fully in frame */}
-          <img src="assets/mascot-full-cream.svg" alt="" style={{
-            position: 'absolute', right: 12, bottom: 10, height: 120, opacity: 0.18,
-            transform: 'rotate(6deg)', pointerEvents: 'none',
-          }}/>
+          {/* Flamingo mascot accent — cropped from the wing up (no legs),
+              vertically centred in the space to the right of the text */}
+          <div style={{
+            position: 'absolute', right: 14, top: 0, bottom: 0, width: 120,
+            display: 'flex', alignItems: 'center', pointerEvents: 'none',
+          }}>
+            <div style={{ width: 120, height: 122, overflow: 'hidden', position: 'relative' }}>
+              <img src="assets/mascot-full-cream.svg" alt="" style={{
+                position: 'absolute', top: 0, left: 0, width: 120, opacity: 0.18,
+              }}/>
+            </div>
+          </div>
           <div style={{ position: 'relative' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>Book your next match</div>
             <div style={{ fontSize: 13, opacity: 0.85, marginTop: 8, maxWidth: '68%' }}>Challenge a friend or get matched — nine holes.</div>
