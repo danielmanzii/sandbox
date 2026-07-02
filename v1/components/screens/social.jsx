@@ -115,13 +115,13 @@ function ExploreSearch({ go }) {
       <div
         onClick={() => inputRef.current && inputRef.current.focus()}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: 'var(--forest)', borderRadius: 16,
-          padding: '15px 18px', cursor: 'text',
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'var(--forest)', borderRadius: 13,
+          padding: '10px 15px', cursor: 'text',
           boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <Icon.Search size={18} color="var(--cream)"/>
+        <Icon.Search size={15} color="var(--cream)"/>
         <input
           ref={inputRef}
           value={q}
@@ -129,7 +129,7 @@ function ExploreSearch({ go }) {
           placeholder="Search players by name or @handle…"
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            fontSize: 15, color: 'var(--cream)', fontWeight: 600,
+            fontSize: 13, color: 'var(--cream)', fontWeight: 600,
           }}
           className="explore-search-input"
         />

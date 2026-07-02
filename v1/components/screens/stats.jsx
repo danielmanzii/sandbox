@@ -90,7 +90,7 @@ function StatsYou({ go }) {
 
       {/* Duo (2v2) / Solo (1v1) split — the format-specific stats live here */}
       <div style={{ display: 'flex', gap: 6, marginTop: 24, background: 'rgba(14,28,19,0.05)', borderRadius: 999, padding: 4 }}>
-        {[['duo', 'Duo stats'], ['solo', 'Solo stats']].map(([k, l]) => (
+        {[['duo', '2v2 Stats'], ['solo', '1v1 Stats']].map(([k, l]) => (
           <button key={k} onClick={() => setFmt(k)} style={{
             flex: 1, padding: '11px 14px', borderRadius: 999,
             background: fmt === k ? 'var(--forest)' : 'transparent',
@@ -124,16 +124,6 @@ function StatsYou({ go }) {
             <PctChip label="Closer %" stat={f1.closer} desc="tight / closing holes won" info={STAT_INFO.closer}/>
           </div>
         </div>
-      )}
-
-      {/* Match history */}
-      <SectionHeader eyebrow="Recent" title="Match history"/>
-      {history.length > 0 ? (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {history.slice(0, 8).map((r, i) => <MatchRow key={r.id} r={r} go={go} last={i === Math.min(history.length, 8) - 1}/>)}
-        </div>
-      ) : (
-        <EmptyNote title="No matches yet." body="Your match history shows up here after your first game."/>
       )}
     </div>
   );

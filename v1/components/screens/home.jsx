@@ -241,9 +241,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       {nextBooking && <NextRoundStatus booking={nextBooking} go={go}/>}
       {activeMatch && (
         <div style={{ padding: '16px 16px 0' }}>
-          <div className="heartbeat">
-            <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={false}/>
-          </div>
+          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={false}/>
         </div>
       )}
 
