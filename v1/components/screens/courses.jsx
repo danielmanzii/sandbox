@@ -128,11 +128,11 @@ function CourseRail({ items, active, onActive, onOpenCourse, playersByCourse }) 
         const pc = playersByCourse[course.id];
         return (
           <button key={course.id} onClick={(e) => {
-            if (focused) { onOpenCourse(course); return; }
+            if (focused) { onOpenCourse(course, e.currentTarget); return; }
             e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           }} style={{
             flex: '0 0 calc(100% - 68px)', scrollSnapAlign: 'center',
-            height: 320, borderRadius: 24, overflow: 'hidden', position: 'relative',
+            height: 440, borderRadius: 24, overflow: 'hidden', position: 'relative',
             border: 'none', padding: 0, textAlign: 'left', color: 'var(--cream)', cursor: 'pointer',
             background: course.heroImg
               ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
@@ -189,10 +189,11 @@ function CourseRail({ items, active, onActive, onOpenCourse, playersByCourse }) 
 // ─── Book screen ──────────────────────────────────────────────────────
 function BookScreen({ go, profile, embedded }) {
   const [coords, geoStatus] = useGeolocation();
-  const [date, setDate] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  // No date picker here anymore — dates/tee times live on the course page.
+  const [date] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const [q, setQ] = React.useState('');
   const [list, loading] = useAvailability(date, coords);
-  const [booking, setBooking] = React.useState(null); // { slot, course }
+  const [zoom, setZoom] = React.useState(null); // { rect, course } → opening animation
 
   const filtered = list.filter(({ course }) => {
     if (!q.trim()) return true;
@@ -200,13 +201,32 @@ function BookScreen({ go, profile, embedded }) {
     return course.shortName.toLowerCase().includes(s) || course.city.toLowerCase().includes(s);
   });
 
-  // Focus-rail state: which course is centered; its tee times render below.
+  // Focus-rail state: which course is centered.
   const [activeIdx, setActiveIdx] = React.useState(0);
   React.useEffect(() => { if (activeIdx > filtered.length - 1) setActiveIdx(0); }, [filtered.length]);
-  const activeItem = filtered[Math.min(activeIdx, Math.max(0, filtered.length - 1))] || null;
   const playersByCourse = useCoursePlayers(filtered.map(x => x.course.id));
-  const activeSlotIds = React.useMemo(() => (activeItem ? activeItem.slots.map(s => s.id) : []), [activeItem]);
-  const friendsBySlot = useFriendsOnSlots(profile && profile.id, activeSlotIds);
+
+  // Tap the focused card → the card melts out to fill the screen, then the
+  // course page takes over (its hero sits where the card grew to).
+  function openCourse(course, el) {
+    if (zoom) return;
+    const r = el.getBoundingClientRect();
+    // The phone stage scales via transform on desktop — convert the card's
+    // viewport rect into the transformed ancestor's local space so the
+    // overlay lines up exactly with the card.
+    let anc = el.parentElement;
+    while (anc && getComputedStyle(anc).transform === 'none') anc = anc.parentElement;
+    let rect;
+    if (anc) {
+      const ar = anc.getBoundingClientRect();
+      const scale = ar.width / anc.offsetWidth || 1;
+      rect = { top: (r.top - ar.top) / scale, left: (r.left - ar.left) / scale, width: r.width / scale, height: r.height / scale };
+    } else {
+      rect = { top: r.top, left: r.left, width: r.width, height: r.height };
+    }
+    setZoom({ rect, course });
+    window.setTimeout(() => go({ screen: 'courseDetail', courseId: course.id }), 480);
+  }
 
   const locLabel = geoStatus === 'ok' ? 'Near you'
     : geoStatus === 'pending' ? 'Locating…'
@@ -250,8 +270,6 @@ function BookScreen({ go, profile, embedded }) {
         )}
       </div>
 
-      <DateStrip selected={date} onSelect={setDate}/>
-
       {/* Search — dark, same look as the players search */}
       <div style={{ padding: '14px 16px 6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--forest)', borderRadius: 16, padding: '15px 18px', boxShadow: 'var(--shadow-sm)' }}>
@@ -272,47 +290,54 @@ function BookScreen({ go, profile, embedded }) {
           </div>
         </div>
       ) : (
-        <>
-          {/* Course rail — the focused card is crisp, neighbours peek in blurred */}
-          <div style={{ marginTop: 8 }}>
-            <CourseRail
-              items={filtered}
-              active={activeIdx}
-              onActive={setActiveIdx}
-              playersByCourse={playersByCourse}
-              onOpenCourse={(course) => go({ screen: 'courseDetail', courseId: course.id })}
-            />
-          </div>
-
-          {/* Tee times for the focused course */}
-          {activeItem && (
-            <div style={{ padding: '10px 16px 0' }}>
-              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
-                Tee times · {activeItem.course.shortName}
-              </div>
-              {activeItem.slots.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--forest)', opacity: 0.55, padding: '2px 2px' }}>No open times this day.</div>
-              ) : (
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="scroll-hide">
-                  {activeItem.slots.map(s => (
-                    <SlotChip key={s.id} slot={s} friends={friendsBySlot[s.id]} onClick={() => setBooking({ slot: s, course: activeItem.course })}/>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
+        /* Course rail — the focused card is crisp, neighbours peek in blurred */
+        <div style={{ marginTop: 8 }}>
+          <CourseRail
+            items={filtered}
+            active={activeIdx}
+            onActive={setActiveIdx}
+            playersByCourse={playersByCourse}
+            onOpenCourse={openCourse}
+          />
+        </div>
       )}
 
-      {booking && (
-        <BookingSheet
-          slot={booking.slot}
-          course={booking.course}
-          profile={profile}
-          onClose={() => setBooking(null)}
-          onBooked={() => { setBooking(null); go({ screen: 'myRounds' }); }}
-        />
-      )}
+      {zoom && <CourseZoomOverlay zoom={zoom}/>}
+    </div>
+  );
+}
+
+// ─── Card → course page opening animation ─────────────────────────────
+// The tapped card "melts" out from its spot to fill the screen (springy
+// gooey ease, corners rounding away), then the course page takes over.
+function CourseZoomOverlay({ zoom }) {
+  const [grown, setGrown] = React.useState(false);
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setGrown(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const { rect, course } = zoom;
+  const pos = grown
+    ? { top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0 }
+    : { top: rect.top, left: rect.left, width: rect.width, height: rect.height, borderRadius: 24 };
+  return (
+    <div style={{
+      position: 'fixed', zIndex: 600, overflow: 'hidden', ...pos,
+      background: course.heroImg
+        ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
+        : 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      backgroundSize: 'cover', backgroundPosition: 'center', color: 'var(--cream)',
+      transition: 'top 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), left 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), width 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), height 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), border-radius 0.45s ease',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <div style={{ position: 'absolute', left: 20, bottom: 18, right: 20 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: grown ? 34 : 28, lineHeight: 0.98, letterSpacing: '-0.01em', transition: 'font-size 0.5s cubic-bezier(0.32, 1.12, 0.35, 1)' }}>
+          {course.shortName}
+        </div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 7, letterSpacing: '0.05em' }}>
+          {course.city.toUpperCase()} · 9 HOLES · PAR {course.par}
+        </div>
+      </div>
     </div>
   );
 }
