@@ -484,7 +484,7 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot, activeMa
         {/* Title floating at bottom of hero */}
         <div style={{ position: 'absolute', bottom: 18, left: 20, right: 20 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.92, letterSpacing: '-0.02em' }}>
-            {event.courseShort}
+            {live ? 'Rejoin your game' : event.courseShort}
           </div>
           <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', opacity: 0.8, marginTop: 6, letterSpacing: '0.04em' }}>
             {live
@@ -546,7 +546,7 @@ function LiveInlinePreview({ match }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>Your match</Eyebrow>
+          <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>Current score</Eyebrow>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 2 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: accent, letterSpacing: '-0.01em' }}>{label}</span>
             <span style={{ fontSize: 11, opacity: 0.65 }}>thru {m.thru}</span>
