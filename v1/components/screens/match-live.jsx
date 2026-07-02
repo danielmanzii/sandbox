@@ -121,13 +121,8 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
   }
 
   if (err) return <FullScreenMessage title="Something went wrong" detail={err} onBack={onExit}/>;
-  // Same look as the app-level LoadingScreen so launch → match is one seamless
-  // "Loading…" instead of a chain of different screens.
-  if (!ready || !hasData) return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, opacity: 0.6, color: 'var(--forest)' }}>Loading…</div>
-    </div>
-  );
+  // Bouncing-logo loader so launch → match is one seamless brand moment.
+  if (!ready || !hasData) return <SppLoader fill/>;
   if (match.status === 'abandoned') {
     return <FullScreenMessage title="Match cancelled" detail="This match was abandoned." onBack={onExit}/>;
   }

@@ -364,7 +364,7 @@ function BandTopTen({ band, rows, total, loading, meId, go, onOpenBoard }) {
           <span style={{ width: 56, textAlign: 'right' }}>SBX</span>
         </div>
         {loading ? (
-          <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+          <SppLoader/>
         ) : rows.length === 0 ? (
           <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
             No rated players yet — play and confirm a few matches to appear here.
@@ -424,7 +424,7 @@ function BandLeaderboard({ band, data, meId, go, bands, onBack, onChangeBand }) 
             <span style={{ width: 56, textAlign: 'right' }}>SBX</span>
           </div>
           {data === null ? (
-            <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+            <SppLoader/>
           ) : rows.length === 0 ? (
             <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
               No players in the {bandLabel(band)} band yet.
@@ -537,7 +537,7 @@ function useStreaks() {
 // ─── Stat leaders (cards) — tap a card to open that stat's full board ─
 function StatLeaders({ data, streaks, openStat }) {
   if (data === null) {
-    return <div style={{ padding: '6px 16px 0', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>;
+    return <SppLoader size={36} pad={16}/>;
   }
   if (!data.length) return null;
 
@@ -633,7 +633,7 @@ function StatLeaderboard({ kind, data, streaks, meId, go, onBack }) {
             <span style={{ width: 64, textAlign: 'right' }}>{meta.head}</span>
           </div>
           {loading ? (
-            <div style={{ padding: '20px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+            <SppLoader/>
           ) : rows.length === 0 ? (
             <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.5, fontSize: 13 }}>
               Nothing here yet — play and confirm matches to appear.

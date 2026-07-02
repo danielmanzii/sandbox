@@ -98,9 +98,7 @@ function NotificationsScreen({ profile, go }) {
       {/* Body */}
       <div style={{ padding: '8px 16px 0', position: 'relative' }}>
         {loading ? (
-          <div style={{ padding: '20px 4px', fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>
-            Loading…
-          </div>
+          <SppLoader/>
         ) : (
           <>
             {/* ── New ── */}

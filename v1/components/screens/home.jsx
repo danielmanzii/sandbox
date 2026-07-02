@@ -242,7 +242,9 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       {nextBooking && <NextRoundStatus booking={nextBooking} go={go}/>}
       {activeMatch && (
         <div style={{ padding: '16px 16px 0' }}>
-          <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={false}/>
+          <div className="heartbeat">
+            <NextUpCard event={nextEvent} go={go} isMember={isMember} liveMode={liveMode} brandLoud={brandLoud} mascot={mascot} activeMatch={activeMatch} isRegistered={false}/>
+          </div>
         </div>
       )}
 
@@ -389,7 +391,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           <button onClick={() => go({ screen: 'social' })} style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Find people →</button>
         </div>
         {feedLoading ? (
-          <div className="card" style={{ padding: 24, fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>Loading…</div>
+          <div className="card"><SppLoader/></div>
         ) : feed.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1.1 }}>

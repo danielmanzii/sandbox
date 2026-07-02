@@ -120,6 +120,21 @@ button {
   50%      { transform: translateY(-16px); }
 }
 
+/* Cream placeholder for dark (forest) search bars */
+.explore-search-input::placeholder { color: rgba(234,226,206,0.6); }
+
+/* Live-match card: subtle double-thump heartbeat — "this game is live, tap back in" */
+.heartbeat {
+  animation: heartbeat 1.8s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes heartbeat {
+  0%, 40%, 100% { transform: scale(1); }
+  8%  { transform: scale(1.015); }
+  16% { transform: scale(1); }
+  24% { transform: scale(1.025); }
+}
+
 /* Dock icon bounce when a tab is selected */
 @keyframes iconBounce {
   0%, 100% { transform: translateY(0); }

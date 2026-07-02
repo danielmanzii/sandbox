@@ -275,7 +275,7 @@ function StartMatchView({ profile, format = 'regular', onCancel, onCreated }) {
         }}/>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
-        {rcCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>Loading courses…</div>}
+        {rcCourses.length === 0 && <SppLoader dark size={34} pad={14}/>}
         {rcCourses.length > 0 && filteredCourses.length === 0 && <div style={{ fontSize: 13, opacity: 0.7 }}>No courses match “{q}”.</div>}
         {filteredCourses.map(c => {
           const on = courseId === c.id;

@@ -65,6 +65,127 @@ function SlotChip({ slot, onClick, friends }) {
   );
 }
 
+// ─── Who's played each course (avatar strip on the rail cards) ────────
+// One query for all visible courses → unique players per course → profiles.
+function useCoursePlayers(courseIds) {
+  const key = (courseIds || []).slice().sort().join(',');
+  const [map, setMap] = React.useState({});
+  React.useEffect(() => {
+    if (!key) { setMap({}); return undefined; }
+    let on = true;
+    (async () => {
+      const { data: ms } = await sbx.from('matches')
+        .select('course_id, player_a, player_a2, player_b, player_b2')
+        .in('course_id', key.split(',')).eq('status', 'completed').limit(400);
+      const byCourse = {};
+      (ms || []).forEach(m => {
+        const arr = byCourse[m.course_id] || (byCourse[m.course_id] = []);
+        [m.player_a, m.player_a2, m.player_b, m.player_b2].forEach(p => { if (p && !arr.includes(p)) arr.push(p); });
+      });
+      const allIds = [...new Set(Object.keys(byCourse).flatMap(c => byCourse[c].slice(0, 4)))];
+      let pById = {};
+      if (allIds.length) {
+        const { data: profs } = await sbx.from('profiles').select('id, first_name, handle, avatar_url').in('id', allIds);
+        (profs || []).forEach(p => { pById[p.id] = p; });
+      }
+      const out = {};
+      for (const cid in byCourse) {
+        out[cid] = { count: byCourse[cid].length, players: byCourse[cid].slice(0, 4).map(id => pById[id]).filter(Boolean) };
+      }
+      if (on) setMap(out);
+    })();
+    return () => { on = false; };
+  }, [key]);
+  return map;
+}
+
+// ─── Focus rail: one course in focus, neighbours peek in blurred ──────
+function CourseRail({ items, active, onActive, onOpenCourse, playersByCourse }) {
+  const railRef = React.useRef(null);
+  const debounce = React.useRef(null);
+
+  const onScroll = () => {
+    if (debounce.current) window.clearTimeout(debounce.current);
+    debounce.current = window.setTimeout(() => {
+      const el = railRef.current; if (!el) return;
+      const mid = el.scrollLeft + el.clientWidth / 2;
+      let best = 0, bestD = Infinity;
+      Array.from(el.children).forEach((c, i) => {
+        const d = Math.abs((c.offsetLeft + c.offsetWidth / 2) - mid);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      if (best !== active) onActive(best);
+    }, 80);
+  };
+
+  return (
+    <div ref={railRef} onScroll={onScroll} className="scroll-hide" style={{
+      display: 'flex', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory',
+      padding: '4px 34px 8px',
+    }}>
+      {items.map(({ course, distanceMi }, i) => {
+        const focused = i === active;
+        const pc = playersByCourse[course.id];
+        return (
+          <button key={course.id} onClick={(e) => {
+            if (focused) { onOpenCourse(course); return; }
+            e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }} style={{
+            flex: '0 0 calc(100% - 68px)', scrollSnapAlign: 'center',
+            height: 320, borderRadius: 24, overflow: 'hidden', position: 'relative',
+            border: 'none', padding: 0, textAlign: 'left', color: 'var(--cream)', cursor: 'pointer',
+            background: course.heroImg
+              ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
+              : 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            boxShadow: focused ? 'var(--shadow-md)' : 'none',
+            filter: focused ? 'none' : 'blur(2.5px) brightness(0.85)',
+            transform: focused ? 'scale(1)' : 'scale(0.93)',
+            opacity: focused ? 1 : 0.75,
+            transition: 'filter 0.35s ease, transform 0.35s ease, opacity 0.35s ease, box-shadow 0.35s ease',
+          }}>
+            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+            {!course.heroImg && (
+              <img src="assets/clay-course-hole.png" alt="" style={{
+                position: 'absolute', right: -14, top: 26, height: 140, opacity: 0.9,
+                pointerEvents: 'none', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.3))',
+              }}/>
+            )}
+            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 0.98, letterSpacing: '-0.01em' }}>{course.shortName}</div>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 7, letterSpacing: '0.05em' }}>
+                {course.city.toUpperCase()}{distanceMi != null ? ` · ${distanceMi.toFixed(1)} MI` : ''} · 9 HOLES · PAR {course.par}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                {pc && pc.players.length > 0 ? (
+                  <>
+                    <div style={{ display: 'flex' }}>
+                      {pc.players.map((p, j) => (
+                        <div key={p.id} style={{
+                          width: 26, height: 26, borderRadius: 999, marginLeft: j ? -8 : 0, overflow: 'hidden',
+                          background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'var(--font-display)', fontSize: 12, boxShadow: '0 0 0 2px rgba(14,28,19,0.5)',
+                        }}>
+                          {p.avatar_url
+                            ? <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                            : ((p.first_name || p.handle || '?').replace(/^@/, '')[0] || '?').toUpperCase()}
+                        </div>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 11, opacity: 0.85 }}>{pc.count} golfer{pc.count === 1 ? '' : 's'} played here</span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, opacity: 0.7 }}>Be one of the first to play it</span>
+                )}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Book screen ──────────────────────────────────────────────────────
 function BookScreen({ go, profile, embedded }) {
   const [coords, geoStatus] = useGeolocation();
@@ -78,6 +199,14 @@ function BookScreen({ go, profile, embedded }) {
     const s = q.trim().toLowerCase();
     return course.shortName.toLowerCase().includes(s) || course.city.toLowerCase().includes(s);
   });
+
+  // Focus-rail state: which course is centered; its tee times render below.
+  const [activeIdx, setActiveIdx] = React.useState(0);
+  React.useEffect(() => { if (activeIdx > filtered.length - 1) setActiveIdx(0); }, [filtered.length]);
+  const activeItem = filtered[Math.min(activeIdx, Math.max(0, filtered.length - 1))] || null;
+  const playersByCourse = useCoursePlayers(filtered.map(x => x.course.id));
+  const activeSlotIds = React.useMemo(() => (activeItem ? activeItem.slots.map(s => s.id) : []), [activeItem]);
+  const friendsBySlot = useFriendsOnSlots(profile && profile.id, activeSlotIds);
 
   const locLabel = geoStatus === 'ok' ? 'Near you'
     : geoStatus === 'pending' ? 'Locating…'
@@ -123,38 +252,57 @@ function BookScreen({ go, profile, embedded }) {
 
       <DateStrip selected={date} onSelect={setDate}/>
 
-      {/* Search */}
+      {/* Search — dark, same look as the players search */}
       <div style={{ padding: '14px 16px 6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper)', borderRadius: 14, padding: '11px 14px', border: 'var(--hairline)' }}>
-          <Icon.Search size={16} color="var(--forest)"/>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 14, color: 'var(--ink)', fontWeight: 600 }}/>
-          {q && <button onClick={() => setQ('')} style={{ background: 'transparent', border: 'none', color: 'var(--forest)', fontSize: 12, opacity: 0.6 }}>Clear</button>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--forest)', borderRadius: 16, padding: '15px 18px', boxShadow: 'var(--shadow-sm)' }}>
+          <Icon.Search size={18} color="var(--cream)"/>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…" className="explore-search-input"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 15, color: 'var(--cream)', fontWeight: 600 }}/>
+          {q && <button onClick={() => setQ('')} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', fontSize: 12, opacity: 0.7 }}>Clear</button>}
         </div>
       </div>
 
-      <div style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {loading ? (
-          <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--forest)', opacity: 0.5 }}>Loading availability…</div>
-        ) : filtered.length === 0 ? (
+      {loading ? (
+        <SppLoader/>
+      ) : filtered.length === 0 ? (
+        <div style={{ padding: '8px 16px 0' }}>
           <div className="card" style={{ padding: 24, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)' }}>No courses found.</div>
             <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>More courses are joining the Sandbox network soon.</div>
           </div>
-        ) : (
-          filtered.map(({ course, slots, distanceMi }) => (
-            <CourseAvailabilityCard
-              key={course.id}
-              course={course}
-              slots={slots}
-              distanceMi={distanceMi}
-              viewerId={profile && profile.id}
-              onOpenCourse={() => go({ screen: 'courseDetail', courseId: course.id })}
-              onPickSlot={(slot) => setBooking({ slot, course })}
+        </div>
+      ) : (
+        <>
+          {/* Course rail — the focused card is crisp, neighbours peek in blurred */}
+          <div style={{ marginTop: 8 }}>
+            <CourseRail
+              items={filtered}
+              active={activeIdx}
+              onActive={setActiveIdx}
+              playersByCourse={playersByCourse}
+              onOpenCourse={(course) => go({ screen: 'courseDetail', courseId: course.id })}
             />
-          ))
-        )}
-      </div>
+          </div>
+
+          {/* Tee times for the focused course */}
+          {activeItem && (
+            <div style={{ padding: '10px 16px 0' }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
+                Tee times · {activeItem.course.shortName}
+              </div>
+              {activeItem.slots.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--forest)', opacity: 0.55, padding: '2px 2px' }}>No open times this day.</div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="scroll-hide">
+                  {activeItem.slots.map(s => (
+                    <SlotChip key={s.id} slot={s} friends={friendsBySlot[s.id]} onClick={() => setBooking({ slot: s, course: activeItem.course })}/>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {booking && (
         <BookingSheet
@@ -169,40 +317,6 @@ function BookScreen({ go, profile, embedded }) {
   );
 }
 
-function CourseAvailabilityCard({ course, slots, distanceMi, viewerId, onOpenCourse, onPickSlot }) {
-  const slotIds = React.useMemo(() => slots.map(s => s.id), [slots]);
-  const friendsBySlot = useFriendsOnSlots(viewerId, slotIds);
-  return (
-    <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-      <button onClick={onOpenCourse} style={{
-        width: '100%', textAlign: 'left', border: 'none', padding: 0, display: 'block',
-        height: 96, position: 'relative',
-        background: course.heroImg
-          ? `linear-gradient(180deg, rgba(14,28,19,0) 30%, rgba(14,28,19,0.7) 100%), url('${course.heroImg}')`
-          : 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-        backgroundSize: 'cover', backgroundPosition: 'center', color: 'var(--cream)',
-      }}>
-        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-        <div style={{ position: 'absolute', left: 14, bottom: 10, right: 14 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.01em' }}>{course.shortName}</div>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 4, letterSpacing: '0.04em' }}>
-            {course.city.toUpperCase()}{distanceMi != null ? ` · ${distanceMi.toFixed(1)} MI` : ''} · 9 HOLES · PAR {course.par}
-          </div>
-        </div>
-      </button>
-      <div style={{ padding: '12px 12px 14px' }}>
-        {slots.length === 0 ? (
-          <div style={{ fontSize: 12, opacity: 0.55, padding: '2px 2px' }}>No open times this day.</div>
-        ) : (
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="scroll-hide">
-            {slots.map(s => <SlotChip key={s.id} slot={s} friends={friendsBySlot[s.id]} onClick={() => onPickSlot(s)}/>)}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Course detail ────────────────────────────────────────────────────
 function CourseDetailScreen({ go, courseId, profile }) {
   const [course, holes, loading] = useCourse(courseId);
@@ -210,7 +324,7 @@ function CourseDetailScreen({ go, courseId, profile }) {
   const [slots, slotsLoading] = useCourseSlots(courseId, date);
   const [booking, setBooking] = React.useState(null);
 
-  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (loading) return <SppLoader fill/>;
   if (!course) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Course not found.</div>;
 
   const totalYards = holes.reduce((s, h) => s + (h.sandbox_yards || 0), 0);
@@ -278,7 +392,7 @@ function CourseDetailScreen({ go, courseId, profile }) {
         <DateStrip selected={date} onSelect={setDate}/>
         <div style={{ padding: '16px 16px 0' }}>
           {slotsLoading ? (
-            <div style={{ fontSize: 13, opacity: 0.5, padding: 12, textAlign: 'center' }}>Loading times…</div>
+            <SppLoader size={32} pad={12}/>
           ) : slots.length === 0 ? (
             <div className="card" style={{ padding: 20, textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>No open times this day.</div>
@@ -541,7 +655,7 @@ function MyRoundsScreen({ go, profile }) {
 
       <div style={{ padding: '4px 16px 0' }}>
         {loading ? (
-          <div style={{ padding: 24, textAlign: 'center', fontSize: 13, opacity: 0.5 }}>Loading…</div>
+          <SppLoader/>
         ) : (
           <>
             <Section label="Upcoming"/>
@@ -630,7 +744,7 @@ function MatchupScreen({ go, matchId, profile }) {
     catch (_) { setStarting(false); }
   }
 
-  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (loading) return <SppLoader fill/>;
   if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Matchup not found.</div>;
 
   const { match, teamA, teamB } = data;
@@ -752,7 +866,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
     });
   }
 
-  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (loading) return <SppLoader fill/>;
   if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Match not found.</div>;
 
   const { match: m, holes, teamA, teamB } = data;

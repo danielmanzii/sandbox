@@ -97,9 +97,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
 
   if (!isSelf && targetLoading && !mockTarget) {
     return (
-      <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>
-        Loading…
-      </div>
+      <SppLoader fill/>
     );
   }
 
@@ -224,7 +222,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
         <div className="card" style={{ overflow: 'hidden' }}>
           {rawMatches === null ? (
-            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
+            <SppLoader/>
           ) : history.length === 0 ? (
             <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
               <div style={{ fontSize: 14 }}>No matches yet.</div>
@@ -1265,7 +1263,7 @@ function MatchScorecardSheet({ match, ownerId, onClose }) {
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(14,28,19,0.62)' }}/>
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '9% 20px 28px', overflowY: 'auto' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 20, opacity: 0.8 }}>Loading…</div>
+          <SppLoader dark/>
         ) : (
           <div style={{ width: '100%', maxWidth: 420, margin: '0 auto' }}>
             <ShareResultCard headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={cells.length}/>
@@ -1306,7 +1304,7 @@ function FollowListSheet({ userId, mode, viewerId, go, onClose }) {
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loading ? (
-            <div style={{ padding: 32, textAlign: 'center', opacity: 0.4, fontSize: 13 }}>Loading…</div>
+            <SppLoader/>
           ) : list.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginBottom: 6 }}>
