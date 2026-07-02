@@ -132,7 +132,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [major]                = useNextMajor();
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
-  const lastMatch              = useLastMatchCard(profile && profile.id);
   const [pendingInvites]       = useMyPendingInvites(profile && profile.id);
   const [pendingEventInvites]  = useMyPendingEventInvites(profile && profile.id);
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
@@ -254,18 +253,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           {pendingInvites.map(inv => (
             <InviteBanner key={inv.id} invite={inv} profile={profile} go={go}/>
           ))}
-        </div>
-      )}
-
-      {/* Your last match — the shareable 3D card, right at the top */}
-      {lastMatch && (
-        <div style={{ padding: '20px 16px 0' }}>
-          <Eyebrow style={{ marginBottom: 10 }}>{lastMatchAgoLine(lastMatch.completedAt)}</Eyebrow>
-          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles} matchup={lastMatch.matchup}/>
-          <button onClick={() => go({ screen: 'matchDetail', matchId: lastMatch.matchId })} style={{
-            marginTop: 10, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--forest)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
-          }}>View match <Icon.ArrowRight size={12}/></button>
         </div>
       )}
 
@@ -981,4 +968,4 @@ function InviteBanner({ invite, profile, go }) {
   );
 }
 
-Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner, FeedRow, FriendsHere });
+Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner, FeedRow, FriendsHere, useLastMatchCard, lastMatchAgoLine });

@@ -150,8 +150,8 @@ function CourseRail({ items, onOpenCourse, playersByCourse }) {
 
   return (
     <div ref={railRef} onScroll={onScroll} className="scroll-hide" style={{
-      display: 'flex', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory',
-      padding: '4px 34px 8px',
+      display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory',
+      padding: '4px 34px 8px', height: '100%', boxSizing: 'border-box', alignItems: 'stretch',
     }}>
       {Array.from({ length: n * reps }, (_, idx) => {
         const { course, distanceMi } = items[idx % n];
@@ -163,8 +163,8 @@ function CourseRail({ items, onOpenCourse, playersByCourse }) {
             e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           }} style={{
             flex: '0 0 calc(100% - 68px)', scrollSnapAlign: 'center',
-            height: 530, borderRadius: 24, overflow: 'hidden', position: 'relative',
-            border: 'none', padding: 0, textAlign: 'left', color: 'var(--cream)', cursor: 'pointer',
+            height: '100%', borderRadius: 24, overflow: 'hidden', position: 'relative',
+            border: 'none', padding: 0, textAlign: 'left', color: '#FFFFFF', cursor: 'pointer',
             background: course.heroImg
               ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
               : 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
@@ -182,33 +182,23 @@ function CourseRail({ items, onOpenCourse, playersByCourse }) {
                 pointerEvents: 'none', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.3))',
               }}/>
             )}
-            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 0.98, letterSpacing: '-0.01em' }}>{course.shortName}</div>
-              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 7, letterSpacing: '0.05em' }}>
-                {course.city.toUpperCase()}{distanceMi != null ? ` · ${distanceMi.toFixed(1)} MI` : ''} · 9 HOLES · PAR {course.par}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                {pc && pc.players.length > 0 ? (
-                  <>
-                    <div style={{ display: 'flex' }}>
-                      {pc.players.map((p, j) => (
-                        <div key={p.id} style={{
-                          width: 26, height: 26, borderRadius: 999, marginLeft: j ? -8 : 0, overflow: 'hidden',
-                          background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontFamily: 'var(--font-display)', fontSize: 12, boxShadow: '0 0 0 2px rgba(14,28,19,0.5)',
-                        }}>
-                          {p.avatar_url
-                            ? <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
-                            : ((p.first_name || p.handle || '?').replace(/^@/, '')[0] || '?').toUpperCase()}
-                        </div>
-                      ))}
+            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 18 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1, letterSpacing: '-0.01em', color: '#FFFFFF', textShadow: '0 2px 12px rgba(14,28,19,0.4)' }}>{course.shortName}</div>
+              {pc && pc.players.length > 0 && (
+                <div style={{ display: 'flex', marginTop: 12 }}>
+                  {pc.players.map((p, j) => (
+                    <div key={p.id} style={{
+                      width: 30, height: 30, borderRadius: 999, marginLeft: j ? -9 : 0, overflow: 'hidden',
+                      background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'var(--font-display)', fontSize: 13, boxShadow: '0 0 0 2px rgba(14,28,19,0.55)',
+                    }}>
+                      {p.avatar_url
+                        ? <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                        : ((p.first_name || p.handle || '?').replace(/^@/, '')[0] || '?').toUpperCase()}
                     </div>
-                    <span style={{ fontSize: 11, opacity: 0.85 }}>{pc.count} golfer{pc.count === 1 ? '' : 's'} played here</span>
-                  </>
-                ) : (
-                  <span style={{ fontSize: 11, opacity: 0.7 }}>Be one of the first to play it</span>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </button>
         );
@@ -263,7 +253,9 @@ function BookScreen({ go, profile, embedded }) {
     : 'Miami, FL';
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: embedded ? 'auto' : '100%', paddingBottom: embedded ? 0 : 120 }}>
+    <div style={embedded
+      ? { background: 'var(--canvas)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+      : { background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
       {/* Standalone route keeps its title + My rounds; the embedded Play tab
           goes straight to the search bar (pills above set the hierarchy). */}
       {!embedded && (
@@ -296,7 +288,7 @@ function BookScreen({ go, profile, embedded }) {
 
       {/* Search — dark like the players search, slimmer than the pills above;
           My rounds sits beside it as a compact matching circle */}
-      <div style={{ padding: embedded ? '6px 16px 6px' : '14px 16px 6px', display: 'flex', gap: 8 }}>
+      <div style={{ padding: embedded ? '6px 16px 6px' : '14px 16px 6px', display: 'flex', gap: 8, flexShrink: 0 }}>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--forest)', borderRadius: 13, padding: '10px 15px', boxShadow: 'var(--shadow-sm)' }}>
           <Icon.Search size={15} color="var(--cream)"/>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…" className="explore-search-input"
@@ -313,7 +305,7 @@ function BookScreen({ go, profile, embedded }) {
       </div>
 
       {loading ? (
-        <SppLoader/>
+        <div style={{ flex: embedded ? 1 : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><SppLoader/></div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: '8px 16px 0' }}>
           <div className="card" style={{ padding: 24, textAlign: 'center' }}>
@@ -322,8 +314,11 @@ function BookScreen({ go, profile, embedded }) {
           </div>
         </div>
       ) : (
-        /* Course rail — the focused card is crisp, neighbours peek in blurred */
-        <div style={{ marginTop: 8 }}>
+        /* Course rail — the focused card is crisp, neighbours peek in blurred.
+           Embedded: fills the space down to the dock. Standalone: fixed tall. */
+        <div style={embedded
+          ? { flex: 1, minHeight: 0, paddingBottom: 96, display: 'flex', flexDirection: 'column' }
+          : { height: 520, marginTop: 8 }}>
           <CourseRail
             items={filtered}
             playersByCourse={playersByCourse}
@@ -361,11 +356,8 @@ function CourseZoomOverlay({ zoom }) {
     }}>
       <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
       <div style={{ position: 'absolute', left: 20, bottom: 18, right: 20 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: grown ? 34 : 28, lineHeight: 0.98, letterSpacing: '-0.01em', transition: 'font-size 0.5s cubic-bezier(0.32, 1.12, 0.35, 1)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: grown ? 34 : 30, lineHeight: 1, letterSpacing: '-0.01em', color: '#FFFFFF', textShadow: '0 2px 12px rgba(14,28,19,0.4)', transition: 'font-size 0.5s cubic-bezier(0.32, 1.12, 0.35, 1)' }}>
           {course.shortName}
-        </div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 7, letterSpacing: '0.05em' }}>
-          {course.city.toUpperCase()} · 9 HOLES · PAR {course.par}
         </div>
       </div>
     </div>

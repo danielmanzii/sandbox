@@ -69,6 +69,7 @@ function StatsYou({ go }) {
   const f1 = u.fmt1v1 || {};
   const hasShotData = (u.gir > 0) || (u.putts > 0) || (u.fairway != null);
   const history = (MOCK.HISTORY || []);
+  const [fmt, setFmt] = React.useState('duo'); // duo = 2v2, solo = 1v1
 
   return (
     <div style={{ padding: '16px' }}>
@@ -87,29 +88,43 @@ function StatsYou({ go }) {
         <EmptyNote title="No shot data yet." body="Track stats during scoring to unlock fairways, greens, putts and more."/>
       )}
 
-      {/* 2v2 */}
-      <SectionHeader eyebrow="Doubles" title="2v2 stats"/>
-      <RecordHero rec={f2} fmt="2v2"/>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
-        <StatChip label="Win streak" fire value={`${f2.winStreak || 0}`} sub={f2.longestStreak ? `longest ${f2.longestStreak}` : 'current run'}/>
-        <StatChip label="Best win" value={f2.bestWin ? f2.bestWin.margin : '—'} sub={f2.bestWin && f2.bestWin.opp ? `vs ${formatHandle(f2.bestWin.opp)}` : 'biggest margin'}/>
-        <PctChip label="Clutch %" stat={f2.clutch} desc="saved the hole for your team" info={STAT_INFO.clutch}/>
-        <PctChip label="Shot efficiency" stat={f2.shotEff} desc="team played your ball" info={STAT_INFO.shotEff}/>
-        <PctChip label="Finisher %" stat={f2.finisher} desc="team putts you sank" info={STAT_INFO.finisher}/>
-        <StatChip label="Best partner" value={f2.bestPartner && f2.bestPartner.handle ? formatHandle(f2.bestPartner.handle) : '—'} sub={f2.bestPartner ? `${f2.bestPartner.winPct}% · ${f2.bestPartner.games} games` : 'min 2 games together'}/>
+      {/* Duo (2v2) / Solo (1v1) split — the format-specific stats live here */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 24, background: 'rgba(14,28,19,0.05)', borderRadius: 999, padding: 4 }}>
+        {[['duo', 'Duo stats'], ['solo', 'Solo stats']].map(([k, l]) => (
+          <button key={k} onClick={() => setFmt(k)} style={{
+            flex: 1, padding: '11px 14px', borderRadius: 999,
+            background: fmt === k ? 'var(--forest)' : 'transparent',
+            color: fmt === k ? 'var(--cream)' : 'var(--forest)',
+            fontWeight: 800, fontSize: 14, letterSpacing: '0.01em', transition: 'all 0.15s',
+          }}>{l}</button>
+        ))}
       </div>
 
-      {/* 1v1 */}
-      <SectionHeader eyebrow="Singles" title="1v1 stats"/>
-      <RecordHero rec={f1} fmt="1v1"/>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
-        <StatChip label="Win streak" fire value={`${f1.winStreak || 0}`} sub={f1.longestStreak ? `longest ${f1.longestStreak}` : 'current run'}/>
-        <StatChip label="Best win" value={f1.bestWin ? f1.bestWin.margin : '—'} sub={f1.bestWin && f1.bestWin.opp ? `vs ${formatHandle(f1.bestWin.opp)}` : 'biggest margin'}/>
-        <PctChip label="Scrambling %" stat={f1.scrambling} desc="missed green, still won/halved" info={STAT_INFO.scrambling}/>
-        <PctChip label="Bounce-back %" stat={f1.bounceBack} desc="won the hole after a loss" info={STAT_INFO.bounceBack}/>
-        <PctChip label="Conversion %" stat={f1.conversion} desc="GIR holes you won" info={STAT_INFO.conversion}/>
-        <PctChip label="Closer %" stat={f1.closer} desc="tight / closing holes won" info={STAT_INFO.closer}/>
-      </div>
+      {fmt === 'duo' ? (
+        <div style={{ marginTop: 14 }}>
+          <RecordHero rec={f2} fmt="2v2"/>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+            <StatChip label="Win streak" fire value={`${f2.winStreak || 0}`} sub={f2.longestStreak ? `longest ${f2.longestStreak}` : 'current run'}/>
+            <StatChip label="Best win" value={f2.bestWin ? f2.bestWin.margin : '—'} sub={f2.bestWin && f2.bestWin.opp ? `vs ${formatHandle(f2.bestWin.opp)}` : 'biggest margin'}/>
+            <PctChip label="Clutch %" stat={f2.clutch} desc="saved the hole for your team" info={STAT_INFO.clutch}/>
+            <PctChip label="Shot efficiency" stat={f2.shotEff} desc="team played your ball" info={STAT_INFO.shotEff}/>
+            <PctChip label="Finisher %" stat={f2.finisher} desc="team putts you sank" info={STAT_INFO.finisher}/>
+            <StatChip label="Best partner" value={f2.bestPartner && f2.bestPartner.handle ? formatHandle(f2.bestPartner.handle) : '—'} sub={f2.bestPartner ? `${f2.bestPartner.winPct}% · ${f2.bestPartner.games} games` : 'min 2 games together'}/>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 14 }}>
+          <RecordHero rec={f1} fmt="1v1"/>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+            <StatChip label="Win streak" fire value={`${f1.winStreak || 0}`} sub={f1.longestStreak ? `longest ${f1.longestStreak}` : 'current run'}/>
+            <StatChip label="Best win" value={f1.bestWin ? f1.bestWin.margin : '—'} sub={f1.bestWin && f1.bestWin.opp ? `vs ${formatHandle(f1.bestWin.opp)}` : 'biggest margin'}/>
+            <PctChip label="Scrambling %" stat={f1.scrambling} desc="missed green, still won/halved" info={STAT_INFO.scrambling}/>
+            <PctChip label="Bounce-back %" stat={f1.bounceBack} desc="won the hole after a loss" info={STAT_INFO.bounceBack}/>
+            <PctChip label="Conversion %" stat={f1.conversion} desc="GIR holes you won" info={STAT_INFO.conversion}/>
+            <PctChip label="Closer %" stat={f1.closer} desc="tight / closing holes won" info={STAT_INFO.closer}/>
+          </div>
+        </div>
+      )}
 
       {/* Match history */}
       <SectionHeader eyebrow="Recent" title="Match history"/>

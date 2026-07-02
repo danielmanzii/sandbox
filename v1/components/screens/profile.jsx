@@ -1,4 +1,4 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut, ShareResultCard, shareResult, plainMargin */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut, ShareResultCard, shareResult, plainMargin, useLastMatchCard, lastMatchAgoLine */
 // Profile (self + public) with member-gated stats
 
 function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
@@ -41,6 +41,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   // via a single directory lookup, so every @ in a row is clickable.
   const stats      = useUserStats(targetId);
   const rawMatches = stats ? stats.recentMatches : null;
+  const lastMatchCard = useLastMatchCard(targetId);
   const dirIds = React.useMemo(() => {
     const s = new Set();
     for (const m of (rawMatches || [])) {
@@ -217,41 +218,31 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         )}
       </div>
 
-      {/* Match history */}
+      {/* Match history — the shareable 3D last-match card + a link into the
+          full history page. */}
       <div style={{ padding: '20px 16px 0' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {rawMatches === null ? (
-            <SppLoader/>
-          ) : history.length === 0 ? (
-            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
-              <div style={{ fontSize: 14 }}>No matches yet.</div>
-            </div>
-          ) : (
-            <>
-              {history.slice(0, 4).map((r, i) => (
-                <MatchHistoryRow
-                  key={r.id}
-                  row={r}
-                  last={i === Math.min(history.length, 4) - 1}
-                  onOpenProfile={(h) => go({ screen: 'profile', viewingHandle: h })}
-                  onOpenCard={() => go({ screen: 'matchDetail', matchId: r.id })}
-                />
-              ))}
-              {history.length > 4 && (
-                <button onClick={() => setMatchHistoryOpen(true)} style={{
-                  width: '100%', padding: '13px 14px',
-                  background: 'transparent', border: 'none',
-                  color: 'var(--forest)', fontSize: 12, fontWeight: 700,
-                  cursor: 'pointer', textAlign: 'center',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                }}>
-                  View all {history.length} matches <Icon.ArrowRight size={12}/>
-                </button>
-              )}
-            </>
-          )}
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+          {isSelf ? (lastMatchCard ? lastMatchAgoLine(lastMatchCard.completedAt) : 'Match history') : 'Match history'}
         </div>
+        {rawMatches === null ? (
+          <div className="card"><SppLoader/></div>
+        ) : lastMatchCard ? (
+          <>
+            <ShareResultCard headline={lastMatchCard.headline} summary={lastMatchCard.summary} subline={lastMatchCard.subline} cells={lastMatchCard.cells} totalHoles={lastMatchCard.totalHoles} matchup={lastMatchCard.matchup}/>
+            <button onClick={() => setMatchHistoryOpen(true)} style={{
+              marginTop: 12, width: '100%', padding: '13px 14px', borderRadius: 14,
+              background: 'transparent', border: '1px solid var(--forest)',
+              color: 'var(--forest)', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              View all {history.length} matches <Icon.ArrowRight size={14}/>
+            </button>
+          </>
+        ) : (
+          <div className="card" style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
+            <div style={{ fontSize: 14 }}>No matches yet.</div>
+          </div>
+        )}
       </div>
 
       {isSelf && <LoyaltyCard userId={viewerId}/>}

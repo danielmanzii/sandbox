@@ -10,11 +10,11 @@ function PlayScreen({ go, tier, brandLoud, liveMode, mascot, profile, playTab })
   // Back-compat with old routes: 'unranked' → challenge, anything else → sbx.
   const tab = (playTab === 'challenge' || playTab === 'unranked') ? 'challenge' : 'sbx';
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <PlayHeader tab={tab} go={go}/>
+    <div style={{ background: 'var(--canvas)', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flexShrink: 0 }}><PlayHeader tab={tab} go={go}/></div>
       {tab === 'sbx'
         ? <BookScreen go={go} profile={profile} embedded/>
-        : <ChallengeFriendsView go={go} profile={profile}/>}
+        : <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 110 }}><ChallengeFriendsView go={go} profile={profile}/></div>}
     </div>
   );
 }
