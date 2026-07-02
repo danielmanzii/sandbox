@@ -226,9 +226,9 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         </div>
         {rawMatches === null ? (
           <div className="card"><SppLoader/></div>
-        ) : lastMatchCard ? (
+        ) : history.length > 0 ? (
           <>
-            <ShareResultCard headline={lastMatchCard.headline} summary={lastMatchCard.summary} subline={lastMatchCard.subline} cells={lastMatchCard.cells} totalHoles={lastMatchCard.totalHoles} matchup={lastMatchCard.matchup}/>
+            <MatchCardStack history={history} go={go}/>
             <button onClick={() => setMatchHistoryOpen(true)} style={{
               marginTop: 12, width: '100%', padding: '13px 14px', borderRadius: 14,
               background: 'transparent', border: '1px solid var(--forest)',
@@ -1166,6 +1166,176 @@ function MatchHistoryRow({ row, last, onOpenProfile, onOpenCard }) {
         <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: marginColor, opacity: marginOpacity }}>{row.margin}</span>
         <Icon.Chevron dir="right" size={12} color="var(--forest)"/>
       </button>
+    </div>
+  );
+}
+
+// ─── Match card stack: the 5 most-recent matches as a tappable deck. ──
+// Tap the top card to open the match; flick/swipe it aside to send it to
+// the back and reveal the next. Mirrors the ImgStack pattern, but every
+// card is a mini scorecard instead of a photo.
+function MatchStackCard({ row }) {
+  const isW = row.result === 'W', isL = row.result === 'L';
+  const bg = isW
+    ? 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)'
+    : isL ? '#F4EFE2' : '#FFFFFF';
+  const fg = isW ? 'var(--cream)' : 'var(--forest)';
+  const label = isW ? 'Won' : isL ? 'Lost' : 'Halved';
+  return (
+    <div style={{
+      position: 'relative', overflow: 'hidden', boxSizing: 'border-box',
+      borderRadius: 22, padding: '18px 20px', minHeight: 148,
+      background: bg, color: fg,
+      border: isW ? 'none' : '1px solid rgba(28,73,42,0.16)',
+      boxShadow: isW ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    }}>
+      {isW && <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{
+          fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase',
+          fontWeight: 800, padding: '5px 10px', borderRadius: 999,
+          background: isW ? 'rgba(234,226,206,0.16)' : 'rgba(28,73,42,0.06)',
+        }}>{label}</span>
+        <span style={{
+          fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
+          opacity: 0.55, fontWeight: 700,
+        }}>{row.is2v2 ? '2v2' : '1v1'}</span>
+      </div>
+      <div style={{ position: 'relative' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, letterSpacing: '-0.02em' }}>
+          {row.margin}
+        </div>
+        <div style={{ fontSize: 12, marginTop: 6, opacity: isW ? 0.85 : 0.65, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          vs {row.opp || '—'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Depth-based transform for each card behind the front one.
+const STACK_DEPTH = [
+  { ty: 0,  scale: 1,    rot: 0,  op: 1    },
+  { ty: 14, scale: 0.95, rot: -4, op: 1    },
+  { ty: 26, scale: 0.90, rot: 5,  op: 0.9  },
+  { ty: 36, scale: 0.86, rot: -6, op: 0.72 },
+  { ty: 44, scale: 0.82, rot: 6,  op: 0.52 },
+];
+
+function MatchCardStack({ history, go }) {
+  const cards = React.useMemo(() => history.slice(0, 5), [history]);
+  const [order, setOrder]       = React.useState(() => cards.map((_, i) => i));
+  const [dragging, setDragging] = React.useState(false);
+  const [flyOut, setFlyOut]     = React.useState(null); // { idx, dir }
+  const [, force]               = React.useReducer(x => x + 1, 0);
+  const startRef = React.useRef({ x: 0, y: 0, moved: 0 });
+  const deltaRef = React.useRef({ dx: 0, dy: 0 });
+
+  React.useEffect(() => { setOrder(cards.map((_, i) => i)); }, [cards.length]);
+
+  const pointOf = (e) => {
+    const t = e.touches && e.touches[0];
+    return { x: (t || e).clientX, y: (t || e).clientY };
+  };
+
+  function beginDrag(e) {
+    if (flyOut) return;
+    const p = pointOf(e);
+    startRef.current = { x: p.x, y: p.y, moved: 0 };
+    deltaRef.current = { dx: 0, dy: 0 };
+    setDragging(true);
+  }
+
+  React.useEffect(() => {
+    if (!dragging) return;
+    const move = (e) => {
+      const p = pointOf(e);
+      const dx = p.x - startRef.current.x;
+      const dy = p.y - startRef.current.y;
+      startRef.current.moved = Math.max(startRef.current.moved, Math.abs(dx) + Math.abs(dy));
+      deltaRef.current = { dx, dy };
+      if (e.cancelable) e.preventDefault();
+      force();
+    };
+    const end = () => {
+      const { dx } = deltaRef.current;
+      const moved = startRef.current.moved;
+      setDragging(false);
+      deltaRef.current = { dx: 0, dy: 0 };
+      if (moved < 8) {
+        // Treated as a tap → open the front match "regularly".
+        const m = cards[order[0]];
+        if (m) go({ screen: 'matchDetail', matchId: m.id });
+        force();
+        return;
+      }
+      if (order.length > 1 && Math.abs(dx) > 80) {
+        setFlyOut({ idx: order[0], dir: dx < 0 ? -1 : 1 });
+      } else {
+        force();
+      }
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', end);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', end);
+    };
+  }, [dragging, order, cards]);
+
+  // Once the flung card finishes its exit, drop it to the back of the deck.
+  React.useEffect(() => {
+    if (!flyOut) return;
+    const t = setTimeout(() => {
+      setOrder(o => [...o.slice(1), o[0]]);
+      setFlyOut(null);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [flyOut]);
+
+  if (!cards.length) return null;
+
+  return (
+    <div style={{ position: 'relative', height: 208, marginBottom: 12, touchAction: 'pan-y' }}>
+      {order.map((cardIdx, pos) => {
+        const m = cards[cardIdx];
+        const d = STACK_DEPTH[Math.min(pos, STACK_DEPTH.length - 1)];
+        const isFront  = pos === 0;
+        const isFlying = flyOut && flyOut.idx === cardIdx;
+        let transform;
+        if (isFlying) {
+          transform = `translate(${flyOut.dir * 520}px, 44px) rotate(${flyOut.dir * 22}deg)`;
+        } else if (isFront && dragging) {
+          const { dx, dy } = deltaRef.current;
+          transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.04}deg)`;
+        } else {
+          transform = `translateY(${d.ty}px) scale(${d.scale}) rotate(${d.rot}deg)`;
+        }
+        return (
+          <div
+            key={m.id}
+            onMouseDown={isFront ? beginDrag : undefined}
+            onTouchStart={isFront ? beginDrag : undefined}
+            style={{
+              position: 'absolute', left: 0, right: 0, top: 0, margin: '0 auto',
+              transform, transformOrigin: 'center top',
+              transition: (isFront && dragging) ? 'none' : 'transform 0.32s cubic-bezier(0.32,1.12,0.35,1), opacity 0.3s',
+              opacity: isFlying ? 0 : d.op,
+              zIndex: isFlying ? 300 : 100 - pos,
+              cursor: isFront ? 'grab' : 'default',
+              pointerEvents: (isFront && !flyOut) ? 'auto' : 'none',
+              willChange: 'transform',
+            }}
+          >
+            <MatchStackCard row={m}/>
+          </div>
+        );
+      })}
     </div>
   );
 }
