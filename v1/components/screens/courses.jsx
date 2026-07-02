@@ -722,19 +722,16 @@ function MatchDetailScreen({ go, matchId, profile }) {
   const [data, loading] = useMatchDetail(matchId);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
-  const [selHole, setSelHole] = React.useState(null);
   const [showHoles, setShowHoles] = React.useState(false);
   const cardRef = React.useRef(null);
   const topRef = React.useRef(null);
-  const accordionRef = React.useRef(null);
   const innerRef = React.useRef(null);
   const exitRef = React.useRef(null);
-  const [holesMax, setHolesMax] = React.useState(0);
   const meId = profile && profile.id;
 
   // Scroll so the Exit button sits above the bottom dock after opening.
   function scrollHolesUp() {
-    const el = exitRef.current || accordionRef.current;
+    const el = exitRef.current || innerRef.current;
     if (!el) return;
     const sc = el.closest && el.closest('.screen-enter');
     if (!sc) { el.scrollIntoView({ behavior: 'smooth', block: 'end' }); return; }
@@ -744,16 +741,13 @@ function MatchDetailScreen({ go, matchId, profile }) {
     if (delta > 0) sc.scrollBy({ top: delta, behavior: 'smooth' });
   }
 
-  // Animate to the content's real height (fixed 640 made the open feel abrupt),
-  // then scroll it up into view. Close → collapse + ease back to the top.
   function toggleHoles() {
     setShowHoles(prev => {
       const next = !prev;
-      setHolesMax(next && innerRef.current ? innerRef.current.scrollHeight + 8 : 0);
       window.setTimeout(() => {
         if (next) scrollHolesUp();
         else if (topRef.current) topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, next ? 430 : 60);
+      }, next ? 320 : 60);
       return next;
     });
   }
@@ -837,16 +831,11 @@ function MatchDetailScreen({ go, matchId, profile }) {
             </Button>
           )}
 
-          {/* Confirmation */}
-          {isParticipant && decided && (
+          {/* Confirmation — only while it still needs confirming; once both
+              sides agree, the hole-by-hole folder takes this spot. */}
+          {isParticipant && decided && !bothConfirmed && (
             <div className="card" style={{ padding: 16, textAlign: 'center', marginTop: 16 }}>
-              {bothConfirmed ? (
-                <>
-                  <div style={{ fontSize: 22 }}>✅</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginTop: 4 }}>Result confirmed</div>
-                  <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Both sides agreed — this counts toward SBX.</div>
-                </>
-              ) : iConfirmed ? (
+              {iConfirmed ? (
                 <>
                   <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Confirmed on your side</div>
                   <div className="caption-serif" style={{ fontSize: 14, opacity: 0.75, marginTop: 6 }}>Waiting for the other side to confirm…</div>
@@ -877,35 +866,24 @@ function MatchDetailScreen({ go, matchId, profile }) {
               {showHoles ? 'Hide hole details' : 'Hole by hole details'}
               <span style={{ transition: 'transform 0.3s ease', transform: showHoles ? 'rotate(180deg)' : 'none', display: 'inline-flex' }}><Icon.Chevron dir="down" size={14} color="var(--forest)"/></span>
             </button>
+            {bothConfirmed && (
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, textAlign: 'center', letterSpacing: '0.06em' }}>
+                ✓ Result confirmed by both sides — counts toward SBX
+              </div>
+            )}
 
-            {/* Accordion: hole-by-hole (tap a hole for its logged stats) */}
-            <div ref={accordionRef} style={{ maxHeight: holesMax, overflow: 'hidden', transition: 'max-height 0.42s ease' }}>
-              <div ref={innerRef} style={{ paddingTop: 4 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+            {/* Gooey folder: one tab per hole, full stroke-by-stroke detail */}
+            {showHoles && (
+              <div ref={innerRef} className="step-reveal" style={{ paddingTop: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
                   <Stat label="Holes won" value={holesWon}/>
                   <Stat label="Lost" value={holesLost}/>
                   <Stat label="Halved" value={holesHalved}/>
                 </div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole · tap for detail</div>
-                <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(holes.length, 9)}, 1fr)`, gap: 4 }}>
-                  {holes.map(h => {
-                    const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
-                    const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
-                    const lab = h.result == null ? '·' : w ? 'W' : l ? 'L' : 'H';
-                    const bg = w ? 'var(--forest)' : l ? '#C44536' : h.result === 'H' ? 'var(--paper)' : 'transparent';
-                    const col = w ? 'var(--cream)' : l ? '#FFFFFF' : 'var(--forest)';
-                    return (
-                      <button key={h.hole_number} onClick={() => setSelHole(h)} style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'transparent', border: 'none', padding: '2px 0', cursor: 'pointer',
-                      }}>
-                        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>{h.hole_number}</div>
-                        <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13 }}>{lab}</div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <HoleFolder holes={holes} youAreA={youAreA} is2v2={is2v2} byId={data.byId}
+                  playerStatsByHole={data.playerStatsByHole} meId={meId} isParticipant={isParticipant}/>
               </div>
-            </div>
+            )}
 
             {/* Exit sits below whatever's expanded */}
             <button ref={exitRef} onClick={() => go({ screen: 'stats' })}
@@ -915,12 +893,205 @@ function MatchDetailScreen({ go, matchId, profile }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {selHole && (
-        <HoleStatSheet hole={selHole} youAreA={youAreA} is2v2={is2v2} byId={data.byId}
-          playerStats={(data.playerStatsByHole || {})[selHole.hole_number] || []}
-          onClose={() => setSelHole(null)}/>
-      )}
+// ─── Gooey hole-by-hole folder ────────────────────────────────────────
+// Manila-folder UI: one tab per hole, the active tab "melts" into the panel
+// via an SVG gooey filter. Panel shows the full stroke-by-stroke shot log
+// (every player's outcome per stroke, whose ball the team took, caddie
+// suggestion, putt rounds) when recorded; older matches fall back to the
+// per-hole summary. 2v2 gets Only-your-shots / Team-shots pills.
+function HoleFolder({ holes, youAreA, is2v2, byId, playerStatsByHole, meId, isParticipant }) {
+  const [active, setActive] = React.useState(0);
+  const [scope, setScope] = React.useState('mine'); // mine | team
+  const TAB_H = 38;
+  const n = holes.length || 1;
+  const h = holes[Math.min(active, n - 1)] || {};
+  const showPills = is2v2 && isParticipant;
+  const teamScope = !showPills || scope === 'team';
+
+  const name = (id) => { const p = byId[id]; return p ? (p.first_name || formatHandle(p.handle)) : 'Player'; };
+  const isMe = (id) => id === meId;
+  const FW = { hit: 'fairway hit', left: 'missed the fairway left', right: 'missed the fairway right', long: 'long of the fairway', short: 'short of the fairway' };
+
+  const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+  const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+  const verdict = h.result == null ? 'Not played' : w ? 'Won' : l ? 'Lost' : 'Halved';
+  const yourScore = youAreA ? h.player_a_score : h.player_b_score;
+  const oppScore  = youAreA ? h.player_b_score : h.player_a_score;
+  const log = (youAreA ? h.shot_log_a : h.shot_log_b) || null;
+  const pStats = (playerStatsByHole || {})[h.hole_number] || [];
+
+  // Which players' lines to show inside an event, honouring the pill scope.
+  const visible = (ids) => teamScope ? ids : ids.filter(isMe);
+
+  const cream = 'var(--cream)';
+  const dim = { fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6 };
+  const line = { fontSize: 13, lineHeight: 1.45 };
+
+  function ShotEvent({ ev }) {
+    const ids = visible(Object.keys(ev.outcomes || {}));
+    const pickedName = ev.picked ? name(ev.picked) : null;
+    return (
+      <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={dim}>Shot {ev.shot}</div>
+        {ids.map(pid => {
+          const o = ev.outcomes[pid] || {};
+          const bits = [];
+          if (o.fairway) bits.push(FW[o.fairway] || o.fairway);
+          if (o.reached === 'holed') bits.push('holed out!');
+          else if (o.reached === true) bits.push(`on the green${o.zone ? ` · ${o.zone}` : ''}`);
+          else if (o.reached === false) bits.push('missed the green');
+          if (o.ob) bits.push('OB / penalty');
+          return (
+            <div key={pid} style={{ ...line, marginTop: 5 }}>
+              <b>{name(pid)}{isMe(pid) ? ' (you)' : ''}</b> — {bits.length ? bits.join(' · ') : 'logged'}
+            </div>
+          );
+        })}
+        {pickedName && (
+          <div style={{ ...line, marginTop: 6, opacity: 0.85 }}>
+            → Team took <b>{pickedName}{isMe(ev.picked) ? ' (you)' : ''}</b>'s ball
+            {ev.suggested ? (ev.suggested === ev.picked ? ' · caddie agreed' : ` · caddie liked ${name(ev.suggested)}'s`) : ''}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function PuttEvent({ ev }) {
+    const all = Object.keys(ev.results || {});
+    const ids = visible(all);
+    // In "only your shots", still surface a partner's make — that's the story of the hole.
+    const partnerMade = !teamScope ? all.find(pid => !isMe(pid) && ev.results[pid] === 'made') : null;
+    return (
+      <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={dim}>Putt · shot {ev.shot}{ev.round > 1 ? ` · round ${ev.round}` : ''}</div>
+        {ids.map(pid => (
+          <div key={pid} style={{ ...line, marginTop: 5 }}>
+            <b>{name(pid)}{isMe(pid) ? ' (you)' : ''}</b> — {ev.results[pid] === 'made' ? 'made the putt' : 'missed'}
+          </div>
+        ))}
+        {partnerMade && (
+          <div style={{ ...line, marginTop: 5, opacity: 0.85 }}>
+            <b>{name(partnerMade)}</b> (partner) made the putt
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Older matches (no stroke log) — the per-hole summary we do have.
+  function SummaryFallback() {
+    const rows = [];
+    if (is2v2) {
+      if (h.ball_player) rows.push(['Ball played', `${name(h.ball_player)}${isMe(h.ball_player) ? ' (you)' : ''}`]);
+      if (h.holed_by)    rows.push(['Holed by', `${name(h.holed_by)}${isMe(h.holed_by) ? ' (you)' : ''}`]);
+      if (h.zone)        rows.push(['Ball position', h.zone]);
+    } else {
+      const fair = youAreA ? h.player_a_fairway : h.player_b_fairway;
+      const gir  = youAreA ? h.player_a_gir : h.player_b_gir;
+      const putts = youAreA ? h.player_a_putts : h.player_b_putts;
+      if (fair) rows.push(['Fairway', FW[fair] || fair]);
+      if (gir != null) rows.push(['Green in reg', gir ? 'Yes' : 'No']);
+      if (putts != null) rows.push(['Putts', putts]);
+    }
+    const stats = visible(pStats.map(s => s.player_id)).map(pid => pStats.find(s => s.player_id === pid)).filter(Boolean);
+    return (
+      <div>
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+            <span style={dim}>{k}</span><span style={{ fontSize: 13, fontWeight: 700 }}>{v}</span>
+          </div>
+        ))}
+        {is2v2 && stats.map(s => {
+          const bits = [];
+          if (s.fairway) bits.push(FW[s.fairway] || s.fairway);
+          if (s.on_green === true || s.gir === true) bits.push('reached the green');
+          else if (s.on_green === false) bits.push('missed the green');
+          if (s.ob) bits.push('OB');
+          if (s.zone) bits.push(s.zone);
+          return (
+            <div key={s.player_id} style={{ ...line, padding: '9px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+              <b>{name(s.player_id)}{isMe(s.player_id) ? ' (you)' : ''}</b> — {bits.length ? bits.join(' · ') : 'no detail logged'}
+            </div>
+          );
+        })}
+        {rows.length === 0 && stats.length === 0 && (
+          <div style={{ ...line, opacity: 0.7, padding: '9px 0' }}>No shot detail was recorded for this hole.</div>
+        )}
+      </div>
+    );
+  }
+
+  const pill = (on) => ({
+    flex: 1, padding: '8px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800, cursor: 'pointer',
+    background: on ? cream : 'rgba(234,226,206,0.1)', color: on ? 'var(--forest)' : cream,
+    border: on ? 'none' : '1px solid rgba(234,226,206,0.24)',
+  });
+
+  return (
+    <div style={{ position: 'relative', marginTop: 4 }}>
+      {/* Gooey filter (blur + contrast melts the tab into the panel) */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+        <defs>
+          <filter id="spp-goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo"/>
+            <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+          </filter>
+        </defs>
+      </svg>
+
+      {/* Filtered background: sliding tab bump + folder body, merged gooey */}
+      <div style={{ position: 'absolute', inset: 0, filter: 'url(#spp-goo)', pointerEvents: 'none' }}>
+        <div style={{
+          position: 'absolute', top: 0, height: TAB_H + 12,
+          left: `${(Math.min(active, n - 1)) * (100 / n)}%`, width: `${100 / n}%`,
+          background: 'var(--forest)', borderRadius: '12px 12px 0 0',
+          transition: 'left 0.4s cubic-bezier(0.3, 0.9, 0.3, 1)',
+        }}/>
+        <div style={{ position: 'absolute', top: TAB_H, left: 0, right: 0, bottom: 0, background: 'var(--forest)', borderRadius: 20 }}/>
+      </div>
+
+      {/* Crisp layer: tab hit-targets + panel content */}
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex' }}>
+          {holes.map((hh, i) => (
+            <button key={hh.hole_number} onClick={() => setActive(i)} style={{
+              flex: 1, height: TAB_H, background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontSize: n > 9 ? 10 : 12, fontWeight: 800,
+              color: i === active ? cream : 'var(--forest)', opacity: i === active ? 1 : 0.6,
+              transition: 'color 0.25s',
+            }}>{hh.hole_number}</button>
+          ))}
+        </div>
+
+        <div key={`${active}-${scope}`} className="step-reveal" style={{ padding: '16px 18px 18px', color: cream }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24 }}>Hole {h.hole_number}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, opacity: 0.9 }}>{verdict}</div>
+          </div>
+          <div style={{ ...dim, marginTop: 4 }}>
+            Par {h.par || 3}{h.distance_yards != null ? ` · ${h.distance_yards}y` : ''} · You {yourScore != null ? yourScore : '—'} — Them {oppScore != null ? oppScore : '—'}
+          </div>
+
+          {showPills && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setScope('mine')} style={pill(scope === 'mine')}>Only your shots</button>
+              <button onClick={() => setScope('team')} style={pill(scope === 'team')}>Team shots</button>
+            </div>
+          )}
+
+          <div style={{ marginTop: 8 }}>
+            {log && log.length
+              ? log.map((ev, i) => ev.phase === 'putt' ? <PuttEvent key={i} ev={ev}/> : <ShotEvent key={i} ev={ev}/>)
+              : <SummaryFallback/>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

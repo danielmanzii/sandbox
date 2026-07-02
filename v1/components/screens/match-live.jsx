@@ -425,13 +425,14 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               onLiveScore={onLiveScore}
               onSaveDraft={onSaveDraft}
               onSavePlayerStat={onSavePlayerStat}
-              onComplete={({ score, gir, putts, zone, ballPlayer, holedBy }) => {
+              onComplete={({ score, gir, putts, zone, ballPlayer, holedBy, shotLog }) => {
                 onYourScore(score);
                 if (gir != null)   onSaveStat(statPrefixEarly + '_gir', gir);
                 if (putts != null) onSaveStat(statPrefixEarly + '_putts', putts);
                 if (zone)          onSaveStat('zone', zone);
                 if (ballPlayer)    onSaveStat('ball_player', ballPlayer);
                 if (holedBy)       onSaveStat('holed_by', holedBy);
+                if (shotLog && shotLog.length) onSaveStat(youAreA ? 'shot_log_a' : 'shot_log_b', shotLog);
               }}
             />
             <div style={{ height: 14 }}/>
@@ -620,6 +621,11 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
   // you only get a green-in-reg if YOUR ball was the one played on every shot up
   // to the green — otherwise a scramble blends your tee with a partner's approach.
   const [picks, setPicks] = React.useState(init.picks || []);
+  // Full stroke-by-stroke record — every player's outcome on every shot, whose
+  // ball the team took (+ caddie suggestion), and each putt round's made/missed.
+  // Persisted to match_holes.shot_log when the hole finishes; nothing captured
+  // during play is thrown away.
+  const [log, setLog] = React.useState(init.log || []);
 
   // ── Shared-state sync bookkeeping ──
   // lastRev: the rev of the draft we last wrote or adopted (ignore its echo).
@@ -650,6 +656,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     setChosen(draft.chosen || null);
     setHistory(draft.history || []);
     setPicks(draft.picks || []);
+    setLog(draft.log || []);
     setDoneScore(null);
   }, [draft, meId]);
 
@@ -666,23 +673,24 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     if (phase === 'done') { onSaveDraft(null); return; }
     const rev = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     lastRev.current = rev;
-    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, picks, rev, by: meId });
-  }, [stroke, card, phase, putts, puttCard, chosen, history, picks]);
+    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, picks, log, rev, by: meId });
+  }, [stroke, card, phase, putts, puttCard, chosen, history, picks, log]);
 
   // Snapshot the current state before any forward move so "Go Back" undoes
   // exactly one shot / putt-round (not the whole hole).
-  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen, picks }]);
+  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen, picks, log }]);
   const goBack = () => {
     if (!history.length) return;
     const prev = history[history.length - 1];
     setStroke(prev.stroke); setCard(prev.card); setPhase(prev.phase);
     setPutts(prev.putts); setPuttCard(prev.puttCard); setChosen(prev.chosen);
     setPicks(prev.picks || []);
+    setLog(prev.log || []);
     setDoneScore(null); setHistory(history.slice(0, -1));
   };
 
   function reset() {
-    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]); setPicks([]);
+    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]); setPicks([]); setLog([]);
   }
 
   // Hole finalized → show the team's score + a way to re-score. This is the
@@ -717,13 +725,24 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     ? suggestBall(yourTeam, { [p1.id]: card[p1.id].zone, [p2.id]: card[p2.id].zone }) : null;
 
   // Finish the hole immediately (used by a hole-out from off the green).
-  function finishHole(score, holedBy, zone) {
+  function finishHole(score, holedBy, zone, logArg) {
     setDoneScore(score); setPhase('done');
-    onComplete({ score, putts: 0, gir: false, zone, ballPlayer: holedBy, holedBy });
+    onComplete({ score, putts: 0, gir: false, zone, ballPlayer: holedBy, holedBy, shotLog: logArg || log });
   }
 
   function pickBall(pid) {
     pushHistory();
+    // Append this stroke to the permanent shot log: every player's outcome,
+    // whose ball the team took, and (when shown) which ball the caddie suggested.
+    const outcomes = {};
+    yourTeam.forEach(p => {
+      const co = card[p.id];
+      if (co) outcomes[p.id] = { fairway: co.fairway || null, reached: co.reached != null ? co.reached : null, ob: !!co.ob, zone: co.zone || null };
+    });
+    const logEvent = { shot: stroke + 1, phase: 'shot', outcomes, picked: pid };
+    if (suggestion && suggestion.pick && suggestion.pick !== 'tie') logEvent.suggested = suggestion.pick;
+    const nextLog = [...log, logEvent];
+    setLog(nextLog);
     yourTeam.forEach(p => {
       const c = card[p.id] || {}; const patch = {};
       if (c.fairway) patch.fairway = c.fairway;
@@ -749,7 +768,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     // then re-hit — so shot 2 OB makes the next tracked shot #4.
     if (c.ob) { setStroke(stroke + 2); setCard({}); return; }
     // Holed out (from off the green, or a drivable par-4 tee) → hole done now.
-    if (c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone); return; }
+    if (c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone, nextLog); return; }
     // On the green → go to putting.
     if (!fairwayTee && c.reached === true) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); return; }
     // Off the green / a drive → next shot.
@@ -762,7 +781,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
   if (phase === 'putt') {
     const roundNo = putts + 1;
     const strokesToGreen = chosen ? chosen.strokesToGreen : stroke;
-    const finish = (holer) => {
+    const finish = (holer, logArg) => {
       const score = strokesToGreen + roundNo;
       setDoneScore(score);
       setPhase('done');
@@ -770,6 +789,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
         score, putts: roundNo,
         gir: strokesToGreen <= Math.max(1, (par || 3) - 2),
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
+        shotLog: logArg || log,
       });
     };
     // Selecting ✓/✕ only marks a pending choice — nothing commits until Confirm.
@@ -777,8 +797,10 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     const allChosen = yourTeam.every(p => puttCard[p.id]);
     const confirmPutt = () => {
       const holer = yourTeam.find(p => puttCard[p.id] === 'made');
-      if (holer) { finish(holer.id); return; }
-      pushHistory(); setPutts(putts + 1); setPuttCard({}); // all missed → next putt round
+      // Log the putt round (each player's made/missed) whether it ends the hole or not.
+      const nextLog = [...log, { shot: strokesToGreen + roundNo, phase: 'putt', round: roundNo, results: { ...puttCard } }];
+      if (holer) { setLog(nextLog); finish(holer.id, nextLog); return; }
+      pushHistory(); setLog(nextLog); setPutts(putts + 1); setPuttCard({}); // all missed → next putt round
     };
     return (
       <SfWrap count={count} onBack={goBack} canBack={history.length > 0} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
