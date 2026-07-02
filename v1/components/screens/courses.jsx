@@ -881,7 +881,8 @@ function MatchDetailScreen({ go, matchId, profile }) {
                   <Stat label="Halved" value={holesHalved}/>
                 </div>
                 <HoleFolder holes={holes} youAreA={youAreA} is2v2={is2v2} byId={data.byId}
-                  playerStatsByHole={data.playerStatsByHole} meId={meId} isParticipant={isParticipant}/>
+                  playerStatsByHole={data.playerStatsByHole} meId={meId} isParticipant={isParticipant}
+                  teamA={teamA} teamB={teamB}/>
               </div>
             )}
 
@@ -903,7 +904,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
 // (every player's outcome per stroke, whose ball the team took, caddie
 // suggestion, putt rounds) when recorded; older matches fall back to the
 // per-hole summary. 2v2 gets Only-your-shots / Team-shots pills.
-function HoleFolder({ holes, youAreA, is2v2, byId, playerStatsByHole, meId, isParticipant }) {
+function HoleFolder({ holes, youAreA, is2v2, byId, playerStatsByHole, meId, isParticipant, teamA, teamB }) {
   const [active, setActive] = React.useState(0);
   const [scope, setScope] = React.useState('mine'); // mine | team
   const TAB_H = 38;
@@ -984,12 +985,20 @@ function HoleFolder({ holes, youAreA, is2v2, byId, playerStatsByHole, meId, isPa
   }
 
   // Older matches (no stroke log) — the per-hole summary we do have.
+  // Reads YOUR side's columns; the legacy shared columns (pre-migration) are
+  // trusted only when the recorded player is actually on your team, since the
+  // other side's write could have overwritten yours.
   function SummaryFallback() {
+    const myTeamIds = ((youAreA ? teamA : teamB) || []).map(p => p.id);
+    const onMyTeam = (id) => id != null && myTeamIds.includes(id);
+    const ball  = (youAreA ? h.ball_player_a : h.ball_player_b) || (onMyTeam(h.ball_player) ? h.ball_player : null);
+    const holed = (youAreA ? h.holed_by_a : h.holed_by_b) || (onMyTeam(h.holed_by) ? h.holed_by : null);
+    const zone  = (youAreA ? h.zone_a : h.zone_b) || (ball ? h.zone : null);
     const rows = [];
     if (is2v2) {
-      if (h.ball_player) rows.push(['Ball played', `${name(h.ball_player)}${isMe(h.ball_player) ? ' (you)' : ''}`]);
-      if (h.holed_by)    rows.push(['Holed by', `${name(h.holed_by)}${isMe(h.holed_by) ? ' (you)' : ''}`]);
-      if (h.zone)        rows.push(['Ball position', h.zone]);
+      if (ball)  rows.push(['Ball played', `${name(ball)}${isMe(ball) ? ' (you)' : ''}`]);
+      if (holed) rows.push(['Holed by', `${name(holed)}${isMe(holed) ? ' (you)' : ''}`]);
+      if (zone)  rows.push(['Ball position', zone]);
     } else {
       const fair = youAreA ? h.player_a_fairway : h.player_b_fairway;
       const gir  = youAreA ? h.player_a_gir : h.player_b_gir;
@@ -1091,87 +1100,6 @@ function HoleFolder({ holes, youAreA, is2v2, byId, playerStatsByHole, meId, isPa
               : <SummaryFallback/>}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Per-hole stat popup ──────────────────────────────────────────────
-function HoleStatSheet({ hole, youAreA, is2v2, byId, playerStats = [], onClose }) {
-  const h = hole;
-  const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
-  const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
-  const verdict = h.result == null ? 'Not played' : w ? 'Won' : l ? 'Lost' : 'Halved';
-  const verdictColor = w ? 'var(--forest)' : l ? '#C44536' : 'var(--ink)';
-
-  const yourScore = youAreA ? h.player_a_score : h.player_b_score;
-  const oppScore  = youAreA ? h.player_b_score : h.player_a_score;
-  const name = (id) => { const p = byId[id]; return p ? (p.first_name || p.handle) : '—'; };
-  const yourGir   = youAreA ? h.player_a_gir : h.player_b_gir;
-  const yourPutts = youAreA ? h.player_a_putts : h.player_b_putts;
-  const yourFair  = youAreA ? h.player_a_fairway : h.player_b_fairway;
-  const fairLabel = { hit: 'Hit', left: 'Missed left', right: 'Missed right', long: 'Long', short: 'Short' };
-
-  const Row = ({ label, value }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
-      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{value}</span>
-    </div>
-  );
-
-  return (
-    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
-      position: 'fixed', inset: 0, background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000,
-    }}>
-      <div style={{ width: '100%', maxWidth: 440, background: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: '14px 20px 28px' }}>
-        <div style={{ width: 38, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.16)', margin: '0 auto 16px' }}/>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)' }}>Hole {h.hole_number}</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: verdictColor }}>{verdict}</div>
-        </div>
-
-        <Row label="Par" value={h.par || 3}/>
-        {h.distance_yards != null && <Row label="Yards" value={h.distance_yards}/>}
-        <Row label="Your side" value={yourScore != null ? yourScore : '—'}/>
-        <Row label="Opponent" value={oppScore != null ? oppScore : '—'}/>
-
-        {is2v2 ? (
-          <>
-            <Row label="Ball played" value={h.ball_player ? name(h.ball_player) : '—'}/>
-            <Row label="Holed by" value={h.holed_by ? name(h.holed_by) : '—'}/>
-            <Row label="Ball position" value={h.zone || '—'}/>
-
-            {/* Per-player breakdown (both teammates' own shots) */}
-            {playerStats.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>By player</div>
-                {playerStats.map(s => {
-                  const p = byId[s.player_id]; if (!p) return null;
-                  const pname = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.handle;
-                  return (
-                    <div key={s.player_id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
-                      <div style={{ fontSize: 13, fontWeight: 800 }}>{pname} <span style={{ opacity: 0.55, fontWeight: 600 }}>{formatHandle(p.handle)}</span></div>
-                      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 3 }}>
-                        {s.fairway ? `Fairway: ${fairLabel[s.fairway] || s.fairway} · ` : ''}
-                        {s.gir != null ? `GIR: ${s.gir ? 'Yes' : 'No'}` : ''}
-                        {s.zone ? ` · ${s.zone}` : ''}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {(h.par || 3) >= 4 && <Row label="Fairway" value={yourFair ? (fairLabel[yourFair] || yourFair) : '—'}/>}
-            <Row label="GIR" value={yourGir == null ? '—' : yourGir ? 'Yes' : 'No'}/>
-            <Row label="Putts" value={yourPutts != null ? yourPutts : '—'}/>
-          </>
-        )}
-
-        <Button variant="forest" full size="md" onClick={onClose} style={{ marginTop: 18 }}>Done</Button>
       </div>
     </div>
   );

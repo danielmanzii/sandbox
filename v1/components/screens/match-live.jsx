@@ -427,12 +427,15 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               onSavePlayerStat={onSavePlayerStat}
               onComplete={({ score, gir, putts, zone, ballPlayer, holedBy, shotLog }) => {
                 onYourScore(score);
+                // Side-suffixed columns only — ball_player/holed_by/zone used to be
+                // shared between teams, so the last side to finish clobbered the other.
+                const side = youAreA ? '_a' : '_b';
                 if (gir != null)   onSaveStat(statPrefixEarly + '_gir', gir);
                 if (putts != null) onSaveStat(statPrefixEarly + '_putts', putts);
-                if (zone)          onSaveStat('zone', zone);
-                if (ballPlayer)    onSaveStat('ball_player', ballPlayer);
-                if (holedBy)       onSaveStat('holed_by', holedBy);
-                if (shotLog && shotLog.length) onSaveStat(youAreA ? 'shot_log_a' : 'shot_log_b', shotLog);
+                if (zone)          onSaveStat('zone' + side, zone);
+                if (ballPlayer)    onSaveStat('ball_player' + side, ballPlayer);
+                if (holedBy)       onSaveStat('holed_by' + side, holedBy);
+                if (shotLog && shotLog.length) onSaveStat('shot_log' + side, shotLog);
               }}
             />
             <div style={{ height: 14 }}/>
