@@ -100,22 +100,52 @@ function useCoursePlayers(courseIds) {
 }
 
 // ─── Focus rail: one course in focus, neighbours peek in blurred ──────
-function CourseRail({ items, active, onActive, onOpenCourse, playersByCourse }) {
+// Loops: the list is rendered several times over and the scroll position
+// silently recenters onto the middle copy after each swipe, so the end of
+// the list always rolls into the beginning (even with only 2 courses).
+function CourseRail({ items, onOpenCourse, playersByCourse }) {
+  const n = items.length;
+  const loop = n > 1;
+  const reps = loop ? Math.max(3, Math.ceil(7 / n)) : 1;
+  const midStart = loop ? n * Math.floor(reps / 2) : 0;
+  const [activeChild, setActiveChild] = React.useState(midStart);
   const railRef = React.useRef(null);
-  const debounce = React.useRef(null);
+  const settle = React.useRef(null);
+
+  const centeredIndex = (el) => {
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = 0, bestD = Infinity;
+    Array.from(el.children).forEach((c, i) => {
+      const d = Math.abs((c.offsetLeft + c.offsetWidth / 2) - mid);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  };
+
+  // Open centered on the middle copy so there's runway in both directions.
+  React.useLayoutEffect(() => {
+    const el = railRef.current; if (!el || !el.children.length) return;
+    const c = el.children[midStart];
+    el.scrollLeft = c.offsetLeft - (el.clientWidth - c.offsetWidth) / 2;
+    setActiveChild(midStart);
+  }, [n]);
 
   const onScroll = () => {
-    if (debounce.current) window.clearTimeout(debounce.current);
-    debounce.current = window.setTimeout(() => {
-      const el = railRef.current; if (!el) return;
-      const mid = el.scrollLeft + el.clientWidth / 2;
-      let best = 0, bestD = Infinity;
-      Array.from(el.children).forEach((c, i) => {
-        const d = Math.abs((c.offsetLeft + c.offsetWidth / 2) - mid);
-        if (d < bestD) { bestD = d; best = i; }
-      });
-      if (best !== active) onActive(best);
-    }, 80);
+    const el = railRef.current; if (!el) return;
+    const c = centeredIndex(el);
+    if (c !== activeChild) setActiveChild(c);
+    if (!loop) return;
+    // After the swipe settles, teleport back onto the middle copy (identical
+    // content either side, so the jump is invisible).
+    if (settle.current) window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => {
+      const cc = centeredIndex(el);
+      const desired = (cc % n) + midStart;
+      if (cc !== desired && el.children[desired]) {
+        el.scrollLeft += el.children[desired].offsetLeft - el.children[cc].offsetLeft;
+        setActiveChild(desired);
+      }
+    }, 160);
   };
 
   return (
@@ -123,11 +153,12 @@ function CourseRail({ items, active, onActive, onOpenCourse, playersByCourse }) 
       display: 'flex', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory',
       padding: '4px 34px 8px',
     }}>
-      {items.map(({ course, distanceMi }, i) => {
-        const focused = i === active;
+      {Array.from({ length: n * reps }, (_, idx) => {
+        const { course, distanceMi } = items[idx % n];
+        const focused = idx === activeChild;
         const pc = playersByCourse[course.id];
         return (
-          <button key={course.id} onClick={(e) => {
+          <button key={`${course.id}-${idx}`} onClick={(e) => {
             if (focused) { onOpenCourse(course, e.currentTarget); return; }
             e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           }} style={{
@@ -201,9 +232,6 @@ function BookScreen({ go, profile, embedded }) {
     return course.shortName.toLowerCase().includes(s) || course.city.toLowerCase().includes(s);
   });
 
-  // Focus-rail state: which course is centered.
-  const [activeIdx, setActiveIdx] = React.useState(0);
-  React.useEffect(() => { if (activeIdx > filtered.length - 1) setActiveIdx(0); }, [filtered.length]);
   const playersByCourse = useCoursePlayers(filtered.map(x => x.course.id));
 
   // Tap the focused card → the card melts out to fill the screen, then the
@@ -288,8 +316,6 @@ function BookScreen({ go, profile, embedded }) {
         <div style={{ marginTop: 8 }}>
           <CourseRail
             items={filtered}
-            active={activeIdx}
-            onActive={setActiveIdx}
             playersByCourse={playersByCourse}
             onOpenCourse={openCourse}
           />
