@@ -749,7 +749,7 @@ function RoundCard({ b, onCancel, busy, past, go }) {
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Partner: {formatHandle(b.partner.handle)}</div>
       )}
       {b.match_id && (
-        <button onClick={() => go({ screen: past ? 'matchDetail' : 'matchup', matchId: b.match_id })} style={{
+        <button onClick={() => go({ screen: past ? 'matchDetail' : 'matchup', matchId: b.match_id, from: 'myRounds' })} style={{
           marginTop: 10, background: 'transparent', border: 'none', color: 'var(--forest)',
           fontSize: 12, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0,
         }}>
@@ -870,8 +870,12 @@ function ScoutCard({ p, me, go }) {
 }
 
 // ─── Match detail / summary (+ confirm result) ────────────────────────
-function MatchDetailScreen({ go, matchId, profile }) {
+function MatchDetailScreen({ go, matchId, profile, from }) {
   const [data, loading] = useMatchDetail(matchId);
+  // Where "Return" sends you — back to wherever you opened this from.
+  const backTo = from === 'profile' ? { screen: 'profile', scrollTo: 'history' }
+    : from === 'myRounds' ? { screen: 'myRounds' }
+    : { screen: 'stats' };
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
   const [showHoles, setShowHoles] = React.useState(false);
@@ -965,7 +969,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div ref={topRef} style={{ padding: '50px 16px 6px', display: 'flex', alignItems: 'center' }}>
-        <button onClick={() => go({ screen: 'stats' })} style={{
+        <button onClick={() => go(backTo)} style={{
           width: 38, height: 38, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)',
           color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}><Icon.ArrowLeft size={16}/></button>
@@ -1039,9 +1043,9 @@ function MatchDetailScreen({ go, matchId, profile }) {
             )}
 
             {/* Exit sits below whatever's expanded */}
-            <button ref={exitRef} onClick={() => go({ screen: 'stats' })}
+            <button ref={exitRef} onClick={() => go(backTo)}
               style={{ width: '100%', padding: 13, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: 'none', color: 'var(--forest)', opacity: 0.6, fontWeight: 800, fontSize: 13 }}>
-              Exit
+              Return
             </button>
           </div>
         </div>

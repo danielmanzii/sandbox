@@ -1,8 +1,9 @@
 /* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut, ShareResultCard, shareResult, plainMargin, useLastMatchCard, lastMatchAgoLine */
 // Profile (self + public) with member-gated stats
 
-function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
+function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile, scrollTo }) {
   const isSelf = !viewingHandle || viewingHandle === MOCK.USER.handle;
+  const historyRef = React.useRef(null);
 
   // For other users, fetch their real profile from Supabase by handle
   // (tolerates @-prefix). Falls back to the legacy mock lookup so
@@ -83,6 +84,18 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const [followListOpen, setFollowListOpen] = React.useState(null); // null | 'followers' | 'following'
   const [guestPassesOpen, setGuestPassesOpen] = React.useState(false);
   const [matchHistoryOpen, setMatchHistoryOpen] = React.useState(false);
+
+  // Returning from a match-detail page drops you back here at the match
+  // history section. Scroll to it once, then clear the flag so a normal
+  // tab visit doesn't auto-scroll.
+  React.useEffect(() => {
+    if (scrollTo !== 'history') return;
+    const t = window.setTimeout(() => {
+      if (historyRef.current) historyRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      go({ scrollTo: undefined });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [scrollTo]);
 
   async function toggleFollow() {
     if (!viewerId || !targetId || viewerId === targetId || followBusy) return;
@@ -218,24 +231,24 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         )}
       </div>
 
-      {/* Match history — the shareable 3D last-match card + a link into the
-          full history page. */}
-      <div style={{ padding: '20px 16px 0' }}>
+      {/* Match history — a Wallet-style stack of the last 5 matches + a
+          link into the full history page. */}
+      <div ref={historyRef} style={{ padding: '20px 16px 0', scrollMarginTop: 12 }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
-          {isSelf && recentCards && recentCards[0] ? lastMatchAgoLine(recentCards[0].completedAt) : 'Match history'}
+          {isSelf ? 'Your last 5 matches' : 'Last 5 matches'}
         </div>
         {recentCards === null ? (
           <div className="card"><SppLoader/></div>
         ) : recentCards.length > 0 ? (
           <>
-            <MatchCardStack cards={recentCards} go={go}/>
+            <WalletStack cards={recentCards} go={go}/>
             <button onClick={() => setMatchHistoryOpen(true)} style={{
               marginTop: 12, width: '100%', padding: '13px 14px', borderRadius: 14,
               background: 'transparent', border: '1px solid var(--forest)',
               color: 'var(--forest)', fontSize: 13, fontWeight: 800, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
-              View all {history.length || recentCards.length} matches <Icon.ArrowRight size={14}/>
+              View the rest of your matches <Icon.ArrowRight size={14}/>
             </button>
           </>
         ) : (
@@ -1250,137 +1263,78 @@ function useRecentMatchCards(userId, limit = 5) {
   return cards;
 }
 
-// ─── Match card stack: the 5 most-recent matches as a tappable deck. ──
-// Each card is the real ShareResultCard (static). Tap the top card to open
-// the match; flick/swipe it aside to send it to the back and reveal the
-// next. Mirrors the ImgStack pattern.
-const STACK_DEPTH = [
-  { ty: 0,  scale: 1,    rot: 0,    op: 1    },
-  { ty: 16, scale: 0.96, rot: -2.5, op: 1    },
-  { ty: 30, scale: 0.93, rot: 3,    op: 0.9  },
-  { ty: 42, scale: 0.90, rot: -3.5, op: 0.72 },
-  { ty: 52, scale: 0.88, rot: 3.5,  op: 0.52 },
-];
+// ─── Wallet stack: the last 5 matches stacked like Apple Wallet. ──────
+// Collapsed, each card shows only its top strip (result + who) peeking
+// above the next. Tap a card and it "pops out" of the wallet to reveal
+// the full score + tee-time date; tap it again to open the full match
+// details page. Cards animate open/closed with the same spring the deck
+// used. Each card is the real ShareResultCard (static).
+const SPRING = 'cubic-bezier(0.32,1.12,0.35,1)';
 
-function MatchCardStack({ cards, go }) {
+function WalletStack({ cards, go }) {
   const deck = React.useMemo(() => (cards || []).slice(0, 5), [cards]);
-  const [order, setOrder]       = React.useState(() => deck.map((_, i) => i));
-  const [dragging, setDragging] = React.useState(false);
-  const [flyOut, setFlyOut]     = React.useState(null); // { idx, dir }
-  const [, force]               = React.useReducer(x => x + 1, 0);
-  const startRef = React.useRef({ x: 0, y: 0, moved: 0 });
-  const deltaRef = React.useRef({ dx: 0, dy: 0 });
+  const [selected, setSelected] = React.useState(null); // matchId | null
+  const [heights, setHeights]   = React.useState({});   // matchId -> full px
+  const nodeRefs = React.useRef({});
+  const PEEK = 116;      // visible header strip of a collapsed card
+  const FALLBACK = 330;  // expanded height until the card is measured
 
-  React.useEffect(() => { setOrder(deck.map((_, i) => i)); }, [deck.length]);
-
-  const pointOf = (e) => {
-    const t = e.touches && e.touches[0];
-    return { x: (t || e).clientX, y: (t || e).clientY };
-  };
-
-  function beginDrag(e) {
-    if (flyOut) return;
-    const p = pointOf(e);
-    startRef.current = { x: p.x, y: p.y, moved: 0 };
-    deltaRef.current = { dx: 0, dy: 0 };
-    setDragging(true);
-  }
-
-  React.useEffect(() => {
-    if (!dragging) return;
-    const move = (e) => {
-      const p = pointOf(e);
-      const dx = p.x - startRef.current.x;
-      const dy = p.y - startRef.current.y;
-      startRef.current.moved = Math.max(startRef.current.moved, Math.abs(dx) + Math.abs(dy));
-      deltaRef.current = { dx, dy };
-      if (e.cancelable) e.preventDefault();
-      force();
-    };
-    const end = () => {
-      const { dx } = deltaRef.current;
-      const moved = startRef.current.moved;
-      setDragging(false);
-      deltaRef.current = { dx: 0, dy: 0 };
-      if (moved < 8) {
-        // Treated as a tap → open the front match "regularly".
-        const m = deck[order[0]];
-        if (m) go({ screen: 'matchDetail', matchId: m.matchId });
-        force();
-        return;
+  // Measure each card's natural (unclipped) height so we can grow the clip
+  // window to exactly fit when it's selected. Runs every render but only
+  // commits when something actually changed, so no update loop.
+  React.useLayoutEffect(() => {
+    const next = {}; let changed = false;
+    for (const c of deck) {
+      const n = nodeRefs.current[c.matchId];
+      if (n && n.offsetHeight && heights[c.matchId] !== n.offsetHeight) {
+        next[c.matchId] = n.offsetHeight; changed = true;
       }
-      if (order.length > 1 && Math.abs(dx) > 80) {
-        setFlyOut({ idx: order[0], dir: dx < 0 ? -1 : 1 });
-      } else {
-        force();
-      }
-    };
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', end);
-    window.addEventListener('touchmove', move, { passive: false });
-    window.addEventListener('touchend', end);
-    return () => {
-      window.removeEventListener('mousemove', move);
-      window.removeEventListener('mouseup', end);
-      window.removeEventListener('touchmove', move);
-      window.removeEventListener('touchend', end);
-    };
-  }, [dragging, order, deck]);
-
-  // Once the flung card finishes its exit, drop it to the back of the deck.
-  React.useEffect(() => {
-    if (!flyOut) return;
-    const t = setTimeout(() => {
-      setOrder(o => [...o.slice(1), o[0]]);
-      setFlyOut(null);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [flyOut]);
+    }
+    if (changed) setHeights(prev => ({ ...prev, ...next }));
+  });
 
   if (!deck.length) return null;
 
+  // Lay the cards out top-to-bottom: a collapsed card occupies PEEK px, the
+  // selected card occupies its full height (pushing everything below down).
+  let top = 0;
+  const layout = deck.map(c => {
+    const isSel = selected === c.matchId;
+    const occ = isSel ? (heights[c.matchId] || FALLBACK) : PEEK;
+    const item = { c, top, occ, isSel };
+    top += occ;
+    return item;
+  });
+
   return (
-    <div style={{ position: 'relative', height: 312, marginBottom: 14, touchAction: 'pan-y' }}>
-      {order.map((cardIdx, pos) => {
-        const m = deck[cardIdx];
-        const d = STACK_DEPTH[Math.min(pos, STACK_DEPTH.length - 1)];
-        const isFront  = pos === 0;
-        const isFlying = flyOut && flyOut.idx === cardIdx;
-        let transform;
-        if (isFlying) {
-          transform = `translate(${flyOut.dir * 520}px, 44px) rotate(${flyOut.dir * 22}deg)`;
-        } else if (isFront && dragging) {
-          const { dx, dy } = deltaRef.current;
-          transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.04}deg)`;
-        } else {
-          transform = `translateY(${d.ty}px) scale(${d.scale}) rotate(${d.rot}deg)`;
-        }
+    <div style={{ position: 'relative', height: top, marginBottom: 14, transition: `height 0.42s ${SPRING}` }}>
+      {layout.map((it, i) => {
+        const { c, isSel } = it;
         return (
           <div
-            key={m.matchId}
-            onMouseDown={isFront ? beginDrag : undefined}
-            onTouchStart={isFront ? beginDrag : undefined}
+            key={c.matchId}
+            onClick={() => (isSel ? go({ screen: 'matchDetail', matchId: c.matchId, from: 'profile' }) : setSelected(c.matchId))}
             style={{
-              position: 'absolute', left: 0, right: 0, top: 0, margin: '0 auto',
-              transform, transformOrigin: 'center top',
-              transition: (isFront && dragging) ? 'none' : 'transform 0.32s cubic-bezier(0.32,1.12,0.35,1), opacity 0.3s',
-              opacity: isFlying ? 0 : d.op,
-              zIndex: isFlying ? 300 : 100 - pos,
-              cursor: isFront ? 'grab' : 'default',
-              pointerEvents: (isFront && !flyOut) ? 'auto' : 'none',
-              willChange: 'transform',
+              position: 'absolute', left: 0, right: 0, top: it.top, height: it.occ,
+              overflow: 'hidden', borderRadius: 'var(--radius-card-lg)', cursor: 'pointer',
+              zIndex: isSel ? 999 : i + 1,
+              transform: isSel ? 'scale(1.015)' : 'scale(1)',
+              boxShadow: isSel ? '0 28px 60px rgba(14,28,19,0.5)' : '0 -5px 18px rgba(14,28,19,0.16)',
+              transition: `top 0.42s ${SPRING}, height 0.42s ${SPRING}, transform 0.42s ${SPRING}, box-shadow 0.3s ease`,
             }}
           >
-            <ShareResultCard
-              plain
-              headline={m.headline}
-              summary={m.summary}
-              subline={m.subline}
-              cells={m.cells}
-              totalHoles={m.totalHoles}
-              matchup={m.matchup}
-              dateLine={m.dateLine}
-            />
+            <div ref={el => { nodeRefs.current[c.matchId] = el; }}>
+              <ShareResultCard
+                plain
+                headline={c.headline}
+                summary={c.summary}
+                subline={c.subline}
+                cells={c.cells}
+                totalHoles={c.totalHoles}
+                matchup={c.matchup}
+                dateLine={c.dateLine}
+              />
+            </div>
           </div>
         );
       })}
@@ -1414,7 +1368,7 @@ function MatchHistorySheet({ history, ownerId, go, onClose }) {
                   row={r}
                   last={i === history.length - 1}
                   onOpenProfile={(h) => { onClose(); go && go({ screen: 'profile', viewingHandle: h }); }}
-                  onOpenCard={() => { onClose(); go && go({ screen: 'matchDetail', matchId: r.id }); }}
+                  onOpenCard={() => { onClose(); go && go({ screen: 'matchDetail', matchId: r.id, from: 'profile' }); }}
                 />
               ))}
             </div>

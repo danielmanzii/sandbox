@@ -194,7 +194,7 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
                 background: 'var(--forest)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
                 Share scorecard
               </button>
-              <button onClick={() => go && go({ screen: 'matchDetail', matchId })} style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer',
+              <button onClick={() => go && go({ screen: 'matchDetail', matchId, from: 'stats' })} style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer',
                 background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
                 Hole by hole details
               </button>

@@ -267,7 +267,7 @@ function MatchRow({ r, last, go }) {
   const label = isW ? 'W' : isL ? 'L' : 'H';
   return (
     <div
-      onClick={() => go && go({ screen: r.live ? 'match' : 'matchDetail', matchId: r.id })}
+      onClick={() => go && go({ screen: r.live ? 'match' : 'matchDetail', matchId: r.id, from: 'stats' })}
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
         borderBottom: last ? 'none' : '1px solid rgba(14,28,19,0.05)',

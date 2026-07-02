@@ -198,7 +198,7 @@ function App({ profile }) {
     case 'events':       screen = <PlayScreen {...screenProps} playTab={route.playTab}/>; break;
     case 'eventDetail':  screen = <EventDetailScreen {...screenProps} eventId={route.eventId}/>; break;
     case 'stats':        screen = <StatsScreen {...screenProps}/>; break;
-    case 'profile':      screen = <ProfileScreen {...screenProps} viewingHandle={route.viewingHandle}/>; break;
+    case 'profile':      screen = <ProfileScreen {...screenProps} viewingHandle={route.viewingHandle} scrollTo={route.scrollTo}/>; break;
     case 'social':       screen = <SocialScreen {...screenProps}/>; break;
     case 'membership':   screen = <MembershipScreen {...screenProps}/>; break;
     case 'live':         screen = <LiveScorecardScreen {...screenProps}/>; break;
@@ -227,7 +227,7 @@ function App({ profile }) {
     case 'courseDetail': screen = <CourseDetailScreen {...screenProps} courseId={route.courseId} courseSeed={route.courseSeed}/>; break;
     case 'myRounds':     screen = <MyRoundsScreen {...screenProps}/>; break;
     case 'matchup':      screen = <MatchupScreen {...screenProps} matchId={route.matchId}/>; break;
-    case 'matchDetail':  screen = <MatchDetailScreen {...screenProps} matchId={route.matchId}/>; break;
+    case 'matchDetail':  screen = <MatchDetailScreen {...screenProps} matchId={route.matchId} from={route.from}/>; break;
     case 'chat':         screen = <ChatScreen {...screenProps} matchId={route.matchId} dmWith={route.dmWith} title={route.title}/>; break;
 
     default: screen = <HomeScreen {...screenProps}/>;
