@@ -1391,7 +1391,7 @@ async function shareCardImage(node, args) {
 // tap to flip → the back is just the Sandbox wordmark. Takes already-computed
 // display pieces so it works on the live match-over screen AND profile history.
 //   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
-const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles, matchup }, captureRef) {
+const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles, matchup, dateLine, plain }, captureRef) {
   const tiltRef = React.useRef(null);
   const frontRef = React.useRef(null);
   const avEl = (p, i) => {
@@ -1482,8 +1482,11 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
 
   return (
     <div style={{ perspective: 680, marginBottom: 4 }}>
-      <div ref={tiltRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onLeave}
-        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out', touchAction: 'none', cursor: 'grab',
+      <div ref={tiltRef}
+        onPointerDown={plain ? undefined : onDown} onPointerMove={plain ? undefined : onMove}
+        onPointerUp={plain ? undefined : onUp} onPointerLeave={plain ? undefined : onLeave}
+        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out',
+          touchAction: plain ? 'auto' : 'none', cursor: plain ? 'default' : 'grab',
           transform: 'rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg))' }}>
         <div ref={captureRef} style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
           {face === 'front' ? (
@@ -1507,6 +1510,7 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>{headline}</div>
                 <div style={{ fontSize: 14, opacity: 0.88, marginTop: 8 }}>{summary}</div>
                 {subline && <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{subline}</div>}
+                {dateLine && <div style={{ fontSize: 10, opacity: 0.55, marginTop: 5, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5 }}><Icon.Clock size={11}/> {dateLine}</div>}
 
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 5, marginTop: 16 }}>
                   {(cells || []).map(c => {
@@ -1529,7 +1533,7 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
                   <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 15, opacity: 0.85 }}/>
-                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Swipe to flip ⇄</span>
+                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{plain ? 'Tap to open' : 'Swipe to flip ⇄'}</span>
                 </div>
               </div>
             </div>

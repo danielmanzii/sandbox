@@ -41,7 +41,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   // via a single directory lookup, so every @ in a row is clickable.
   const stats      = useUserStats(targetId);
   const rawMatches = stats ? stats.recentMatches : null;
-  const lastMatchCard = useLastMatchCard(targetId);
+  const recentCards = useRecentMatchCards(targetId, 5);
   const dirIds = React.useMemo(() => {
     const s = new Set();
     for (const m of (rawMatches || [])) {
@@ -222,20 +222,20 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
           full history page. */}
       <div style={{ padding: '20px 16px 0' }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
-          {isSelf ? (lastMatchCard ? lastMatchAgoLine(lastMatchCard.completedAt) : 'Match history') : 'Match history'}
+          {isSelf && recentCards && recentCards[0] ? lastMatchAgoLine(recentCards[0].completedAt) : 'Match history'}
         </div>
-        {rawMatches === null ? (
+        {recentCards === null ? (
           <div className="card"><SppLoader/></div>
-        ) : history.length > 0 ? (
+        ) : recentCards.length > 0 ? (
           <>
-            <MatchCardStack history={history} go={go}/>
+            <MatchCardStack cards={recentCards} go={go}/>
             <button onClick={() => setMatchHistoryOpen(true)} style={{
               marginTop: 12, width: '100%', padding: '13px 14px', borderRadius: 14,
               background: 'transparent', border: '1px solid var(--forest)',
               color: 'var(--forest)', fontSize: 13, fontWeight: 800, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
-              View all {history.length} matches <Icon.ArrowRight size={14}/>
+              View all {history.length || recentCards.length} matches <Icon.ArrowRight size={14}/>
             </button>
           </>
         ) : (
@@ -1170,69 +1170,108 @@ function MatchHistoryRow({ row, last, onOpenProfile, onOpenCard }) {
   );
 }
 
-// ─── Match card stack: the 5 most-recent matches as a tappable deck. ──
-// Tap the top card to open the match; flick/swipe it aside to send it to
-// the back and reveal the next. Mirrors the ImgStack pattern, but every
-// card is a mini scorecard instead of a photo.
-function MatchStackCard({ row }) {
-  const isW = row.result === 'W', isL = row.result === 'L';
-  const bg = isW
-    ? 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)'
-    : isL ? '#F4EFE2' : '#FFFFFF';
-  const fg = isW ? 'var(--cream)' : 'var(--forest)';
-  const label = isW ? 'Won' : isL ? 'Lost' : 'Halved';
-  return (
-    <div style={{
-      position: 'relative', overflow: 'hidden', boxSizing: 'border-box',
-      borderRadius: 22, padding: '18px 20px', minHeight: 148,
-      background: bg, color: fg,
-      border: isW ? 'none' : '1px solid rgba(28,73,42,0.16)',
-      boxShadow: isW ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-    }}>
-      {isW && <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{
-          fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase',
-          fontWeight: 800, padding: '5px 10px', borderRadius: 999,
-          background: isW ? 'rgba(234,226,206,0.16)' : 'rgba(28,73,42,0.06)',
-        }}>{label}</span>
-        <span style={{
-          fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase',
-          opacity: 0.55, fontWeight: 700,
-        }}>{row.is2v2 ? '2v2' : '1v1'}</span>
-      </div>
-      <div style={{ position: 'relative' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, letterSpacing: '-0.02em' }}>
-          {row.margin}
-        </div>
-        <div style={{ fontSize: 12, marginTop: 6, opacity: isW ? 0.85 : 0.65, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          vs {row.opp || '—'}
-        </div>
-      </div>
-    </div>
-  );
+// ─── "MON DD, YYYY · H:MM AM" from a timestamp (tee time + date) ──────
+function formatTeeLine(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${date} · ${time}`;
 }
 
-// Depth-based transform for each card behind the front one.
+// The 5 most-recent completed matches, each shaped into the exact pieces
+// ShareResultCard renders (headline/summary/subline/cells/matchup) plus a
+// tee-time date line. Booked matches take their tee time from the reserved
+// tee slot; casual matches fall back to when they were played.
+function useRecentMatchCards(userId, limit = 5) {
+  const [cards, setCards] = React.useState(null);
+  React.useEffect(() => {
+    if (!userId) { setCards([]); return undefined; }
+    let on = true;
+    (async () => {
+      const { data: ms } = await sbx.from('matches').select('*')
+        .or(`player_a.eq.${userId},player_a2.eq.${userId},player_b.eq.${userId},player_b2.eq.${userId}`)
+        .eq('status', 'completed').order('completed_at', { ascending: false }).limit(limit);
+      if (!ms || !ms.length) { if (on) setCards([]); return; }
+      const ids  = ms.map(m => m.id);
+      const pids = [...new Set(ms.flatMap(m => [m.player_a, m.player_a2, m.player_b, m.player_b2]).filter(Boolean))];
+      const [holesRes, psRes, bkRes] = await Promise.all([
+        sbx.from('match_holes').select('match_id, hole_number, result').in('match_id', ids).order('hole_number'),
+        sbx.from('profiles').select('id, first_name, handle, avatar_url').in('id', pids),
+        sbx.from('bookings').select('match_id, tee_slots(starts_at)').in('match_id', ids),
+      ]);
+      if (!on) return;
+      const byId = {}; (psRes.data || []).forEach(p => { byId[p.id] = p; });
+      const holesByMatch = {};
+      (holesRes.data || []).forEach(h => { (holesByMatch[h.match_id] = holesByMatch[h.match_id] || []).push(h); });
+      const slotByMatch = {};
+      (bkRes.data || []).forEach(b => {
+        const s = b.tee_slots && b.tee_slots.starts_at;
+        if (s && !slotByMatch[b.match_id]) slotByMatch[b.match_id] = s;
+      });
+      const nm = id => { const p = byId[id]; return p ? (p.first_name || p.handle) : 'Player'; };
+      const av = id => ({ name: nm(id), avatar: byId[id] && byId[id].avatar_url });
+
+      const out = ms.map(m => {
+        const youAreA = m.player_a === userId || m.player_a2 === userId;
+        const is2v2   = m.match_type === '2v2';
+        const teamA = [m.player_a, m.player_a2].filter(Boolean).map(nm).join(' + ');
+        const teamB = [m.player_b, m.player_b2].filter(Boolean).map(nm).join(' + ');
+        const theirLabel = youAreA ? teamB : teamA;
+        const yourLabel  = youAreA ? teamA : teamB;
+        const won    = (m.result === 'A' && youAreA) || (m.result === 'B' && !youAreA);
+        const halved = m.result === 'H';
+        const margin = m.final_margin || '';
+        const plain  = plainMargin ? plainMargin(margin) : margin;
+        const headline = halved ? 'Halved' : won ? `W ${margin}` : `L ${margin}`;
+        const summary  = halved ? 'All square — matched hole for hole.'
+          : won ? `Beat ${theirLabel} · ${plain}` : `${theirLabel} took it · ${plain}`;
+        const subline  = `${is2v2 ? `${yourLabel} vs ${theirLabel}` : `You vs ${theirLabel}`} · ${m.course_name || 'Sandbox'}`;
+        const hs = (holesByMatch[m.id] || []).slice().sort((a, b) => a.hole_number - b.hole_number);
+        const cells = hs.map(h => {
+          const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+          const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+          return { n: h.hole_number, lab: h.result == null ? '' : w ? 'W' : l ? 'L' : 'H' };
+        });
+        const aIds = [m.player_a, m.player_a2].filter(Boolean);
+        const bIds = [m.player_b, m.player_b2].filter(Boolean);
+        const matchup = { yours: (youAreA ? aIds : bIds).map(av), theirs: (youAreA ? bIds : aIds).map(av) };
+        const when = slotByMatch[m.id] || m.completed_at || m.started_at || m.created_at;
+        return {
+          matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes,
+          matchup, dateLine: formatTeeLine(when), completedAt: m.completed_at || m.created_at,
+        };
+      });
+      if (on) setCards(out);
+    })();
+    return () => { on = false; };
+  }, [userId, limit]);
+  return cards;
+}
+
+// ─── Match card stack: the 5 most-recent matches as a tappable deck. ──
+// Each card is the real ShareResultCard (static). Tap the top card to open
+// the match; flick/swipe it aside to send it to the back and reveal the
+// next. Mirrors the ImgStack pattern.
 const STACK_DEPTH = [
-  { ty: 0,  scale: 1,    rot: 0,  op: 1    },
-  { ty: 14, scale: 0.95, rot: -4, op: 1    },
-  { ty: 26, scale: 0.90, rot: 5,  op: 0.9  },
-  { ty: 36, scale: 0.86, rot: -6, op: 0.72 },
-  { ty: 44, scale: 0.82, rot: 6,  op: 0.52 },
+  { ty: 0,  scale: 1,    rot: 0,    op: 1    },
+  { ty: 16, scale: 0.96, rot: -2.5, op: 1    },
+  { ty: 30, scale: 0.93, rot: 3,    op: 0.9  },
+  { ty: 42, scale: 0.90, rot: -3.5, op: 0.72 },
+  { ty: 52, scale: 0.88, rot: 3.5,  op: 0.52 },
 ];
 
-function MatchCardStack({ history, go }) {
-  const cards = React.useMemo(() => history.slice(0, 5), [history]);
-  const [order, setOrder]       = React.useState(() => cards.map((_, i) => i));
+function MatchCardStack({ cards, go }) {
+  const deck = React.useMemo(() => (cards || []).slice(0, 5), [cards]);
+  const [order, setOrder]       = React.useState(() => deck.map((_, i) => i));
   const [dragging, setDragging] = React.useState(false);
   const [flyOut, setFlyOut]     = React.useState(null); // { idx, dir }
   const [, force]               = React.useReducer(x => x + 1, 0);
   const startRef = React.useRef({ x: 0, y: 0, moved: 0 });
   const deltaRef = React.useRef({ dx: 0, dy: 0 });
 
-  React.useEffect(() => { setOrder(cards.map((_, i) => i)); }, [cards.length]);
+  React.useEffect(() => { setOrder(deck.map((_, i) => i)); }, [deck.length]);
 
   const pointOf = (e) => {
     const t = e.touches && e.touches[0];
@@ -1265,8 +1304,8 @@ function MatchCardStack({ history, go }) {
       deltaRef.current = { dx: 0, dy: 0 };
       if (moved < 8) {
         // Treated as a tap → open the front match "regularly".
-        const m = cards[order[0]];
-        if (m) go({ screen: 'matchDetail', matchId: m.id });
+        const m = deck[order[0]];
+        if (m) go({ screen: 'matchDetail', matchId: m.matchId });
         force();
         return;
       }
@@ -1286,7 +1325,7 @@ function MatchCardStack({ history, go }) {
       window.removeEventListener('touchmove', move);
       window.removeEventListener('touchend', end);
     };
-  }, [dragging, order, cards]);
+  }, [dragging, order, deck]);
 
   // Once the flung card finishes its exit, drop it to the back of the deck.
   React.useEffect(() => {
@@ -1298,12 +1337,12 @@ function MatchCardStack({ history, go }) {
     return () => clearTimeout(t);
   }, [flyOut]);
 
-  if (!cards.length) return null;
+  if (!deck.length) return null;
 
   return (
-    <div style={{ position: 'relative', height: 208, marginBottom: 12, touchAction: 'pan-y' }}>
+    <div style={{ position: 'relative', height: 312, marginBottom: 14, touchAction: 'pan-y' }}>
       {order.map((cardIdx, pos) => {
-        const m = cards[cardIdx];
+        const m = deck[cardIdx];
         const d = STACK_DEPTH[Math.min(pos, STACK_DEPTH.length - 1)];
         const isFront  = pos === 0;
         const isFlying = flyOut && flyOut.idx === cardIdx;
@@ -1318,7 +1357,7 @@ function MatchCardStack({ history, go }) {
         }
         return (
           <div
-            key={m.id}
+            key={m.matchId}
             onMouseDown={isFront ? beginDrag : undefined}
             onTouchStart={isFront ? beginDrag : undefined}
             style={{
@@ -1332,7 +1371,16 @@ function MatchCardStack({ history, go }) {
               willChange: 'transform',
             }}
           >
-            <MatchStackCard row={m}/>
+            <ShareResultCard
+              plain
+              headline={m.headline}
+              summary={m.summary}
+              subline={m.subline}
+              cells={m.cells}
+              totalHoles={m.totalHoles}
+              matchup={m.matchup}
+              dateLine={m.dateLine}
+            />
           </div>
         );
       })}
