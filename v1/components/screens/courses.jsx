@@ -163,7 +163,7 @@ function CourseRail({ items, onOpenCourse, playersByCourse }) {
             e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           }} style={{
             flex: '0 0 calc(100% - 68px)', scrollSnapAlign: 'center',
-            height: 440, borderRadius: 24, overflow: 'hidden', position: 'relative',
+            height: 530, borderRadius: 24, overflow: 'hidden', position: 'relative',
             border: 'none', padding: 0, textAlign: 'left', color: 'var(--cream)', cursor: 'pointer',
             background: course.heroImg
               ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
@@ -253,7 +253,9 @@ function BookScreen({ go, profile, embedded }) {
       rect = { top: r.top, left: r.left, width: r.width, height: r.height };
     }
     setZoom({ rect, course });
-    window.setTimeout(() => go({ screen: 'courseDetail', courseId: course.id }), 480);
+    // Hand the course object over so the page renders instantly (no loader
+    // interrupting the zoom) while the full record loads underneath.
+    window.setTimeout(() => go({ screen: 'courseDetail', courseId: course.id, courseSeed: course }), 480);
   }
 
   const locLabel = geoStatus === 'ok' ? 'Near you'
@@ -292,14 +294,22 @@ function BookScreen({ go, profile, embedded }) {
         </div>
       )}
 
-      {/* Search — dark like the players search, slimmer than the pills above */}
-      <div style={{ padding: embedded ? '6px 16px 6px' : '14px 16px 6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--forest)', borderRadius: 13, padding: '10px 15px', boxShadow: 'var(--shadow-sm)' }}>
+      {/* Search — dark like the players search, slimmer than the pills above;
+          My rounds sits beside it as a compact matching circle */}
+      <div style={{ padding: embedded ? '6px 16px 6px' : '14px 16px 6px', display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--forest)', borderRadius: 13, padding: '10px 15px', boxShadow: 'var(--shadow-sm)' }}>
           <Icon.Search size={15} color="var(--cream)"/>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…" className="explore-search-input"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: 'var(--cream)', fontWeight: 600 }}/>
           {q && <button onClick={() => setQ('')} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', fontSize: 12, opacity: 0.7 }}>Clear</button>}
         </div>
+        <button onClick={() => go({ screen: 'myRounds' })} title="My rounds" style={{
+          width: 40, alignSelf: 'stretch', borderRadius: 13, flexShrink: 0,
+          background: 'var(--forest)', border: 'none', color: 'var(--cream)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)',
+        }}>
+          <Icon.Calendar size={16}/>
+        </button>
       </div>
 
       {loading ? (
@@ -363,13 +373,17 @@ function CourseZoomOverlay({ zoom }) {
 }
 
 // ─── Course detail ────────────────────────────────────────────────────
-function CourseDetailScreen({ go, courseId, profile }) {
-  const [course, holes, loading] = useCourse(courseId);
+// courseSeed: the course object handed over by the rail card, so the page
+// renders instantly mid-zoom-animation (no loader flash) while the full
+// record + holes load underneath.
+function CourseDetailScreen({ go, courseId, profile, courseSeed }) {
+  const [loaded, holes, loading] = useCourse(courseId);
   const [date, setDate] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const [slots, slotsLoading] = useCourseSlots(courseId, date);
   const [booking, setBooking] = React.useState(null);
 
-  if (loading) return <SppLoader fill/>;
+  const course = loaded || courseSeed || null;
+  if (loading && !course) return <SppLoader fill/>;
   if (!course) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Course not found.</div>;
 
   const totalYards = holes.reduce((s, h) => s + (h.sandbox_yards || 0), 0);
@@ -379,20 +393,20 @@ function CourseDetailScreen({ go, courseId, profile }) {
       {/* Hero */}
       <div style={{
         height: 220, position: 'relative', color: 'var(--cream)',
-        background: course.renderImg
-          ? `linear-gradient(180deg, rgba(14,28,19,0.1) 0%, rgba(14,28,19,0.7) 100%), url('${course.renderImg}')`
+        background: (course.renderImg || course.heroImg)
+          ? `linear-gradient(180deg, rgba(14,28,19,0.1) 0%, rgba(14,28,19,0.7) 100%), url('${course.renderImg || course.heroImg}')`
           : 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
         backgroundSize: 'cover', backgroundPosition: 'center', overflow: 'hidden',
       }}>
         <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
         {/* Clay course-hole diorama (when no custom render set) */}
-        {!course.renderImg && (
+        {!(course.renderImg || course.heroImg) && (
           <img src="assets/clay-course-hole.png" alt="" style={{
             position: 'absolute', right: -10, bottom: -6, height: 150, opacity: 0.92,
             pointerEvents: 'none', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.3))',
           }}/>
         )}
-        <button onClick={() => go({ screen: 'book' })} style={{
+        <button onClick={() => go({ screen: 'events', playTab: 'sbx' })} style={{
           position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 999,
           background: 'rgba(14,28,19,0.55)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -401,7 +415,7 @@ function CourseDetailScreen({ go, courseId, profile }) {
         <div style={{ position: 'absolute', left: 20, bottom: 16, right: 20 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, letterSpacing: '-0.02em' }}>{course.shortName}</div>
           <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 6, letterSpacing: '0.04em' }}>
-            {course.city.toUpperCase()}, {course.state}
+            {course.city.toUpperCase()}{course.state ? `, ${course.state}` : ''}
           </div>
         </div>
       </div>
@@ -692,40 +706,27 @@ function MyRoundsScreen({ go, profile }) {
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
       <div style={{ padding: '58px 22px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => go({ screen: 'book' })} style={{ width: 40, height: 40, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => go({ screen: 'events', playTab: 'sbx' })} style={{ width: 40, height: 40, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon.ArrowLeft size={16}/>
         </button>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--forest)', letterSpacing: '-0.02em' }}>My Rounds</div>
       </div>
 
+      {/* Actively booked tee times only — past rounds live in match history. */}
       <div style={{ padding: '4px 16px 0' }}>
         {loading ? (
           <SppLoader/>
+        ) : upcoming.length === 0 ? (
+          <div className="card" style={{ padding: 22, textAlign: 'center', marginBottom: 18 }}>
+            <img src="assets/clay-golfer.png" alt="" style={{ height: 120, margin: '0 auto 6px', display: 'block' }}/>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>Nothing booked yet.</div>
+            <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 4, marginBottom: 14 }}>You have no upcoming tee times — find a twilight round near you.</div>
+            <Button variant="forest" size="sm" onClick={() => go({ screen: 'events', playTab: 'sbx' })}>Book a round</Button>
+          </div>
         ) : (
-          <>
-            <Section label="Upcoming"/>
-            {upcoming.length === 0 ? (
-              <div className="card" style={{ padding: 22, textAlign: 'center', marginBottom: 18 }}>
-                <img src="assets/clay-golfer.png" alt="" style={{ height: 120, margin: '0 auto 6px', display: 'block' }}/>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>No rounds booked.</div>
-                <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 4, marginBottom: 14 }}>Find a twilight tee time near you.</div>
-                <Button variant="forest" size="sm" onClick={() => go({ screen: 'book' })}>Book a round</Button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
-                {upcoming.map(b => <RoundCard key={b.id} b={b} onCancel={() => cancel(b)} busy={busyId === b.id} go={go}/>)}
-              </div>
-            )}
-
-            {past.length > 0 && (
-              <>
-                <Section label="Past"/>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {past.map(b => <RoundCard key={b.id} b={b} past go={go}/>)}
-                </div>
-              </>
-            )}
-          </>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
+            {upcoming.map(b => <RoundCard key={b.id} b={b} onCancel={() => cancel(b)} busy={busyId === b.id} go={go}/>)}
+          </div>
         )}
       </div>
     </div>

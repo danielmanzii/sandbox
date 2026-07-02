@@ -224,7 +224,7 @@ function App({ profile }) {
 
     // Course booking flow (Phase B)
     case 'book':         screen = <BookScreen {...screenProps}/>; break;
-    case 'courseDetail': screen = <CourseDetailScreen {...screenProps} courseId={route.courseId}/>; break;
+    case 'courseDetail': screen = <CourseDetailScreen {...screenProps} courseId={route.courseId} courseSeed={route.courseSeed}/>; break;
     case 'myRounds':     screen = <MyRoundsScreen {...screenProps}/>; break;
     case 'matchup':      screen = <MatchupScreen {...screenProps} matchId={route.matchId}/>; break;
     case 'matchDetail':  screen = <MatchDetailScreen {...screenProps} matchId={route.matchId}/>; break;

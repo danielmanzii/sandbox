@@ -35,7 +35,7 @@ function PlayHeader({ tab, go }) {
           Pitch &amp; Putt
         </SegmentButton>
         <SegmentButton active={tab === 'challenge'} onClick={() => go({ screen: 'events', playTab: 'challenge' })}>
-          Casual
+          Challenge your friends
         </SegmentButton>
       </div>
     </div>
