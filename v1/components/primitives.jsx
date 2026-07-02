@@ -345,7 +345,27 @@ function Spark({ data, width = 60, height = 20, color = 'currentColor' }) {
   );
 }
 
+// ─── Bouncing-logo loader ─────────────────────────────────────────────
+// The ONLY loading indicator in the app — never a "Loading…" text string.
+//   <SppLoader/>            inline (centered in its own padded row)
+//   <SppLoader fill/>       fills the screen on the white canvas
+//   <SppLoader dark/>       cream logo, for forest/gradient backgrounds
+function SppLoader({ size = 46, pad = 28, dark = false, fill = false }) {
+  const img = (
+    <img src={`assets/monogram-${dark ? 'cream' : 'forest'}.svg`} alt="Loading"
+      style={{ width: size, animation: 'sppbounce 0.62s ease-in-out infinite' }}/>
+  );
+  if (fill) {
+    return (
+      <div style={{ background: dark ? 'transparent' : 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {img}
+      </div>
+    );
+  }
+  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: pad }}>{img}</div>;
+}
+
 Object.assign(window, {
   Icon, LiveDot, SppMark, Button, Eyebrow, Chip, Dashed, Ostrich, Wordmark, Lockup, ScoreDial, Spark,
-  formatHandle,
+  formatHandle, SppLoader,
 });

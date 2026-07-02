@@ -10,11 +10,11 @@ function PlayScreen({ go, tier, brandLoud, liveMode, mascot, profile, playTab })
   // Back-compat with old routes: 'unranked' → challenge, anything else → sbx.
   const tab = (playTab === 'challenge' || playTab === 'unranked') ? 'challenge' : 'sbx';
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
-      <PlayHeader tab={tab} go={go}/>
+    <div style={{ background: 'var(--canvas)', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flexShrink: 0 }}><PlayHeader tab={tab} go={go}/></div>
       {tab === 'sbx'
         ? <BookScreen go={go} profile={profile} embedded/>
-        : <ChallengeFriendsView go={go} profile={profile}/>}
+        : <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 110 }}><ChallengeFriendsView go={go} profile={profile}/></div>}
     </div>
   );
 }
@@ -22,20 +22,17 @@ function PlayScreen({ go, tier, brandLoud, liveMode, mascot, profile, playTab })
 // ─── Header with SBX Matches / Challenge Friends segmented control ────
 function PlayHeader({ tab, go }) {
   return (
-    <div style={{ padding: '58px 20px 8px', background: 'var(--canvas)' }}>
-      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-        {tab === 'sbx' ? 'Twilight tee times' : 'Casual match play'}
-      </div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
+    <div style={{ padding: '58px 20px 12px', background: 'var(--canvas)' }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 0, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
         {tab === 'sbx' ? 'Book an SBX match.' : 'Challenge friends.'}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginTop: 18, padding: 4, background: 'rgba(14,28,19,0.06)', borderRadius: 999 }}>
+      <div style={{ display: 'flex', gap: 4, marginTop: 16, background: 'rgba(14,28,19,0.05)', borderRadius: 14, padding: 4 }}>
         <SegmentButton active={tab === 'sbx'} onClick={() => go({ screen: 'events', playTab: 'sbx' })}>
-          Pitch &amp; Putt
+          SBX Courses
         </SegmentButton>
         <SegmentButton active={tab === 'challenge'} onClick={() => go({ screen: 'events', playTab: 'challenge' })}>
-          Casual
+          Challenge Friends
         </SegmentButton>
       </div>
     </div>
@@ -45,10 +42,13 @@ function PlayHeader({ tab, go }) {
 function SegmentButton({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      flex: 1, padding: '10px 16px', borderRadius: 999,
-      background: active ? 'var(--forest)' : 'transparent',
-      color: active ? 'var(--cream)' : 'var(--forest)',
-      fontSize: 13, fontWeight: 700, letterSpacing: '0.02em', transition: 'all 0.15s',
+      flex: 1, padding: '10px 12px', borderRadius: 11,
+      background: active ? 'var(--paper)' : 'transparent',
+      color: 'var(--forest)',
+      fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', transition: 'all 0.15s',
+      fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+      boxShadow: active ? 'var(--shadow-sm)' : 'none',
+      border: 'none',
     }}>{children}</button>
   );
 }

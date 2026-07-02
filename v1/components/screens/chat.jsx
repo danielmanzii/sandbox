@@ -45,7 +45,7 @@ function ChatScreen({ go, profile, matchId, dmWith, title }) {
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 8px' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', fontSize: 13, opacity: 0.5, padding: 24 }}>Loading…</div>
+          <SppLoader/>
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)' }}>Say hello.</div>

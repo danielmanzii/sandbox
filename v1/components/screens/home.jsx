@@ -44,12 +44,79 @@ function useLastMatchCard(userId) {
         yours: (youAreA ? teamAids : teamBids).map(av),
         theirs: (youAreA ? teamBids : teamAids).map(av),
       };
-      if (on) setState({ matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes, matchup: mu });
+      if (on) setState({ matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes, matchup: mu, completedAt: m.completed_at || m.created_at });
     })();
     return () => { on = false; };
   }, [userId]);
   return state;
 }
+// "Your most recent match" / "Your last match was 3 days ago" — plain-English
+// distance from a completed_at timestamp. Same calendar day → "most recent";
+// then yesterday → a couple of days → N days → weeks → months (+ days) →
+// years (+ months).
+function lastMatchAgoLine(dateStr) {
+  if (!dateStr) return 'Your last match';
+  const then = new Date(dateStr);
+  const now = new Date();
+  if (isNaN(then.getTime())) return 'Your last match';
+  const sameDay = then.getFullYear() === now.getFullYear() && then.getMonth() === now.getMonth() && then.getDate() === now.getDate();
+  if (sameDay) return 'Your most recent match';
+  const days = Math.max(1, Math.floor((now - then) / 86400000));
+  let when;
+  if (days === 1) when = 'yesterday';
+  else if (days === 2) when = 'a couple of days ago';
+  else if (days < 7) when = `${days} days ago`;
+  else if (days < 30) { const wk = Math.floor(days / 7); when = wk === 1 ? 'a week ago' : `${wk} weeks ago`; }
+  else if (days < 365) {
+    const mo = Math.floor(days / 30); const rem = days - mo * 30;
+    when = `${mo} month${mo > 1 ? 's' : ''}${rem >= 7 ? `, ${Math.floor(rem / 7)} week${Math.floor(rem / 7) > 1 ? 's' : ''}` : ''} ago`;
+  } else {
+    const yr = Math.floor(days / 365); const mo = Math.floor((days - yr * 365) / 30);
+    when = `${yr} year${yr > 1 ? 's' : ''}${mo > 0 ? `, ${mo} month${mo > 1 ? 's' : ''}` : ''} ago`;
+  }
+  return `Your last match was ${when}`;
+}
+
+// "Wednesday, July 1st 2026" — today's date for the Home header.
+function todayLine() {
+  const d = new Date();
+  const day = d.getDate();
+  const suffix = (day % 10 === 1 && day !== 11) ? 'st' : (day % 10 === 2 && day !== 12) ? 'nd' : (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+  const month = d.toLocaleDateString('en-US', { month: 'long' });
+  return `${weekday}, ${month} ${day}${suffix} ${d.getFullYear()}`;
+}
+
+// Real "City, ST" from device location (reverse-geocoded, cached for a day).
+// Falls back to Miami, FL when permission is denied or lookup fails.
+function useGeoCityState() {
+  const [loc, setLoc] = React.useState(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem('spp_geo_city') || 'null');
+      if (c && c.text && Date.now() - c.at < 86400000) return c.text;
+    } catch (_) {}
+    return null;
+  });
+  React.useEffect(() => {
+    if (loc || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const { latitude, longitude } = pos.coords;
+        const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+        const j = await res.json();
+        const city = j.city || j.locality;
+        const st = (j.principalSubdivisionCode || '').split('-')[1] || j.principalSubdivision;
+        if (city && st) {
+          const text = `${city}, ${st}`;
+          setLoc(text);
+          try { localStorage.setItem('spp_geo_city', JSON.stringify({ text, at: Date.now() })); } catch (_) {}
+        }
+      } catch (_) {}
+    }, () => {}, { maximumAge: 3600000, timeout: 8000 });
+  }, [loc]);
+  return loc || 'Miami, FL';
+}
+
 // Reads events from Supabase via the hooks in events-data.jsx and the
 // signed-in user's active match via live-data.jsx. Tweaks-panel
 // `liveMode=true` still falls back to a mock live event for design-
@@ -65,7 +132,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [major]                = useNextMajor();
   const [upcoming, upcomingLoading] = useUpcomingEvents(4);
   const [activeMatch]          = useActiveMatchForUser(profile && profile.id);
-  const lastMatch              = useLastMatchCard(profile && profile.id);
   const [pendingInvites]       = useMyPendingInvites(profile && profile.id);
   const [pendingEventInvites]  = useMyPendingEventInvites(profile && profile.id);
   const [feed, feedLoading, followCount] = useFriendFeed(profile && profile.id, 12);
@@ -73,6 +139,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
   const [notifs]               = useNotifications(profile && profile.id);
   const [upcomingBookings]     = useMyBookings(profile && profile.id);
   const nextBooking            = (upcomingBookings && upcomingBookings[0]) || null;
+  const geoCity                = useGeoCityState();
   // Only count items the user hasn't seen yet (seen IDs written by NotificationsScreen)
   const seenNotifIds = React.useMemo(() => {
     try { return new Set(JSON.parse(localStorage.getItem('spp_seen_notifs') || '[]')); }
@@ -137,7 +204,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
       }}>
         <div style={{ position: 'relative' }}>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            MIAMI / WK 12
+            {geoCity} · {todayLine()}
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em', color: 'var(--forest)' }}>
             Hey, {greetingName}.
@@ -187,18 +254,6 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
         </div>
       )}
 
-      {/* Your last match — the shareable 3D card, right at the top */}
-      {lastMatch && (
-        <div style={{ padding: '20px 16px 0' }}>
-          <Eyebrow style={{ marginBottom: 10 }}>Your last match</Eyebrow>
-          <ShareResultCard headline={lastMatch.headline} summary={lastMatch.summary} subline={lastMatch.subline} cells={lastMatch.cells} totalHoles={lastMatch.totalHoles} matchup={lastMatch.matchup}/>
-          <button onClick={() => go({ screen: 'matchDetail', matchId: lastMatch.matchId })} style={{
-            marginTop: 10, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--forest)', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
-          }}>View match <Icon.ArrowRight size={12}/></button>
-        </div>
-      )}
-
       {/* Book your next match → Play */}
       <div style={{ padding: '18px 16px 0' }}>
         <button onClick={() => go({ screen: 'events' })} style={{
@@ -244,7 +299,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           sub="season"
         />
         <QuickStat
-          label="Unbeaten"
+          label="Win streak"
           value={String(MOCK.USER.streak || 0)}
           sub="matches"
           icon={<Icon.Fire size={14} color="var(--forest)"/>}
@@ -321,7 +376,7 @@ function HomeScreen({ go, tier, brandLoud, liveMode, mascot, profile }) {
           <button onClick={() => go({ screen: 'social' })} style={{ fontSize: 11, fontWeight: 700, color: 'var(--forest)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Find people →</button>
         </div>
         {feedLoading ? (
-          <div className="card" style={{ padding: 24, fontSize: 13, color: 'var(--forest)', opacity: 0.5, textAlign: 'center' }}>Loading…</div>
+          <div className="card"><SppLoader/></div>
         ) : feed.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)', lineHeight: 1.1 }}>
@@ -414,7 +469,7 @@ function NextUpCard({ event, go, isMember, liveMode, brandLoud, mascot, activeMa
         {/* Title floating at bottom of hero */}
         <div style={{ position: 'absolute', bottom: 18, left: 20, right: 20 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.92, letterSpacing: '-0.02em' }}>
-            {event.courseShort}
+            {live ? 'Rejoin your game' : event.courseShort}
           </div>
           <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', opacity: 0.8, marginTop: 6, letterSpacing: '0.04em' }}>
             {live
@@ -476,7 +531,7 @@ function LiveInlinePreview({ match }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>Your match</Eyebrow>
+          <Eyebrow color="var(--cream)" style={{ opacity: 0.5 }}>Current score</Eyebrow>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 2 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: accent, letterSpacing: '-0.01em' }}>{label}</span>
             <span style={{ fontSize: 11, opacity: 0.65 }}>thru {m.thru}</span>
@@ -911,4 +966,4 @@ function InviteBanner({ invite, profile, go }) {
   );
 }
 
-Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner, FeedRow, FriendsHere });
+Object.assign(window, { HomeScreen, NextUpCard, QuickStat, MiniEventCard, AvatarBy, InviteBanner, FeedRow, FriendsHere, useLastMatchCard, lastMatchAgoLine });

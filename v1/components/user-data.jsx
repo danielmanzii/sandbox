@@ -159,16 +159,26 @@ function useUserStats(profileId) {
           for (const x of ms) {
             const teamLetter = x.userIsA ? 'A' : 'B';
             if (x.partnerId) { const a = partnerAgg[x.partnerId] || (partnerAgg[x.partnerId] = { W: 0, L: 0, H: 0 }); a[x.res]++; }
+            // Only YOUR side's capture may feed your stats. ball_player/holed_by
+            // used to be single columns shared by both teams (last writer won),
+            // so the legacy values are trusted only when the recorded player is
+            // actually on the user's team; the new per-side columns are exact.
+            const myTeam = x.userIsA ? [x.m.player_a, x.m.player_a2] : [x.m.player_b, x.m.player_b2];
+            const onMyTeam = (id) => id != null && myTeam.includes(id);
             for (const h of holesByMatch[x.m.id] || []) {
               if (h.result == null) continue;
               const teamRes = h.result === 'H' ? 'H' : (h.result === teamLetter ? 'W' : 'L');
-              if (h.ball_player != null) { effD++; if (h.ball_player === profileId) effN++; }
-              if (h.holed_by   != null) { finD++; if (h.holed_by   === profileId) finN++; }
+              const sideBall  = x.userIsA ? h.ball_player_a : h.ball_player_b;
+              const sideHoled = x.userIsA ? h.holed_by_a    : h.holed_by_b;
+              const ball  = sideBall  != null ? sideBall  : (onMyTeam(h.ball_player) ? h.ball_player : null);
+              const holed = sideHoled != null ? sideHoled : (onMyTeam(h.holed_by)   ? h.holed_by   : null);
+              if (ball  != null) { effD++; if (ball  === profileId) effN++; }
+              if (holed != null) { finD++; if (holed === profileId) finN++; }
               const pp = x.partnerId ? psMap[`${h.match_id}|${h.hole_number}|${x.partnerId}`] : null;
-              if (pp && h.ball_player != null) {
+              if (pp && ball != null) {
                 // Partner's ball was compromised: not on the green, OB, or off the fairway.
                 const compromised = pp.on_green === false || pp.ob === true || (pp.fairway && pp.fairway !== 'hit');
-                if (compromised) { clD++; if (h.ball_player === profileId && (teamRes === 'W' || teamRes === 'H')) clN++; }
+                if (compromised) { clD++; if (ball === profileId && (teamRes === 'W' || teamRes === 'H')) clN++; }
               }
             }
           }

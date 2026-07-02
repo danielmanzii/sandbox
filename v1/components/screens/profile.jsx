@@ -1,8 +1,9 @@
-/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut, ShareResultCard, shareResult, plainMargin */
+/* global React, Icon, Button, Eyebrow, Chip, Dashed, MOCK, sbx, AvatarBy, useProfileByHandle, useFollowCounts, useIsFollowing, useFollowers, useFollowing, followUser, unfollowUser, uploadAvatar, updateProfile, formatHandle, useUpcomingEvents, useCompletedMatchDetail, useLoyalty, useUserStats, signOut, ShareResultCard, shareResult, plainMargin, useLastMatchCard, lastMatchAgoLine */
 // Profile (self + public) with member-gated stats
 
-function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
+function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile, scrollTo }) {
   const isSelf = !viewingHandle || viewingHandle === MOCK.USER.handle;
+  const historyRef = React.useRef(null);
 
   // For other users, fetch their real profile from Supabase by handle
   // (tolerates @-prefix). Falls back to the legacy mock lookup so
@@ -41,6 +42,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   // via a single directory lookup, so every @ in a row is clickable.
   const stats      = useUserStats(targetId);
   const rawMatches = stats ? stats.recentMatches : null;
+  const recentCards = useRecentMatchCards(targetId, 5);
   const dirIds = React.useMemo(() => {
     const s = new Set();
     for (const m of (rawMatches || [])) {
@@ -83,6 +85,18 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
   const [guestPassesOpen, setGuestPassesOpen] = React.useState(false);
   const [matchHistoryOpen, setMatchHistoryOpen] = React.useState(false);
 
+  // Returning from a match-detail page drops you back here at the match
+  // history section. Scroll to it once, then clear the flag so a normal
+  // tab visit doesn't auto-scroll.
+  React.useEffect(() => {
+    if (scrollTo !== 'history') return;
+    const t = window.setTimeout(() => {
+      if (historyRef.current) historyRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      go({ scrollTo: undefined });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [scrollTo]);
+
   async function toggleFollow() {
     if (!viewerId || !targetId || viewerId === targetId || followBusy) return;
     setFollowBusy(true);
@@ -97,9 +111,7 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
 
   if (!isSelf && targetLoading && !mockTarget) {
     return (
-      <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>
-        Loading…
-      </div>
+      <SppLoader fill/>
     );
   }
 
@@ -219,41 +231,31 @@ function ProfileScreen({ go, tier, viewingHandle, profile: signedInProfile }) {
         )}
       </div>
 
-      {/* Match history */}
-      <div style={{ padding: '20px 16px 0' }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Match history</div>
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {rawMatches === null ? (
-            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.45, fontSize: 13 }}>Loading…</div>
-          ) : history.length === 0 ? (
-            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
-              <div style={{ fontSize: 14 }}>No matches yet.</div>
-            </div>
-          ) : (
-            <>
-              {history.slice(0, 4).map((r, i) => (
-                <MatchHistoryRow
-                  key={r.id}
-                  row={r}
-                  last={i === Math.min(history.length, 4) - 1}
-                  onOpenProfile={(h) => go({ screen: 'profile', viewingHandle: h })}
-                  onOpenCard={() => go({ screen: 'matchDetail', matchId: r.id })}
-                />
-              ))}
-              {history.length > 4 && (
-                <button onClick={() => setMatchHistoryOpen(true)} style={{
-                  width: '100%', padding: '13px 14px',
-                  background: 'transparent', border: 'none',
-                  color: 'var(--forest)', fontSize: 12, fontWeight: 700,
-                  cursor: 'pointer', textAlign: 'center',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                }}>
-                  View all {history.length} matches <Icon.ArrowRight size={12}/>
-                </button>
-              )}
-            </>
-          )}
+      {/* Match history — a Wallet-style stack of the last 5 matches + a
+          link into the full history page. */}
+      <div ref={historyRef} style={{ padding: '20px 16px 0', scrollMarginTop: 12 }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+          {isSelf ? 'Your last 5 matches' : 'Last 5 matches'}
         </div>
+        {recentCards === null ? (
+          <div className="card"><SppLoader/></div>
+        ) : recentCards.length > 0 ? (
+          <>
+            <WalletStack cards={recentCards} go={go}/>
+            <button onClick={() => setMatchHistoryOpen(true)} style={{
+              marginTop: 12, width: '100%', padding: '13px 14px', borderRadius: 14,
+              background: 'transparent', border: '1px solid var(--forest)',
+              color: 'var(--forest)', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              View the rest of your matches <Icon.ArrowRight size={14}/>
+            </button>
+          </>
+        ) : (
+          <div className="card" style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.4 }}>
+            <div style={{ fontSize: 14 }}>No matches yet.</div>
+          </div>
+        )}
       </div>
 
       {isSelf && <LoyaltyCard userId={viewerId}/>}
@@ -1181,6 +1183,188 @@ function MatchHistoryRow({ row, last, onOpenProfile, onOpenCard }) {
   );
 }
 
+// ─── "MON DD, YYYY · H:MM AM" from a timestamp (tee time + date) ──────
+function formatTeeLine(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${date} · ${time}`;
+}
+
+// The 5 most-recent completed matches, each shaped into the exact pieces
+// ShareResultCard renders (headline/summary/subline/cells/matchup) plus a
+// tee-time date line. Booked matches take their tee time from the reserved
+// tee slot; casual matches fall back to when they were played.
+function useRecentMatchCards(userId, limit = 5) {
+  const [cards, setCards] = React.useState(null);
+  React.useEffect(() => {
+    if (!userId) { setCards([]); return undefined; }
+    let on = true;
+    (async () => {
+      const { data: ms } = await sbx.from('matches').select('*')
+        .or(`player_a.eq.${userId},player_a2.eq.${userId},player_b.eq.${userId},player_b2.eq.${userId}`)
+        .eq('status', 'completed').order('completed_at', { ascending: false }).limit(limit);
+      if (!ms || !ms.length) { if (on) setCards([]); return; }
+      const ids  = ms.map(m => m.id);
+      const pids = [...new Set(ms.flatMap(m => [m.player_a, m.player_a2, m.player_b, m.player_b2]).filter(Boolean))];
+      const [holesRes, psRes, bkRes] = await Promise.all([
+        sbx.from('match_holes').select('match_id, hole_number, result').in('match_id', ids).order('hole_number'),
+        sbx.from('profiles').select('id, first_name, handle, avatar_url').in('id', pids),
+        sbx.from('bookings').select('match_id, tee_slots(starts_at)').in('match_id', ids),
+      ]);
+      if (!on) return;
+      const byId = {}; (psRes.data || []).forEach(p => { byId[p.id] = p; });
+      const holesByMatch = {};
+      (holesRes.data || []).forEach(h => { (holesByMatch[h.match_id] = holesByMatch[h.match_id] || []).push(h); });
+      const slotByMatch = {};
+      (bkRes.data || []).forEach(b => {
+        const s = b.tee_slots && b.tee_slots.starts_at;
+        if (s && !slotByMatch[b.match_id]) slotByMatch[b.match_id] = s;
+      });
+      const nm = id => { const p = byId[id]; return p ? (p.first_name || p.handle) : 'Player'; };
+      const av = id => ({ name: nm(id), avatar: byId[id] && byId[id].avatar_url });
+
+      const out = ms.map(m => {
+        const youAreA = m.player_a === userId || m.player_a2 === userId;
+        const is2v2   = m.match_type === '2v2';
+        const teamA = [m.player_a, m.player_a2].filter(Boolean).map(nm).join(' + ');
+        const teamB = [m.player_b, m.player_b2].filter(Boolean).map(nm).join(' + ');
+        const theirLabel = youAreA ? teamB : teamA;
+        const yourLabel  = youAreA ? teamA : teamB;
+        const won    = (m.result === 'A' && youAreA) || (m.result === 'B' && !youAreA);
+        const halved = m.result === 'H';
+        const margin = m.final_margin || '';
+        const plain  = plainMargin ? plainMargin(margin) : margin;
+        const headline = halved ? 'Halved' : won ? `W ${margin}` : `L ${margin}`;
+        const summary  = halved ? 'All square — matched hole for hole.'
+          : won ? `Beat ${theirLabel} · ${plain}` : `${theirLabel} took it · ${plain}`;
+        const subline  = `${is2v2 ? `${yourLabel} vs ${theirLabel}` : `You vs ${theirLabel}`} · ${m.course_name || 'Sandbox'}`;
+        const hs = (holesByMatch[m.id] || []).slice().sort((a, b) => a.hole_number - b.hole_number);
+        const cells = hs.map(h => {
+          const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
+          const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
+          return { n: h.hole_number, lab: h.result == null ? '' : w ? 'W' : l ? 'L' : 'H' };
+        });
+        const aIds = [m.player_a, m.player_a2].filter(Boolean);
+        const bIds = [m.player_b, m.player_b2].filter(Boolean);
+        const matchup = { yours: (youAreA ? aIds : bIds).map(av), theirs: (youAreA ? bIds : aIds).map(av) };
+        const when = slotByMatch[m.id] || m.completed_at || m.started_at || m.created_at;
+        return {
+          matchId: m.id, headline, summary, subline, cells, totalHoles: m.total_holes,
+          matchup, dateLine: formatTeeLine(when), completedAt: m.completed_at || m.created_at,
+        };
+      });
+      if (on) setCards(out);
+    })();
+    return () => { on = false; };
+  }, [userId, limit]);
+  return cards;
+}
+
+// ─── Wallet stack: the last 5 matches stacked like Apple Wallet. ──────
+// Collapsed, each card shows only its top strip peeking above the next,
+// with seam shadows + depth shading so it reads as a real pile of cards.
+// Tap a card and it slides out of the wallet in place, growing to reveal
+// the whole card while the cards below slide down. Tap the TOP half of an
+// open card to drop it back on the stack; tap the BOTTOM half to open the
+// full match details page.
+const SPRING = 'cubic-bezier(0.32,1.12,0.35,1)';
+
+function WalletStack({ cards, go }) {
+  const deck = React.useMemo(() => (cards || []).slice(0, 5), [cards]);
+  const [open, setOpen]       = React.useState(null); // matchId | null
+  const [heights, setHeights] = React.useState({});   // matchId -> full px
+  const nodeRefs = React.useRef({});
+  const PEEK = 108;        // header strip shown for a card with one on top
+  const FRONT_PEEK = 150;  // the front (closest) card sits a little taller
+  const last = deck.length - 1;
+
+  // Measure each card's natural (unclipped) height so an open card grows to
+  // exactly fit. Runs every render but only commits on a real change.
+  React.useLayoutEffect(() => {
+    const next = {}; let changed = false;
+    for (const c of deck) {
+      const n = nodeRefs.current[c.matchId];
+      if (n && n.offsetHeight && heights[c.matchId] !== n.offsetHeight) {
+        next[c.matchId] = n.offsetHeight; changed = true;
+      }
+    }
+    if (changed) setHeights(prev => ({ ...prev, ...next }));
+  });
+
+  if (!deck.length) return null;
+
+  // Adjacent bands top-to-bottom; the card drawn later (higher z) is the
+  // one visually in front, so the FRONT card is the last in the list. An
+  // open card takes its full height and pushes everything below it down.
+  let top = 0;
+  const layout = deck.map((c, i) => {
+    const isOpen = open === c.matchId;
+    const collapsed = i === last ? FRONT_PEEK : PEEK;
+    const occ = isOpen ? (heights[c.matchId] || 330) : collapsed;
+    const item = { c, top, occ, i, isOpen, depth: last - i, hasCardInFront: i < last };
+    top += occ;
+    return item;
+  });
+
+  function onCardClick(e, it) {
+    if (it.isOpen) {
+      // Top half → back to the wallet; bottom half → open full details.
+      const r = e.currentTarget.getBoundingClientRect();
+      if ((e.clientY - r.top) < r.height / 2) setOpen(null);
+      else go({ screen: 'matchDetail', matchId: it.c.matchId, from: 'profile' });
+    } else {
+      setOpen(it.c.matchId);
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative', height: top, marginBottom: 14, transition: `height 0.44s ${SPRING}` }}>
+      {layout.map(it => {
+        const { c, i, depth, hasCardInFront, isOpen } = it;
+        return (
+          <div
+            key={c.matchId}
+            onClick={(e) => onCardClick(e, it)}
+            style={{
+              position: 'absolute', left: 0, right: 0, top: it.top, height: it.occ,
+              overflow: 'hidden', borderRadius: 'var(--radius-card-lg)', cursor: 'pointer',
+              zIndex: isOpen ? 999 : i + 1,
+              transform: isOpen ? 'translateY(-4px)' : 'none',
+              boxShadow: isOpen ? '0 24px 48px rgba(14,28,19,0.42)' : '0 10px 22px rgba(14,28,19,0.20)',
+              transition: `top 0.44s ${SPRING}, height 0.44s ${SPRING}, transform 0.44s ${SPRING}, box-shadow 0.3s ease`,
+            }}
+          >
+            <div ref={el => { nodeRefs.current[c.matchId] = el; }}>
+              <ShareResultCard
+                plain
+                headline={c.headline}
+                summary={c.summary}
+                subline={c.subline}
+                cells={c.cells}
+                totalHoles={c.totalHoles}
+                matchup={c.matchup}
+                dateLine={c.dateLine}
+              />
+            </div>
+            {/* thin lit top edge of the card */}
+            <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, background: 'rgba(234,226,206,0.16)', pointerEvents: 'none' }}/>
+            {/* depth shading + seam shadow — only while it's tucked in the pile */}
+            {!isOpen && depth > 0 && (
+              <div style={{ position: 'absolute', inset: 0, background: `rgba(4,10,7,${Math.min(depth * 0.07, 0.26)})`, pointerEvents: 'none' }}/>
+            )}
+            {!isOpen && hasCardInFront && (
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 20, background: 'linear-gradient(to top, rgba(0,0,0,0.42), rgba(0,0,0,0))', pointerEvents: 'none' }}/>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Match History Sheet ─────────────────────────────────────────────
 function MatchHistorySheet({ history, ownerId, go, onClose }) {
   const [selectedMatch, setSelectedMatch] = React.useState(null);
@@ -1207,7 +1391,7 @@ function MatchHistorySheet({ history, ownerId, go, onClose }) {
                   row={r}
                   last={i === history.length - 1}
                   onOpenProfile={(h) => { onClose(); go && go({ screen: 'profile', viewingHandle: h }); }}
-                  onOpenCard={() => { onClose(); go && go({ screen: 'matchDetail', matchId: r.id }); }}
+                  onOpenCard={() => { onClose(); go && go({ screen: 'matchDetail', matchId: r.id, from: 'profile' }); }}
                 />
               ))}
             </div>
@@ -1265,7 +1449,7 @@ function MatchScorecardSheet({ match, ownerId, onClose }) {
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(14,28,19,0.62)' }}/>
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '9% 20px 28px', overflowY: 'auto' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--cream)', fontFamily: 'var(--font-display)', fontSize: 20, opacity: 0.8 }}>Loading…</div>
+          <SppLoader dark/>
         ) : (
           <div style={{ width: '100%', maxWidth: 420, margin: '0 auto' }}>
             <ShareResultCard headline={headline} summary={summary} subline={subline} cells={cells} totalHoles={cells.length}/>
@@ -1306,7 +1490,7 @@ function FollowListSheet({ userId, mode, viewerId, go, onClose }) {
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loading ? (
-            <div style={{ padding: 32, textAlign: 'center', opacity: 0.4, fontSize: 13 }}>Loading…</div>
+            <SppLoader/>
           ) : list.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginBottom: 6 }}>

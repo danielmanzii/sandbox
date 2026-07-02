@@ -65,13 +65,156 @@ function SlotChip({ slot, onClick, friends }) {
   );
 }
 
+// ─── Who's played each course (avatar strip on the rail cards) ────────
+// One query for all visible courses → unique players per course → profiles.
+function useCoursePlayers(courseIds) {
+  const key = (courseIds || []).slice().sort().join(',');
+  const [map, setMap] = React.useState({});
+  React.useEffect(() => {
+    if (!key) { setMap({}); return undefined; }
+    let on = true;
+    (async () => {
+      const { data: ms } = await sbx.from('matches')
+        .select('course_id, player_a, player_a2, player_b, player_b2')
+        .in('course_id', key.split(',')).eq('status', 'completed').limit(400);
+      const byCourse = {};
+      (ms || []).forEach(m => {
+        const arr = byCourse[m.course_id] || (byCourse[m.course_id] = []);
+        [m.player_a, m.player_a2, m.player_b, m.player_b2].forEach(p => { if (p && !arr.includes(p)) arr.push(p); });
+      });
+      const allIds = [...new Set(Object.keys(byCourse).flatMap(c => byCourse[c].slice(0, 4)))];
+      let pById = {};
+      if (allIds.length) {
+        const { data: profs } = await sbx.from('profiles').select('id, first_name, handle, avatar_url').in('id', allIds);
+        (profs || []).forEach(p => { pById[p.id] = p; });
+      }
+      const out = {};
+      for (const cid in byCourse) {
+        out[cid] = { count: byCourse[cid].length, players: byCourse[cid].slice(0, 4).map(id => pById[id]).filter(Boolean) };
+      }
+      if (on) setMap(out);
+    })();
+    return () => { on = false; };
+  }, [key]);
+  return map;
+}
+
+// ─── Focus rail: one course in focus, neighbours peek in blurred ──────
+// Loops: the list is rendered several times over and the scroll position
+// silently recenters onto the middle copy after each swipe, so the end of
+// the list always rolls into the beginning (even with only 2 courses).
+function CourseRail({ items, onOpenCourse, playersByCourse }) {
+  const n = items.length;
+  const loop = n > 1;
+  const reps = loop ? Math.max(3, Math.ceil(7 / n)) : 1;
+  const midStart = loop ? n * Math.floor(reps / 2) : 0;
+  const [activeChild, setActiveChild] = React.useState(midStart);
+  const railRef = React.useRef(null);
+  const settle = React.useRef(null);
+
+  const centeredIndex = (el) => {
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = 0, bestD = Infinity;
+    Array.from(el.children).forEach((c, i) => {
+      const d = Math.abs((c.offsetLeft + c.offsetWidth / 2) - mid);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  };
+
+  // Open centered on the middle copy so there's runway in both directions.
+  React.useLayoutEffect(() => {
+    const el = railRef.current; if (!el || !el.children.length) return;
+    const c = el.children[midStart];
+    el.scrollLeft = c.offsetLeft - (el.clientWidth - c.offsetWidth) / 2;
+    setActiveChild(midStart);
+  }, [n]);
+
+  const onScroll = () => {
+    const el = railRef.current; if (!el) return;
+    const c = centeredIndex(el);
+    if (c !== activeChild) setActiveChild(c);
+    if (!loop) return;
+    // After the swipe settles, teleport back onto the middle copy (identical
+    // content either side, so the jump is invisible).
+    if (settle.current) window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => {
+      const cc = centeredIndex(el);
+      const desired = (cc % n) + midStart;
+      if (cc !== desired && el.children[desired]) {
+        el.scrollLeft += el.children[desired].offsetLeft - el.children[cc].offsetLeft;
+        setActiveChild(desired);
+      }
+    }, 160);
+  };
+
+  return (
+    <div ref={railRef} onScroll={onScroll} className="scroll-hide" style={{
+      display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory',
+      padding: '4px 34px 8px', height: '100%', boxSizing: 'border-box', alignItems: 'stretch',
+    }}>
+      {Array.from({ length: n * reps }, (_, idx) => {
+        const { course, distanceMi } = items[idx % n];
+        const focused = idx === activeChild;
+        const pc = playersByCourse[course.id];
+        return (
+          <button key={`${course.id}-${idx}`} onClick={(e) => {
+            if (focused) { onOpenCourse(course, e.currentTarget); return; }
+            e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }} style={{
+            flex: '0 0 calc(100% - 68px)', scrollSnapAlign: 'center',
+            height: '100%', borderRadius: 24, overflow: 'hidden', position: 'relative',
+            border: 'none', padding: 0, textAlign: 'left', color: '#FFFFFF', cursor: 'pointer',
+            background: course.heroImg
+              ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
+              : 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            boxShadow: focused ? 'var(--shadow-md)' : 'none',
+            filter: focused ? 'none' : 'blur(2.5px) brightness(0.85)',
+            transform: focused ? 'scale(1)' : 'scale(0.93)',
+            opacity: focused ? 1 : 0.75,
+            transition: 'filter 0.35s ease, transform 0.35s ease, opacity 0.35s ease, box-shadow 0.35s ease',
+          }}>
+            <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+            {!course.heroImg && (
+              <img src="assets/clay-course-hole.png" alt="" style={{
+                position: 'absolute', right: -14, top: 26, height: 140, opacity: 0.9,
+                pointerEvents: 'none', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.3))',
+              }}/>
+            )}
+            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 18 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1, letterSpacing: '-0.01em', color: '#FFFFFF', textShadow: '0 2px 12px rgba(14,28,19,0.4)' }}>{course.shortName}</div>
+              {pc && pc.players.length > 0 && (
+                <div style={{ display: 'flex', marginTop: 12 }}>
+                  {pc.players.map((p, j) => (
+                    <div key={p.id} style={{
+                      width: 30, height: 30, borderRadius: 999, marginLeft: j ? -9 : 0, overflow: 'hidden',
+                      background: 'var(--cream)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'var(--font-display)', fontSize: 13, boxShadow: '0 0 0 2px rgba(14,28,19,0.55)',
+                    }}>
+                      {p.avatar_url
+                        ? <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                        : ((p.first_name || p.handle || '?').replace(/^@/, '')[0] || '?').toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Book screen ──────────────────────────────────────────────────────
 function BookScreen({ go, profile, embedded }) {
   const [coords, geoStatus] = useGeolocation();
-  const [date, setDate] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  // No date picker here anymore — dates/tee times live on the course page.
+  const [date] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const [q, setQ] = React.useState('');
   const [list, loading] = useAvailability(date, coords);
-  const [booking, setBooking] = React.useState(null); // { slot, course }
+  const [zoom, setZoom] = React.useState(null); // { rect, course } → opening animation
 
   const filtered = list.filter(({ course }) => {
     if (!q.trim()) return true;
@@ -79,14 +222,44 @@ function BookScreen({ go, profile, embedded }) {
     return course.shortName.toLowerCase().includes(s) || course.city.toLowerCase().includes(s);
   });
 
+  const playersByCourse = useCoursePlayers(filtered.map(x => x.course.id));
+
+  // Tap the focused card → the card melts out to fill the screen, then the
+  // course page takes over (its hero sits where the card grew to).
+  function openCourse(course, el) {
+    if (zoom) return;
+    const r = el.getBoundingClientRect();
+    // The phone stage scales via transform on desktop — convert the card's
+    // viewport rect into the transformed ancestor's local space so the
+    // overlay lines up exactly with the card.
+    let anc = el.parentElement;
+    while (anc && getComputedStyle(anc).transform === 'none') anc = anc.parentElement;
+    let rect;
+    if (anc) {
+      const ar = anc.getBoundingClientRect();
+      const scale = ar.width / anc.offsetWidth || 1;
+      rect = { top: (r.top - ar.top) / scale, left: (r.left - ar.left) / scale, width: r.width / scale, height: r.height / scale };
+    } else {
+      rect = { top: r.top, left: r.left, width: r.width, height: r.height };
+    }
+    setZoom({ rect, course });
+    // Hand the course object over so the page renders instantly (no loader
+    // interrupting the zoom) while the full record loads underneath.
+    window.setTimeout(() => go({ screen: 'courseDetail', courseId: course.id, courseSeed: course }), 480);
+  }
+
   const locLabel = geoStatus === 'ok' ? 'Near you'
     : geoStatus === 'pending' ? 'Locating…'
     : 'Miami, FL';
 
   return (
-    <div style={{ background: 'var(--canvas)', minHeight: embedded ? 'auto' : '100%', paddingBottom: embedded ? 0 : 120 }}>
-      <div style={{ padding: embedded ? '4px 20px 12px' : '58px 20px 12px', color: 'var(--forest)' }}>
-        {!embedded && (
+    <div style={embedded
+      ? { background: 'var(--canvas)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+      : { background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
+      {/* Standalone route keeps its title + My rounds; the embedded Play tab
+          goes straight to the search bar (pills above set the hierarchy). */}
+      {!embedded && (
+        <div style={{ padding: '58px 20px 12px', color: 'var(--forest)' }}>
           <button onClick={() => go({ screen: 'home' })} style={{
             width: 40, height: 40, borderRadius: 999, marginBottom: 12,
             background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)',
@@ -94,123 +267,115 @@ function BookScreen({ go, profile, embedded }) {
           }}>
             <Icon.ArrowLeft size={16}/>
           </button>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {!embedded ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.55, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Twilight tee times</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.92, marginTop: 8, letterSpacing: '-0.02em' }}>Book a round.</div>
             </div>
-          ) : (
-            <div style={{ fontSize: 12, opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Icon.Pin size={12}/> {locLabel}
-            </div>
-          )}
-          <button onClick={() => go({ screen: 'myRounds' })} style={{
-            marginTop: embedded ? 0 : 6, padding: '8px 12px', borderRadius: 999,
-            background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)',
-            fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
-          }}>
-            <Icon.Calendar size={13}/> My rounds
-          </button>
-        </div>
-        {!embedded && (
+            <button onClick={() => go({ screen: 'myRounds' })} style={{
+              marginTop: 6, padding: '8px 12px', borderRadius: 999,
+              background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)',
+              fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            }}>
+              <Icon.Calendar size={13}/> My rounds
+            </button>
+          </div>
           <div style={{ fontSize: 12, marginTop: 8, opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <Icon.Pin size={12}/> {locLabel}
           </div>
-        )}
-      </div>
-
-      <DateStrip selected={date} onSelect={setDate}/>
-
-      {/* Search */}
-      <div style={{ padding: '14px 16px 6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper)', borderRadius: 14, padding: '11px 14px', border: 'var(--hairline)' }}>
-          <Icon.Search size={16} color="var(--forest)"/>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 14, color: 'var(--ink)', fontWeight: 600 }}/>
-          {q && <button onClick={() => setQ('')} style={{ background: 'transparent', border: 'none', color: 'var(--forest)', fontSize: 12, opacity: 0.6 }}>Clear</button>}
         </div>
+      )}
+
+      {/* Search — dark like the players search, slimmer than the pills above;
+          My rounds sits beside it as a compact matching circle */}
+      <div style={{ padding: embedded ? '6px 16px 6px' : '14px 16px 6px', display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--forest)', borderRadius: 13, padding: '10px 15px', boxShadow: 'var(--shadow-sm)' }}>
+          <Icon.Search size={15} color="var(--cream)"/>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…" className="explore-search-input"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: 'var(--cream)', fontWeight: 600 }}/>
+          {q && <button onClick={() => setQ('')} style={{ background: 'transparent', border: 'none', color: 'var(--cream)', fontSize: 12, opacity: 0.7 }}>Clear</button>}
+        </div>
+        <button onClick={() => go({ screen: 'myRounds' })} title="My rounds" style={{
+          width: 40, alignSelf: 'stretch', borderRadius: 13, flexShrink: 0,
+          background: 'var(--forest)', border: 'none', color: 'var(--cream)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)',
+        }}>
+          <Icon.Calendar size={16}/>
+        </button>
       </div>
 
-      <div style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {loading ? (
-          <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--forest)', opacity: 0.5 }}>Loading availability…</div>
-        ) : filtered.length === 0 ? (
+      {loading ? (
+        <div style={{ flex: embedded ? 1 : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><SppLoader/></div>
+      ) : filtered.length === 0 ? (
+        <div style={{ padding: '8px 16px 0' }}>
           <div className="card" style={{ padding: 24, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--forest)' }}>No courses found.</div>
             <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 6 }}>More courses are joining the Sandbox network soon.</div>
           </div>
-        ) : (
-          filtered.map(({ course, slots, distanceMi }) => (
-            <CourseAvailabilityCard
-              key={course.id}
-              course={course}
-              slots={slots}
-              distanceMi={distanceMi}
-              viewerId={profile && profile.id}
-              onOpenCourse={() => go({ screen: 'courseDetail', courseId: course.id })}
-              onPickSlot={(slot) => setBooking({ slot, course })}
-            />
-          ))
-        )}
-      </div>
-
-      {booking && (
-        <BookingSheet
-          slot={booking.slot}
-          course={booking.course}
-          profile={profile}
-          onClose={() => setBooking(null)}
-          onBooked={() => { setBooking(null); go({ screen: 'myRounds' }); }}
-        />
+        </div>
+      ) : (
+        /* Course rail — the focused card is crisp, neighbours peek in blurred.
+           Embedded: fills the space down to the dock. Standalone: fixed tall. */
+        <div style={embedded
+          ? { flex: 1, minHeight: 0, paddingBottom: 96, display: 'flex', flexDirection: 'column' }
+          : { height: 520, marginTop: 8 }}>
+          <CourseRail
+            items={filtered}
+            playersByCourse={playersByCourse}
+            onOpenCourse={openCourse}
+          />
+        </div>
       )}
+
+      {zoom && <CourseZoomOverlay zoom={zoom}/>}
     </div>
   );
 }
 
-function CourseAvailabilityCard({ course, slots, distanceMi, viewerId, onOpenCourse, onPickSlot }) {
-  const slotIds = React.useMemo(() => slots.map(s => s.id), [slots]);
-  const friendsBySlot = useFriendsOnSlots(viewerId, slotIds);
+// ─── Card → course page opening animation ─────────────────────────────
+// The tapped card "melts" out from its spot to fill the screen (springy
+// gooey ease, corners rounding away), then the course page takes over.
+function CourseZoomOverlay({ zoom }) {
+  const [grown, setGrown] = React.useState(false);
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setGrown(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const { rect, course } = zoom;
+  const pos = grown
+    ? { top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0 }
+    : { top: rect.top, left: rect.left, width: rect.width, height: rect.height, borderRadius: 24 };
   return (
-    <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-      <button onClick={onOpenCourse} style={{
-        width: '100%', textAlign: 'left', border: 'none', padding: 0, display: 'block',
-        height: 96, position: 'relative',
-        background: course.heroImg
-          ? `linear-gradient(180deg, rgba(14,28,19,0) 30%, rgba(14,28,19,0.7) 100%), url('${course.heroImg}')`
-          : 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
-        backgroundSize: 'cover', backgroundPosition: 'center', color: 'var(--cream)',
-      }}>
-        <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
-        <div style={{ position: 'absolute', left: 14, bottom: 10, right: 14 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.01em' }}>{course.shortName}</div>
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 4, letterSpacing: '0.04em' }}>
-            {course.city.toUpperCase()}{distanceMi != null ? ` · ${distanceMi.toFixed(1)} MI` : ''} · 9 HOLES · PAR {course.par}
-          </div>
+    <div style={{
+      position: 'fixed', zIndex: 600, overflow: 'hidden', ...pos,
+      background: course.heroImg
+        ? `linear-gradient(180deg, rgba(14,28,19,0.05) 25%, rgba(14,28,19,0.82) 100%), url('${course.heroImg}')`
+        : 'linear-gradient(160deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
+      backgroundSize: 'cover', backgroundPosition: 'center', color: 'var(--cream)',
+      transition: 'top 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), left 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), width 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), height 0.5s cubic-bezier(0.32, 1.12, 0.35, 1), border-radius 0.45s ease',
+    }}>
+      <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
+      <div style={{ position: 'absolute', left: 20, bottom: 18, right: 20 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: grown ? 34 : 30, lineHeight: 1, letterSpacing: '-0.01em', color: '#FFFFFF', textShadow: '0 2px 12px rgba(14,28,19,0.4)', transition: 'font-size 0.5s cubic-bezier(0.32, 1.12, 0.35, 1)' }}>
+          {course.shortName}
         </div>
-      </button>
-      <div style={{ padding: '12px 12px 14px' }}>
-        {slots.length === 0 ? (
-          <div style={{ fontSize: 12, opacity: 0.55, padding: '2px 2px' }}>No open times this day.</div>
-        ) : (
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="scroll-hide">
-            {slots.map(s => <SlotChip key={s.id} slot={s} friends={friendsBySlot[s.id]} onClick={() => onPickSlot(s)}/>)}
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
 // ─── Course detail ────────────────────────────────────────────────────
-function CourseDetailScreen({ go, courseId, profile }) {
-  const [course, holes, loading] = useCourse(courseId);
+// courseSeed: the course object handed over by the rail card, so the page
+// renders instantly mid-zoom-animation (no loader flash) while the full
+// record + holes load underneath.
+function CourseDetailScreen({ go, courseId, profile, courseSeed }) {
+  const [loaded, holes, loading] = useCourse(courseId);
   const [date, setDate] = React.useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const [slots, slotsLoading] = useCourseSlots(courseId, date);
   const [booking, setBooking] = React.useState(null);
 
-  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  const course = loaded || courseSeed || null;
+  if (loading && !course) return <SppLoader fill/>;
   if (!course) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Course not found.</div>;
 
   const totalYards = holes.reduce((s, h) => s + (h.sandbox_yards || 0), 0);
@@ -220,20 +385,20 @@ function CourseDetailScreen({ go, courseId, profile }) {
       {/* Hero */}
       <div style={{
         height: 220, position: 'relative', color: 'var(--cream)',
-        background: course.renderImg
-          ? `linear-gradient(180deg, rgba(14,28,19,0.1) 0%, rgba(14,28,19,0.7) 100%), url('${course.renderImg}')`
+        background: (course.renderImg || course.heroImg)
+          ? `linear-gradient(180deg, rgba(14,28,19,0.1) 0%, rgba(14,28,19,0.7) 100%), url('${course.renderImg || course.heroImg}')`
           : 'linear-gradient(135deg, var(--forest-dark) 0%, var(--forest) 55%, var(--moss) 100%)',
         backgroundSize: 'cover', backgroundPosition: 'center', overflow: 'hidden',
       }}>
         <div className="grain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}/>
         {/* Clay course-hole diorama (when no custom render set) */}
-        {!course.renderImg && (
+        {!(course.renderImg || course.heroImg) && (
           <img src="assets/clay-course-hole.png" alt="" style={{
             position: 'absolute', right: -10, bottom: -6, height: 150, opacity: 0.92,
             pointerEvents: 'none', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.3))',
           }}/>
         )}
-        <button onClick={() => go({ screen: 'book' })} style={{
+        <button onClick={() => go({ screen: 'events', playTab: 'sbx' })} style={{
           position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 999,
           background: 'rgba(14,28,19,0.55)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -242,7 +407,7 @@ function CourseDetailScreen({ go, courseId, profile }) {
         <div style={{ position: 'absolute', left: 20, bottom: 16, right: 20 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.95, letterSpacing: '-0.02em' }}>{course.shortName}</div>
           <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', opacity: 0.85, marginTop: 6, letterSpacing: '0.04em' }}>
-            {course.city.toUpperCase()}, {course.state}
+            {course.city.toUpperCase()}{course.state ? `, ${course.state}` : ''}
           </div>
         </div>
       </div>
@@ -278,7 +443,7 @@ function CourseDetailScreen({ go, courseId, profile }) {
         <DateStrip selected={date} onSelect={setDate}/>
         <div style={{ padding: '16px 16px 0' }}>
           {slotsLoading ? (
-            <div style={{ fontSize: 13, opacity: 0.5, padding: 12, textAlign: 'center' }}>Loading times…</div>
+            <SppLoader size={32} pad={12}/>
           ) : slots.length === 0 ? (
             <div className="card" style={{ padding: 20, textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>No open times this day.</div>
@@ -533,40 +698,27 @@ function MyRoundsScreen({ go, profile }) {
   return (
     <div style={{ background: 'var(--canvas)', minHeight: '100%', paddingBottom: 120 }}>
       <div style={{ padding: '58px 22px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => go({ screen: 'book' })} style={{ width: 40, height: 40, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => go({ screen: 'events', playTab: 'sbx' })} style={{ width: 40, height: 40, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)', color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon.ArrowLeft size={16}/>
         </button>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--forest)', letterSpacing: '-0.02em' }}>My Rounds</div>
       </div>
 
+      {/* Actively booked tee times only — past rounds live in match history. */}
       <div style={{ padding: '4px 16px 0' }}>
         {loading ? (
-          <div style={{ padding: 24, textAlign: 'center', fontSize: 13, opacity: 0.5 }}>Loading…</div>
+          <SppLoader/>
+        ) : upcoming.length === 0 ? (
+          <div className="card" style={{ padding: 22, textAlign: 'center', marginBottom: 18 }}>
+            <img src="assets/clay-golfer.png" alt="" style={{ height: 120, margin: '0 auto 6px', display: 'block' }}/>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>Nothing booked yet.</div>
+            <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 4, marginBottom: 14 }}>You have no upcoming tee times — find a twilight round near you.</div>
+            <Button variant="forest" size="sm" onClick={() => go({ screen: 'events', playTab: 'sbx' })}>Book a round</Button>
+          </div>
         ) : (
-          <>
-            <Section label="Upcoming"/>
-            {upcoming.length === 0 ? (
-              <div className="card" style={{ padding: 22, textAlign: 'center', marginBottom: 18 }}>
-                <img src="assets/clay-golfer.png" alt="" style={{ height: 120, margin: '0 auto 6px', display: 'block' }}/>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)' }}>No rounds booked.</div>
-                <div className="caption-serif" style={{ fontSize: 14, opacity: 0.7, marginTop: 4, marginBottom: 14 }}>Find a twilight tee time near you.</div>
-                <Button variant="forest" size="sm" onClick={() => go({ screen: 'book' })}>Book a round</Button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
-                {upcoming.map(b => <RoundCard key={b.id} b={b} onCancel={() => cancel(b)} busy={busyId === b.id} go={go}/>)}
-              </div>
-            )}
-
-            {past.length > 0 && (
-              <>
-                <Section label="Past"/>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {past.map(b => <RoundCard key={b.id} b={b} past go={go}/>)}
-                </div>
-              </>
-            )}
-          </>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
+            {upcoming.map(b => <RoundCard key={b.id} b={b} onCancel={() => cancel(b)} busy={busyId === b.id} go={go}/>)}
+          </div>
         )}
       </div>
     </div>
@@ -597,7 +749,7 @@ function RoundCard({ b, onCancel, busy, past, go }) {
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Partner: {formatHandle(b.partner.handle)}</div>
       )}
       {b.match_id && (
-        <button onClick={() => go({ screen: past ? 'matchDetail' : 'matchup', matchId: b.match_id })} style={{
+        <button onClick={() => go({ screen: past ? 'matchDetail' : 'matchup', matchId: b.match_id, from: 'myRounds' })} style={{
           marginTop: 10, background: 'transparent', border: 'none', color: 'var(--forest)',
           fontSize: 12, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0,
         }}>
@@ -630,7 +782,7 @@ function MatchupScreen({ go, matchId, profile }) {
     catch (_) { setStarting(false); }
   }
 
-  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (loading) return <SppLoader fill/>;
   if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Matchup not found.</div>;
 
   const { match, teamA, teamB } = data;
@@ -718,23 +870,24 @@ function ScoutCard({ p, me, go }) {
 }
 
 // ─── Match detail / summary (+ confirm result) ────────────────────────
-function MatchDetailScreen({ go, matchId, profile }) {
+function MatchDetailScreen({ go, matchId, profile, from }) {
   const [data, loading] = useMatchDetail(matchId);
+  // Where "Return" sends you — back to wherever you opened this from.
+  const backTo = from === 'profile' ? { screen: 'profile', scrollTo: 'history' }
+    : from === 'myRounds' ? { screen: 'myRounds' }
+    : { screen: 'stats' };
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState('');
-  const [selHole, setSelHole] = React.useState(null);
   const [showHoles, setShowHoles] = React.useState(false);
   const cardRef = React.useRef(null);
   const topRef = React.useRef(null);
-  const accordionRef = React.useRef(null);
   const innerRef = React.useRef(null);
   const exitRef = React.useRef(null);
-  const [holesMax, setHolesMax] = React.useState(0);
   const meId = profile && profile.id;
 
   // Scroll so the Exit button sits above the bottom dock after opening.
   function scrollHolesUp() {
-    const el = exitRef.current || accordionRef.current;
+    const el = exitRef.current || innerRef.current;
     if (!el) return;
     const sc = el.closest && el.closest('.screen-enter');
     if (!sc) { el.scrollIntoView({ behavior: 'smooth', block: 'end' }); return; }
@@ -744,21 +897,18 @@ function MatchDetailScreen({ go, matchId, profile }) {
     if (delta > 0) sc.scrollBy({ top: delta, behavior: 'smooth' });
   }
 
-  // Animate to the content's real height (fixed 640 made the open feel abrupt),
-  // then scroll it up into view. Close → collapse + ease back to the top.
   function toggleHoles() {
     setShowHoles(prev => {
       const next = !prev;
-      setHolesMax(next && innerRef.current ? innerRef.current.scrollHeight + 8 : 0);
       window.setTimeout(() => {
         if (next) scrollHolesUp();
         else if (topRef.current) topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, next ? 430 : 60);
+      }, next ? 320 : 60);
       return next;
     });
   }
 
-  if (loading) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)', opacity: 0.5 }}>Loading…</div>;
+  if (loading) return <SppLoader fill/>;
   if (!data) return <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}>Match not found.</div>;
 
   const { match: m, holes, teamA, teamB } = data;
@@ -819,7 +969,7 @@ function MatchDetailScreen({ go, matchId, profile }) {
     <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div ref={topRef} style={{ padding: '50px 16px 6px', display: 'flex', alignItems: 'center' }}>
-        <button onClick={() => go({ screen: 'stats' })} style={{
+        <button onClick={() => go(backTo)} style={{
           width: 38, height: 38, borderRadius: 999, background: 'var(--paper)', border: 'var(--hairline)',
           color: 'var(--forest)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}><Icon.ArrowLeft size={16}/></button>
@@ -837,16 +987,11 @@ function MatchDetailScreen({ go, matchId, profile }) {
             </Button>
           )}
 
-          {/* Confirmation */}
-          {isParticipant && decided && (
+          {/* Confirmation — only while it still needs confirming; once both
+              sides agree, the hole-by-hole folder takes this spot. */}
+          {isParticipant && decided && !bothConfirmed && (
             <div className="card" style={{ padding: 16, textAlign: 'center', marginTop: 16 }}>
-              {bothConfirmed ? (
-                <>
-                  <div style={{ fontSize: 22 }}>✅</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--forest)', marginTop: 4 }}>Result confirmed</div>
-                  <div className="caption-serif" style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Both sides agreed — this counts toward SBX.</div>
-                </>
-              ) : iConfirmed ? (
+              {iConfirmed ? (
                 <>
                   <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Confirmed on your side</div>
                   <div className="caption-serif" style={{ fontSize: 14, opacity: 0.75, marginTop: 6 }}>Waiting for the other side to confirm…</div>
@@ -877,130 +1022,240 @@ function MatchDetailScreen({ go, matchId, profile }) {
               {showHoles ? 'Hide hole details' : 'Hole by hole details'}
               <span style={{ transition: 'transform 0.3s ease', transform: showHoles ? 'rotate(180deg)' : 'none', display: 'inline-flex' }}><Icon.Chevron dir="down" size={14} color="var(--forest)"/></span>
             </button>
+            {bothConfirmed && (
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, textAlign: 'center', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                ✓ Confirmed by both sides · counts toward SBX
+              </div>
+            )}
 
-            {/* Accordion: hole-by-hole (tap a hole for its logged stats) */}
-            <div ref={accordionRef} style={{ maxHeight: holesMax, overflow: 'hidden', transition: 'max-height 0.42s ease' }}>
-              <div ref={innerRef} style={{ paddingTop: 4 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+            {/* Gooey folder: one tab per hole, full stroke-by-stroke detail */}
+            {showHoles && (
+              <div ref={innerRef} className="step-reveal" style={{ paddingTop: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
                   <Stat label="Holes won" value={holesWon}/>
                   <Stat label="Lost" value={holesLost}/>
                   <Stat label="Halved" value={holesHalved}/>
                 </div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Hole by hole · tap for detail</div>
-                <div className="card" style={{ padding: 8, display: 'grid', gridTemplateColumns: `repeat(${Math.min(holes.length, 9)}, 1fr)`, gap: 4 }}>
-                  {holes.map(h => {
-                    const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
-                    const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
-                    const lab = h.result == null ? '·' : w ? 'W' : l ? 'L' : 'H';
-                    const bg = w ? 'var(--forest)' : l ? '#C44536' : h.result === 'H' ? 'var(--paper)' : 'transparent';
-                    const col = w ? 'var(--cream)' : l ? '#FFFFFF' : 'var(--forest)';
-                    return (
-                      <button key={h.hole_number} onClick={() => setSelHole(h)} style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'transparent', border: 'none', padding: '2px 0', cursor: 'pointer',
-                      }}>
-                        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5 }}>{h.hole_number}</div>
-                        <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, color: col, border: h.result == null || h.result === 'H' ? '1px solid rgba(28,73,42,0.25)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13 }}>{lab}</div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <HoleFolder holes={holes} youAreA={youAreA} is2v2={is2v2} byId={data.byId}
+                  playerStatsByHole={data.playerStatsByHole} meId={meId} isParticipant={isParticipant}
+                  teamA={teamA} teamB={teamB}/>
               </div>
-            </div>
+            )}
 
             {/* Exit sits below whatever's expanded */}
-            <button ref={exitRef} onClick={() => go({ screen: 'stats' })}
+            <button ref={exitRef} onClick={() => go(backTo)}
               style={{ width: '100%', padding: 13, borderRadius: 14, cursor: 'pointer', background: 'transparent', border: 'none', color: 'var(--forest)', opacity: 0.6, fontWeight: 800, fontSize: 13 }}>
-              Exit
+              Return
             </button>
           </div>
         </div>
       </div>
-
-      {selHole && (
-        <HoleStatSheet hole={selHole} youAreA={youAreA} is2v2={is2v2} byId={data.byId}
-          playerStats={(data.playerStatsByHole || {})[selHole.hole_number] || []}
-          onClose={() => setSelHole(null)}/>
-      )}
     </div>
   );
 }
 
-// ─── Per-hole stat popup ──────────────────────────────────────────────
-function HoleStatSheet({ hole, youAreA, is2v2, byId, playerStats = [], onClose }) {
-  const h = hole;
+// ─── Gooey hole-by-hole folder ────────────────────────────────────────
+// Manila-folder UI: one tab per hole, the active tab "melts" into the panel
+// via an SVG gooey filter. Panel shows the full stroke-by-stroke shot log
+// (every player's outcome per stroke, whose ball the team took, caddie
+// suggestion, putt rounds) when recorded; older matches fall back to the
+// per-hole summary. 2v2 gets Only-your-shots / Team-shots pills.
+function HoleFolder({ holes, youAreA, is2v2, byId, playerStatsByHole, meId, isParticipant, teamA, teamB }) {
+  const [active, setActive] = React.useState(0);
+  const [scope, setScope] = React.useState('mine'); // mine | team
+  const TAB_H = 38;
+  const n = holes.length || 1;
+  const h = holes[Math.min(active, n - 1)] || {};
+  const showPills = is2v2 && isParticipant;
+  const teamScope = !showPills || scope === 'team';
+
+  const name = (id) => { const p = byId[id]; return p ? (p.first_name || formatHandle(p.handle)) : 'Player'; };
+  const isMe = (id) => id === meId;
+  const FW = { hit: 'fairway hit', left: 'missed the fairway left', right: 'missed the fairway right', long: 'long of the fairway', short: 'short of the fairway' };
+
   const w = (h.result === 'A' && youAreA) || (h.result === 'B' && !youAreA);
   const l = (h.result === 'B' && youAreA) || (h.result === 'A' && !youAreA);
   const verdict = h.result == null ? 'Not played' : w ? 'Won' : l ? 'Lost' : 'Halved';
-  const verdictColor = w ? 'var(--forest)' : l ? '#C44536' : 'var(--ink)';
-
   const yourScore = youAreA ? h.player_a_score : h.player_b_score;
   const oppScore  = youAreA ? h.player_b_score : h.player_a_score;
-  const name = (id) => { const p = byId[id]; return p ? (p.first_name || p.handle) : '—'; };
-  const yourGir   = youAreA ? h.player_a_gir : h.player_b_gir;
-  const yourPutts = youAreA ? h.player_a_putts : h.player_b_putts;
-  const yourFair  = youAreA ? h.player_a_fairway : h.player_b_fairway;
-  const fairLabel = { hit: 'Hit', left: 'Missed left', right: 'Missed right', long: 'Long', short: 'Short' };
+  const log = (youAreA ? h.shot_log_a : h.shot_log_b) || null;
+  const pStats = (playerStatsByHole || {})[h.hole_number] || [];
 
-  const Row = ({ label, value }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
-      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{value}</span>
-    </div>
-  );
+  // Which players' lines to show inside an event, honouring the pill scope.
+  const visible = (ids) => teamScope ? ids : ids.filter(isMe);
+
+  const cream = 'var(--cream)';
+  const dim = { fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6 };
+  const line = { fontSize: 13, lineHeight: 1.45 };
+
+  function ShotEvent({ ev }) {
+    const ids = visible(Object.keys(ev.outcomes || {}));
+    const pickedName = ev.picked ? name(ev.picked) : null;
+    return (
+      <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={dim}>Shot {ev.shot}</div>
+        {ids.map(pid => {
+          const o = ev.outcomes[pid] || {};
+          const bits = [];
+          if (o.fairway) bits.push(FW[o.fairway] || o.fairway);
+          if (o.reached === 'holed') bits.push('holed out!');
+          else if (o.reached === true) bits.push(`on the green${o.zone ? ` · ${o.zone}` : ''}`);
+          else if (o.reached === false) bits.push('missed the green');
+          if (o.ob) bits.push('OB / penalty');
+          return (
+            <div key={pid} style={{ ...line, marginTop: 5 }}>
+              <b>{name(pid)}{isMe(pid) ? ' (you)' : ''}</b> — {bits.length ? bits.join(' · ') : 'logged'}
+            </div>
+          );
+        })}
+        {pickedName && (
+          <div style={{ ...line, marginTop: 6, opacity: 0.85 }}>
+            → Team took <b>{pickedName}{isMe(ev.picked) ? ' (you)' : ''}</b>'s ball
+            {ev.suggested ? (ev.suggested === ev.picked ? ' · caddie agreed' : ` · caddie liked ${name(ev.suggested)}'s`) : ''}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function PuttEvent({ ev }) {
+    const all = Object.keys(ev.results || {});
+    const ids = visible(all);
+    // In "only your shots", still surface a partner's make — that's the story of the hole.
+    const partnerMade = !teamScope ? all.find(pid => !isMe(pid) && ev.results[pid] === 'made') : null;
+    return (
+      <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+        <div style={dim}>Putt · shot {ev.shot}{ev.round > 1 ? ` · round ${ev.round}` : ''}</div>
+        {ids.map(pid => (
+          <div key={pid} style={{ ...line, marginTop: 5 }}>
+            <b>{name(pid)}{isMe(pid) ? ' (you)' : ''}</b> — {ev.results[pid] === 'made' ? 'made the putt' : 'missed'}
+          </div>
+        ))}
+        {partnerMade && (
+          <div style={{ ...line, marginTop: 5, opacity: 0.85 }}>
+            <b>{name(partnerMade)}</b> (partner) made the putt
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Older matches (no stroke log) — the per-hole summary we do have.
+  // Reads YOUR side's columns; the legacy shared columns (pre-migration) are
+  // trusted only when the recorded player is actually on your team, since the
+  // other side's write could have overwritten yours.
+  function SummaryFallback() {
+    const myTeamIds = ((youAreA ? teamA : teamB) || []).map(p => p.id);
+    const onMyTeam = (id) => id != null && myTeamIds.includes(id);
+    const ball  = (youAreA ? h.ball_player_a : h.ball_player_b) || (onMyTeam(h.ball_player) ? h.ball_player : null);
+    const holed = (youAreA ? h.holed_by_a : h.holed_by_b) || (onMyTeam(h.holed_by) ? h.holed_by : null);
+    const zone  = (youAreA ? h.zone_a : h.zone_b) || (ball ? h.zone : null);
+    const rows = [];
+    if (is2v2) {
+      if (ball)  rows.push(['Ball played', `${name(ball)}${isMe(ball) ? ' (you)' : ''}`]);
+      if (holed) rows.push(['Holed by', `${name(holed)}${isMe(holed) ? ' (you)' : ''}`]);
+      if (zone)  rows.push(['Ball position', zone]);
+    } else {
+      const fair = youAreA ? h.player_a_fairway : h.player_b_fairway;
+      const gir  = youAreA ? h.player_a_gir : h.player_b_gir;
+      const putts = youAreA ? h.player_a_putts : h.player_b_putts;
+      if (fair) rows.push(['Fairway', FW[fair] || fair]);
+      if (gir != null) rows.push(['Green in reg', gir ? 'Yes' : 'No']);
+      if (putts != null) rows.push(['Putts', putts]);
+    }
+    const stats = visible(pStats.map(s => s.player_id)).map(pid => pStats.find(s => s.player_id === pid)).filter(Boolean);
+    return (
+      <div>
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+            <span style={dim}>{k}</span><span style={{ fontSize: 13, fontWeight: 700 }}>{v}</span>
+          </div>
+        ))}
+        {is2v2 && stats.map(s => {
+          const bits = [];
+          if (s.fairway) bits.push(FW[s.fairway] || s.fairway);
+          if (s.on_green === true || s.gir === true) bits.push('reached the green');
+          else if (s.on_green === false) bits.push('missed the green');
+          if (s.ob) bits.push('OB');
+          if (s.zone) bits.push(s.zone);
+          return (
+            <div key={s.player_id} style={{ ...line, padding: '9px 0', borderBottom: '1px solid rgba(234,226,206,0.14)' }}>
+              <b>{name(s.player_id)}{isMe(s.player_id) ? ' (you)' : ''}</b> — {bits.length ? bits.join(' · ') : 'no detail logged'}
+            </div>
+          );
+        })}
+        {rows.length === 0 && stats.length === 0 && (
+          <div style={{ ...line, opacity: 0.7, padding: '9px 0' }}>No shot detail was recorded for this hole.</div>
+        )}
+      </div>
+    );
+  }
+
+  const pill = (on) => ({
+    flex: 1, padding: '8px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800, cursor: 'pointer',
+    background: on ? cream : 'rgba(234,226,206,0.1)', color: on ? 'var(--forest)' : cream,
+    border: on ? 'none' : '1px solid rgba(234,226,206,0.24)',
+  });
 
   return (
-    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
-      position: 'fixed', inset: 0, background: 'rgba(14,28,19,0.6)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000,
-    }}>
-      <div style={{ width: '100%', maxWidth: 440, background: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: '14px 20px 28px' }}>
-        <div style={{ width: 38, height: 4, borderRadius: 999, background: 'rgba(14,28,19,0.16)', margin: '0 auto 16px' }}/>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)' }}>Hole {h.hole_number}</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: verdictColor }}>{verdict}</div>
+    <div style={{ position: 'relative', marginTop: 4 }}>
+      {/* Gooey filter (blur + contrast melts the tab into the panel) */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+        <defs>
+          <filter id="spp-goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo"/>
+            <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+          </filter>
+        </defs>
+      </svg>
+
+      {/* Filtered background: sliding tab bump + folder body, merged gooey */}
+      <div style={{ position: 'absolute', inset: 0, filter: 'url(#spp-goo)', pointerEvents: 'none' }}>
+        <div style={{
+          position: 'absolute', top: 0, height: TAB_H + 12,
+          left: `${(Math.min(active, n - 1)) * (100 / n)}%`, width: `${100 / n}%`,
+          background: 'var(--forest)', borderRadius: '12px 12px 0 0',
+          transition: 'left 0.4s cubic-bezier(0.3, 0.9, 0.3, 1)',
+        }}/>
+        <div style={{ position: 'absolute', top: TAB_H, left: 0, right: 0, bottom: 0, background: 'var(--forest)', borderRadius: 20 }}/>
+      </div>
+
+      {/* Crisp layer: tab hit-targets + panel content */}
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex' }}>
+          {holes.map((hh, i) => (
+            <button key={hh.hole_number} onClick={() => setActive(i)} style={{
+              flex: 1, height: TAB_H, background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontSize: n > 9 ? 10 : 12, fontWeight: 800,
+              color: i === active ? cream : 'var(--forest)', opacity: i === active ? 1 : 0.6,
+              transition: 'color 0.25s',
+            }}>{hh.hole_number}</button>
+          ))}
         </div>
 
-        <Row label="Par" value={h.par || 3}/>
-        {h.distance_yards != null && <Row label="Yards" value={h.distance_yards}/>}
-        <Row label="Your side" value={yourScore != null ? yourScore : '—'}/>
-        <Row label="Opponent" value={oppScore != null ? oppScore : '—'}/>
+        <div key={`${active}-${scope}`} className="step-reveal" style={{ padding: '16px 18px 18px', color: cream }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24 }}>Hole {h.hole_number}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, opacity: 0.9 }}>{verdict}</div>
+          </div>
+          <div style={{ ...dim, marginTop: 4 }}>
+            Par {h.par || 3}{h.distance_yards != null ? ` · ${h.distance_yards}y` : ''} · You {yourScore != null ? yourScore : '—'} — Them {oppScore != null ? oppScore : '—'}
+          </div>
 
-        {is2v2 ? (
-          <>
-            <Row label="Ball played" value={h.ball_player ? name(h.ball_player) : '—'}/>
-            <Row label="Holed by" value={h.holed_by ? name(h.holed_by) : '—'}/>
-            <Row label="Ball position" value={h.zone || '—'}/>
+          {showPills && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setScope('mine')} style={pill(scope === 'mine')}>Only your shots</button>
+              <button onClick={() => setScope('team')} style={pill(scope === 'team')}>Team shots</button>
+            </div>
+          )}
 
-            {/* Per-player breakdown (both teammates' own shots) */}
-            {playerStats.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>By player</div>
-                {playerStats.map(s => {
-                  const p = byId[s.player_id]; if (!p) return null;
-                  const pname = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.handle;
-                  return (
-                    <div key={s.player_id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(14,28,19,0.06)' }}>
-                      <div style={{ fontSize: 13, fontWeight: 800 }}>{pname} <span style={{ opacity: 0.55, fontWeight: 600 }}>{formatHandle(p.handle)}</span></div>
-                      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 3 }}>
-                        {s.fairway ? `Fairway: ${fairLabel[s.fairway] || s.fairway} · ` : ''}
-                        {s.gir != null ? `GIR: ${s.gir ? 'Yes' : 'No'}` : ''}
-                        {s.zone ? ` · ${s.zone}` : ''}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {(h.par || 3) >= 4 && <Row label="Fairway" value={yourFair ? (fairLabel[yourFair] || yourFair) : '—'}/>}
-            <Row label="GIR" value={yourGir == null ? '—' : yourGir ? 'Yes' : 'No'}/>
-            <Row label="Putts" value={yourPutts != null ? yourPutts : '—'}/>
-          </>
-        )}
-
-        <Button variant="forest" full size="md" onClick={onClose} style={{ marginTop: 18 }}>Done</Button>
+          <div style={{ marginTop: 8 }}>
+            {log && log.length
+              ? log.map((ev, i) => ev.phase === 'putt' ? <PuttEvent key={i} ev={ev}/> : <ShotEvent key={i} ev={ev}/>)
+              : <SummaryFallback/>}
+          </div>
+        </div>
       </div>
     </div>
   );

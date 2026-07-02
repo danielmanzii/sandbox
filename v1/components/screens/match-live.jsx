@@ -121,13 +121,8 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
   }
 
   if (err) return <FullScreenMessage title="Something went wrong" detail={err} onBack={onExit}/>;
-  // Same look as the app-level LoadingScreen so launch → match is one seamless
-  // "Loading…" instead of a chain of different screens.
-  if (!ready || !hasData) return (
-    <div style={{ background: 'var(--canvas)', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, opacity: 0.6, color: 'var(--forest)' }}>Loading…</div>
-    </div>
-  );
+  // Bouncing-logo loader so launch → match is one seamless brand moment.
+  if (!ready || !hasData) return <SppLoader fill/>;
   if (match.status === 'abandoned') {
     return <FullScreenMessage title="Match cancelled" detail="This match was abandoned." onBack={onExit}/>;
   }
@@ -199,7 +194,7 @@ function MatchLive({ matchId, profile, tier, onExit, go }) {
                 background: 'var(--forest)', color: 'var(--cream)', fontWeight: 800, fontSize: 14 }}>
                 Share scorecard
               </button>
-              <button onClick={() => go && go({ screen: 'matchDetail', matchId })} style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer',
+              <button onClick={() => go && go({ screen: 'matchDetail', matchId, from: 'stats' })} style={{ width: '100%', padding: 15, borderRadius: 14, cursor: 'pointer',
                 background: 'transparent', border: '1px solid var(--forest)', color: 'var(--forest)', fontWeight: 800, fontSize: 14 }}>
                 Hole by hole details
               </button>
@@ -425,13 +420,17 @@ function HoleCard({ hole, youAreA, is2v2, isMember, isRegular, initialMode, your
               onLiveScore={onLiveScore}
               onSaveDraft={onSaveDraft}
               onSavePlayerStat={onSavePlayerStat}
-              onComplete={({ score, gir, putts, zone, ballPlayer, holedBy }) => {
+              onComplete={({ score, gir, putts, zone, ballPlayer, holedBy, shotLog }) => {
                 onYourScore(score);
+                // Side-suffixed columns only — ball_player/holed_by/zone used to be
+                // shared between teams, so the last side to finish clobbered the other.
+                const side = youAreA ? '_a' : '_b';
                 if (gir != null)   onSaveStat(statPrefixEarly + '_gir', gir);
                 if (putts != null) onSaveStat(statPrefixEarly + '_putts', putts);
-                if (zone)          onSaveStat('zone', zone);
-                if (ballPlayer)    onSaveStat('ball_player', ballPlayer);
-                if (holedBy)       onSaveStat('holed_by', holedBy);
+                if (zone)          onSaveStat('zone' + side, zone);
+                if (ballPlayer)    onSaveStat('ball_player' + side, ballPlayer);
+                if (holedBy)       onSaveStat('holed_by' + side, holedBy);
+                if (shotLog && shotLog.length) onSaveStat('shot_log' + side, shotLog);
               }}
             />
             <div style={{ height: 14 }}/>
@@ -620,6 +619,11 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
   // you only get a green-in-reg if YOUR ball was the one played on every shot up
   // to the green — otherwise a scramble blends your tee with a partner's approach.
   const [picks, setPicks] = React.useState(init.picks || []);
+  // Full stroke-by-stroke record — every player's outcome on every shot, whose
+  // ball the team took (+ caddie suggestion), and each putt round's made/missed.
+  // Persisted to match_holes.shot_log when the hole finishes; nothing captured
+  // during play is thrown away.
+  const [log, setLog] = React.useState(init.log || []);
 
   // ── Shared-state sync bookkeeping ──
   // lastRev: the rev of the draft we last wrote or adopted (ignore its echo).
@@ -650,6 +654,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     setChosen(draft.chosen || null);
     setHistory(draft.history || []);
     setPicks(draft.picks || []);
+    setLog(draft.log || []);
     setDoneScore(null);
   }, [draft, meId]);
 
@@ -666,23 +671,24 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     if (phase === 'done') { onSaveDraft(null); return; }
     const rev = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     lastRev.current = rev;
-    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, picks, rev, by: meId });
-  }, [stroke, card, phase, putts, puttCard, chosen, history, picks]);
+    onSaveDraft({ stroke, card, phase, putts, puttCard, chosen, history, picks, log, rev, by: meId });
+  }, [stroke, card, phase, putts, puttCard, chosen, history, picks, log]);
 
   // Snapshot the current state before any forward move so "Go Back" undoes
   // exactly one shot / putt-round (not the whole hole).
-  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen, picks }]);
+  const pushHistory = () => setHistory(h => [...h, { stroke, card, phase, putts, puttCard, chosen, picks, log }]);
   const goBack = () => {
     if (!history.length) return;
     const prev = history[history.length - 1];
     setStroke(prev.stroke); setCard(prev.card); setPhase(prev.phase);
     setPutts(prev.putts); setPuttCard(prev.puttCard); setChosen(prev.chosen);
     setPicks(prev.picks || []);
+    setLog(prev.log || []);
     setDoneScore(null); setHistory(history.slice(0, -1));
   };
 
   function reset() {
-    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]); setPicks([]);
+    setStroke(0); setCard({}); setPhase('cards'); setPutts(0); setPuttCard({}); setChosen(null); setDoneScore(null); setHistory([]); setPicks([]); setLog([]);
   }
 
   // Hole finalized → show the team's score + a way to re-score. This is the
@@ -717,13 +723,24 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     ? suggestBall(yourTeam, { [p1.id]: card[p1.id].zone, [p2.id]: card[p2.id].zone }) : null;
 
   // Finish the hole immediately (used by a hole-out from off the green).
-  function finishHole(score, holedBy, zone) {
+  function finishHole(score, holedBy, zone, logArg) {
     setDoneScore(score); setPhase('done');
-    onComplete({ score, putts: 0, gir: false, zone, ballPlayer: holedBy, holedBy });
+    onComplete({ score, putts: 0, gir: false, zone, ballPlayer: holedBy, holedBy, shotLog: logArg || log });
   }
 
   function pickBall(pid) {
     pushHistory();
+    // Append this stroke to the permanent shot log: every player's outcome,
+    // whose ball the team took, and (when shown) which ball the caddie suggested.
+    const outcomes = {};
+    yourTeam.forEach(p => {
+      const co = card[p.id];
+      if (co) outcomes[p.id] = { fairway: co.fairway || null, reached: co.reached != null ? co.reached : null, ob: !!co.ob, zone: co.zone || null };
+    });
+    const logEvent = { shot: stroke + 1, phase: 'shot', outcomes, picked: pid };
+    if (suggestion && suggestion.pick && suggestion.pick !== 'tie') logEvent.suggested = suggestion.pick;
+    const nextLog = [...log, logEvent];
+    setLog(nextLog);
     yourTeam.forEach(p => {
       const c = card[p.id] || {}; const patch = {};
       if (c.fairway) patch.fairway = c.fairway;
@@ -749,7 +766,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     // then re-hit — so shot 2 OB makes the next tracked shot #4.
     if (c.ob) { setStroke(stroke + 2); setCard({}); return; }
     // Holed out (from off the green, or a drivable par-4 tee) → hole done now.
-    if (c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone); return; }
+    if (c.reached === 'holed') { finishHole(stroke + 1, pid, c.zone, nextLog); return; }
     // On the green → go to putting.
     if (!fairwayTee && c.reached === true) { setChosen({ ball: pid, zone: c.zone, strokesToGreen: stroke + 1 }); setPhase('putt'); return; }
     // Off the green / a drive → next shot.
@@ -762,7 +779,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
   if (phase === 'putt') {
     const roundNo = putts + 1;
     const strokesToGreen = chosen ? chosen.strokesToGreen : stroke;
-    const finish = (holer) => {
+    const finish = (holer, logArg) => {
       const score = strokesToGreen + roundNo;
       setDoneScore(score);
       setPhase('done');
@@ -770,6 +787,7 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
         score, putts: roundNo,
         gir: strokesToGreen <= Math.max(1, (par || 3) - 2),
         zone: chosen && chosen.zone, ballPlayer: chosen && chosen.ball, holedBy: holer,
+        shotLog: logArg || log,
       });
     };
     // Selecting ✓/✕ only marks a pending choice — nothing commits until Confirm.
@@ -777,8 +795,10 @@ function ShotFlow({ yourTeam, par, isRegular, isMember, savedScore, draft, meId,
     const allChosen = yourTeam.every(p => puttCard[p.id]);
     const confirmPutt = () => {
       const holer = yourTeam.find(p => puttCard[p.id] === 'made');
-      if (holer) { finish(holer.id); return; }
-      pushHistory(); setPutts(putts + 1); setPuttCard({}); // all missed → next putt round
+      // Log the putt round (each player's made/missed) whether it ends the hole or not.
+      const nextLog = [...log, { shot: strokesToGreen + roundNo, phase: 'putt', round: roundNo, results: { ...puttCard } }];
+      if (holer) { setLog(nextLog); finish(holer.id, nextLog); return; }
+      pushHistory(); setLog(nextLog); setPutts(putts + 1); setPuttCard({}); // all missed → next putt round
     };
     return (
       <SfWrap count={count} onBack={goBack} canBack={history.length > 0} label={yourTeamLabel} labelPlayers={yourTeam} title={`Shot ${strokesToGreen + roundNo} — Putt made?`}>
@@ -1371,7 +1391,7 @@ async function shareCardImage(node, args) {
 // tap to flip → the back is just the Sandbox wordmark. Takes already-computed
 // display pieces so it works on the live match-over screen AND profile history.
 //   cells: [{ n, lab }] where lab ∈ 'W' | 'L' | 'H' | ''
-const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles, matchup }, captureRef) {
+const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, summary, subline, cells, totalHoles, matchup, dateLine, plain }, captureRef) {
   const tiltRef = React.useRef(null);
   const frontRef = React.useRef(null);
   const avEl = (p, i) => {
@@ -1462,8 +1482,11 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
 
   return (
     <div style={{ perspective: 680, marginBottom: 4 }}>
-      <div ref={tiltRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onLeave}
-        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out', touchAction: 'none', cursor: 'grab',
+      <div ref={tiltRef}
+        onPointerDown={plain ? undefined : onDown} onPointerMove={plain ? undefined : onMove}
+        onPointerUp={plain ? undefined : onUp} onPointerLeave={plain ? undefined : onLeave}
+        style={{ transformStyle: 'preserve-3d', transition: 'transform 0.06s ease-out',
+          touchAction: plain ? 'auto' : 'none', cursor: plain ? 'default' : 'grab',
           transform: 'rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg))' }}>
         <div ref={captureRef} style={{ position: 'relative', transformStyle: 'preserve-3d', ...flip }}>
           {face === 'front' ? (
@@ -1487,6 +1510,7 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.9, marginTop: 12, letterSpacing: '-0.02em' }}>{headline}</div>
                 <div style={{ fontSize: 14, opacity: 0.88, marginTop: 8 }}>{summary}</div>
                 {subline && <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{subline}</div>}
+                {dateLine && <div style={{ fontSize: 10, opacity: 0.55, marginTop: 5, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5 }}><Icon.Clock size={11}/> {dateLine}</div>}
 
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 5, marginTop: 16 }}>
                   {(cells || []).map(c => {
@@ -1509,7 +1533,7 @@ const ShareResultCard = React.forwardRef(function ShareResultCard({ headline, su
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
                   <img src="assets/wordmark-cream.svg" alt="Sandbox" style={{ height: 15, opacity: 0.85 }}/>
-                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Swipe to flip ⇄</span>
+                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', opacity: 0.5, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{plain ? 'Tap to open' : 'Swipe to flip ⇄'}</span>
                 </div>
               </div>
             </div>
