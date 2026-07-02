@@ -45,10 +45,10 @@ function PlayHeader({ tab, go }) {
 function SegmentButton({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      flex: 1, padding: '10px 16px', borderRadius: 999,
+      flex: 1, padding: '14px 16px', borderRadius: 999,
       background: active ? 'var(--forest)' : 'transparent',
       color: active ? 'var(--cream)' : 'var(--forest)',
-      fontSize: 13, fontWeight: 700, letterSpacing: '0.02em', transition: 'all 0.15s',
+      fontSize: 15, fontWeight: 800, letterSpacing: '0.02em', transition: 'all 0.15s',
     }}>{children}</button>
   );
 }
