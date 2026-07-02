@@ -867,8 +867,8 @@ function MatchDetailScreen({ go, matchId, profile }) {
               <span style={{ transition: 'transform 0.3s ease', transform: showHoles ? 'rotate(180deg)' : 'none', display: 'inline-flex' }}><Icon.Chevron dir="down" size={14} color="var(--forest)"/></span>
             </button>
             {bothConfirmed && (
-              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, textAlign: 'center', letterSpacing: '0.06em' }}>
-                ✓ Result confirmed by both sides — counts toward SBX
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--forest)', opacity: 0.55, textAlign: 'center', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                ✓ Confirmed by both sides · counts toward SBX
               </div>
             )}
 
