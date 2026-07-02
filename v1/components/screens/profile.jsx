@@ -1264,66 +1264,49 @@ function useRecentMatchCards(userId, limit = 5) {
 }
 
 // ─── Wallet stack: the last 5 matches stacked like Apple Wallet. ──────
-// Collapsed, each card shows only its top strip (result + who) peeking
-// above the next. Tap a card and it "pops out" of the wallet to reveal
-// the full score + tee-time date; tap it again to open the full match
-// details page. Cards animate open/closed with the same spring the deck
-// used. Each card is the real ShareResultCard (static).
+// Collapsed, each card shows only its top strip peeking above the next,
+// with seam shadows + depth shading so it reads as a real pile of cards.
+// Tap a card and it lifts out of the wallet up to the top of the screen,
+// where it becomes the full interactive 3D card: tap the TOP half to drop
+// it back on the stack, tap the BOTTOM half to open full match details.
 const SPRING = 'cubic-bezier(0.32,1.12,0.35,1)';
 
 function WalletStack({ cards, go }) {
   const deck = React.useMemo(() => (cards || []).slice(0, 5), [cards]);
-  const [selected, setSelected] = React.useState(null); // matchId | null
-  const [heights, setHeights]   = React.useState({});   // matchId -> full px
-  const nodeRefs = React.useRef({});
-  const PEEK = 116;      // visible header strip of a collapsed card
-  const FALLBACK = 330;  // expanded height until the card is measured
-
-  // Measure each card's natural (unclipped) height so we can grow the clip
-  // window to exactly fit when it's selected. Runs every render but only
-  // commits when something actually changed, so no update loop.
-  React.useLayoutEffect(() => {
-    const next = {}; let changed = false;
-    for (const c of deck) {
-      const n = nodeRefs.current[c.matchId];
-      if (n && n.offsetHeight && heights[c.matchId] !== n.offsetHeight) {
-        next[c.matchId] = n.offsetHeight; changed = true;
-      }
-    }
-    if (changed) setHeights(prev => ({ ...prev, ...next }));
-  });
+  const [focused, setFocused] = React.useState(null); // matchId | null
+  const PEEK = 108;        // header strip shown for a card with one on top
+  const FRONT_PEEK = 150;  // the front (closest) card sits a little taller
+  const last = deck.length - 1;
 
   if (!deck.length) return null;
 
-  // Lay the cards out top-to-bottom: a collapsed card occupies PEEK px, the
-  // selected card occupies its full height (pushing everything below down).
+  // Adjacent bands top-to-bottom; the card drawn later (higher z) is the
+  // one visually in front, so the FRONT card is the last in the list.
   let top = 0;
-  const layout = deck.map(c => {
-    const isSel = selected === c.matchId;
-    const occ = isSel ? (heights[c.matchId] || FALLBACK) : PEEK;
-    const item = { c, top, occ, isSel };
+  const layout = deck.map((c, i) => {
+    const occ = i === last ? FRONT_PEEK : PEEK;
+    const item = { c, top, occ, i, depth: last - i, hasCardInFront: i < last };
     top += occ;
     return item;
   });
+  const focusedCard = deck.find(c => c.matchId === focused) || null;
 
   return (
-    <div style={{ position: 'relative', height: top, marginBottom: 14, transition: `height 0.42s ${SPRING}` }}>
-      {layout.map((it, i) => {
-        const { c, isSel } = it;
-        return (
-          <div
-            key={c.matchId}
-            onClick={() => (isSel ? go({ screen: 'matchDetail', matchId: c.matchId, from: 'profile' }) : setSelected(c.matchId))}
-            style={{
-              position: 'absolute', left: 0, right: 0, top: it.top, height: it.occ,
-              overflow: 'hidden', borderRadius: 'var(--radius-card-lg)', cursor: 'pointer',
-              zIndex: isSel ? 999 : i + 1,
-              transform: isSel ? 'scale(1.015)' : 'scale(1)',
-              boxShadow: isSel ? '0 28px 60px rgba(14,28,19,0.5)' : '0 -5px 18px rgba(14,28,19,0.16)',
-              transition: `top 0.42s ${SPRING}, height 0.42s ${SPRING}, transform 0.42s ${SPRING}, box-shadow 0.3s ease`,
-            }}
-          >
-            <div ref={el => { nodeRefs.current[c.matchId] = el; }}>
+    <>
+      <div style={{ position: 'relative', height: top, marginBottom: 14 }}>
+        {layout.map(it => {
+          const { c, i, depth, hasCardInFront } = it;
+          return (
+            <div
+              key={c.matchId}
+              onClick={() => setFocused(c.matchId)}
+              style={{
+                position: 'absolute', left: 0, right: 0, top: it.top, height: it.occ,
+                overflow: 'hidden', borderRadius: 'var(--radius-card-lg)', cursor: 'pointer',
+                zIndex: i + 1,
+                boxShadow: '0 10px 22px rgba(14,28,19,0.20)',
+              }}
+            >
               <ShareResultCard
                 plain
                 headline={c.headline}
@@ -1334,10 +1317,92 @@ function WalletStack({ cards, go }) {
                 matchup={c.matchup}
                 dateLine={c.dateLine}
               />
+              {/* thin lit top edge of the card */}
+              <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, background: 'rgba(234,226,206,0.16)', pointerEvents: 'none' }}/>
+              {/* cards further back sit in shadow → recede into the pile */}
+              {depth > 0 && (
+                <div style={{ position: 'absolute', inset: 0, background: `rgba(4,10,7,${Math.min(depth * 0.07, 0.26)})`, pointerEvents: 'none' }}/>
+              )}
+              {/* the card in front casts a shadow onto this card's bottom seam */}
+              {hasCardInFront && (
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 20, background: 'linear-gradient(to top, rgba(0,0,0,0.42), rgba(0,0,0,0))', pointerEvents: 'none' }}/>
+              )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      {focusedCard && (
+        <FocusedMatchCard
+          card={focusedCard}
+          onClose={() => setFocused(null)}
+          onOpen={() => go({ screen: 'matchDetail', matchId: focusedCard.matchId, from: 'profile' })}
+        />
+      )}
+    </>
+  );
+}
+
+// The lifted-out card: a full-screen focus overlay with the real (fully
+// interactive) ShareResultCard pinned near the top. Drag it to tilt in 3D;
+// tap the top half to return it to the stack, the bottom half to open the
+// full match details page.
+function FocusedMatchCard({ card, onClose, onOpen }) {
+  const [entered, setEntered] = React.useState(false);
+  React.useEffect(() => {
+    const r = requestAnimationFrame(() => setEntered(true));
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { cancelAnimationFrame(r); document.body.style.overflow = prev; };
+  }, []);
+
+  // A tap (not a tilt-drag) on the card: top half → back to stack, bottom
+  // half → open details. The card's own tilt handlers don't preventDefault,
+  // so a clean tap still fires this click.
+  function onCardClick(e) {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    if ((e.clientY - r.top) < r.height / 2) onClose();
+    else onOpen();
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(8,16,11,0.72)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px 0',
+      }}
+    >
+      <div
+        onClick={onCardClick}
+        style={{
+          width: '100%', maxWidth: 420, transformOrigin: 'top center',
+          transition: `transform 0.44s ${SPRING}, opacity 0.3s ease`,
+          transform: entered ? 'translateY(0) scale(1)' : 'translateY(60px) scale(0.9)',
+          opacity: entered ? 1 : 0,
+        }}
+      >
+        <ShareResultCard
+          headline={card.headline}
+          summary={card.summary}
+          subline={card.subline}
+          cells={card.cells}
+          totalHoles={card.totalHoles}
+          matchup={card.matchup}
+          dateLine={card.dateLine}
+        />
+      </div>
+
+      <div style={{
+        marginTop: 22, textAlign: 'center', color: 'rgba(234,226,206,0.75)',
+        fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', lineHeight: 1.7,
+        transition: 'opacity 0.3s ease 0.15s', opacity: entered ? 1 : 0,
+      }}>
+        <div>▲&nbsp;&nbsp;TAP THE TOP TO PUT IT BACK</div>
+        <div>▼&nbsp;&nbsp;TAP THE BOTTOM FOR FULL DETAILS</div>
+      </div>
     </div>
   );
 }
